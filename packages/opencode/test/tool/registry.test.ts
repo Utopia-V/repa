@@ -24,6 +24,7 @@ import type { Tool as MCPToolDef } from "@modelcontextprotocol/sdk/types.js"
 import { assertExternalToolID, toolCallPreparation } from "@/tool/learning-command"
 import { Permission } from "@/permission"
 import { Course } from "@opencode-ai/core/course"
+import { AdvisoryPlanSuggestion } from "@opencode-ai/core/advisory-plan-suggestion"
 import { Assignment } from "@opencode-ai/core/assignment"
 import { Database } from "@opencode-ai/core/database/database"
 import { LearnerGoal } from "@opencode-ai/core/learner-goal"
@@ -832,6 +833,26 @@ describe("tool.registry", () => {
       expect(learnerStateWriter).toContain("update_learner_state_judgment")
       expect(learnerStateWriter).not.toContain("learner_state_judgment_read")
 
+      const advisoryReader = (yield* registry.tools({
+        ...model,
+        agent: {
+          ...agent,
+          permission: Permission.fromConfig({ "*": "deny", advisory_plan_suggestion_read: "allow" }),
+        },
+      })).map((tool) => tool.id)
+      expect(advisoryReader).toContain("advisory_plan_suggestion_read")
+      expect(advisoryReader).not.toContain("update_advisory_plan_suggestion")
+
+      const advisoryWriter = (yield* registry.tools({
+        ...model,
+        agent: {
+          ...agent,
+          permission: Permission.fromConfig({ "*": "deny", update_advisory_plan_suggestion: "allow" }),
+        },
+      })).map((tool) => tool.id)
+      expect(advisoryWriter).toContain("update_advisory_plan_suggestion")
+      expect(advisoryWriter).not.toContain("advisory_plan_suggestion_read")
+
       const delegated = (yield* registry.tools({
         ...model,
         authority: [
@@ -852,6 +873,8 @@ describe("tool.registry", () => {
       expect(delegated).not.toContain("update_assignment")
       expect(delegated).not.toContain("learner_state_judgment_read")
       expect(delegated).not.toContain("update_learner_state_judgment")
+      expect(delegated).not.toContain("advisory_plan_suggestion_read")
+      expect(delegated).not.toContain("update_advisory_plan_suggestion")
       expect(delegated).not.toContain("update_learning_course")
       expect(delegated.filter((id) => gate18Reads.some((allowed) => allowed === id))).toEqual(["course_query"])
 
@@ -893,6 +916,21 @@ describe("tool.registry", () => {
       })).map((tool) => tool.id)
       expect(delegatedLearnerStateReader).toContain("learner_state_judgment_read")
       expect(delegatedLearnerStateReader).not.toContain("update_learner_state_judgment")
+
+      const delegatedAdvisoryReader = (yield* registry.tools({
+        ...model,
+        authority: [
+          {
+            ruleset: Permission.fromConfig({
+              advisory_plan_suggestion_read: "allow",
+              update_advisory_plan_suggestion: "allow",
+            }),
+            absence: "deny",
+          },
+        ],
+      })).map((tool) => tool.id)
+      expect(delegatedAdvisoryReader).toContain("advisory_plan_suggestion_read")
+      expect(delegatedAdvisoryReader).not.toContain("update_advisory_plan_suggestion")
 
       const delegatedBootstrap = (yield* registry.tools({
         ...model,
@@ -1398,6 +1436,73 @@ describe("tool.registry", () => {
     }),
   )
 
+  it.instance("publishes fuzzy advisory advice and keeps its bounded directory read non-mutating", () =>
+    Effect.gen(function* () {
+      const registry = yield* ToolRegistry.Service
+      const agents = yield* Agent.Service
+      const db = (yield* Database.Service).db
+      const agent = yield* agents.defaultInfo()
+      const tools = yield* registry.tools({
+        providerID: ProviderV2.ID.opencode,
+        modelID: ModelV2.ID.make("test"),
+        agent,
+      })
+      const command = tools.find((tool) => tool.id === AdvisoryPlanSuggestion.UPDATE_CAPABILITY)
+      const query = tools.find((tool) => tool.id === AdvisoryPlanSuggestion.READ_CAPABILITY)
+      if (!command || !query) return yield* Effect.die("Advisory suggestion command/read tools are unavailable")
+
+      expect(command.description).toContain("source-bearing Tutor advice")
+      expect(command.description).toContain("fuzzy and fallible")
+      expect(command.description).toContain("not a scheduler")
+      expect(command.description).toContain("Natural learner correction")
+      expect(command.description).toContain("may remain zero-write")
+      expect(command.description).toContain("Never infer that advice was followed")
+      expect((command.jsonSchema as { additionalProperties?: boolean }).additionalProperties).toBe(false)
+      expect(
+        (query.jsonSchema as { anyOf?: Array<{ additionalProperties?: boolean }> }).anyOf?.map(
+          (branch) => branch.additionalProperties,
+        ),
+      ).toEqual([false, false, false, false])
+
+      const before = yield* db.get<{ count: number }>(sql`SELECT total_changes() AS count`)
+      const frontier = yield* db.all(sql`SELECT * FROM learning_shared_frontier ORDER BY sequence`)
+      const result = JSON.parse(
+        (yield* query.execute(
+          { action: "discover", disposition: "active", limit: 3 },
+          {
+            sessionID: SessionID.descending(),
+            messageID: MessageID.ascending(),
+            agent: agent.name,
+            abort: new AbortController().signal,
+            messages: [],
+            metadata: () => Effect.void,
+            ask: () => Effect.void,
+          },
+        )).output,
+      )
+      expect(result).toMatchObject({
+        page: {
+          items: [],
+          countAtCut: 0,
+          returnedCount: 0,
+          omittedCount: 0,
+          order: "identity_creation_then_suggestion_id_non_priority",
+        },
+      })
+      expect(yield* db.get<{ count: number }>(sql`SELECT total_changes() AS count`)).toEqual(before)
+      expect(yield* db.all(sql`SELECT * FROM learning_shared_frontier ORDER BY sequence`)).toEqual(frontier)
+      expect(
+        yield* db.get(sql`
+          SELECT
+            (SELECT count(*) FROM learning_command_invocation) AS invocations,
+            (SELECT count(*) FROM advisory_plan_suggestion_disposition) AS dispositions,
+            (SELECT count(*) FROM advisory_plan_suggestion_effect) AS effects
+        `),
+      ).toEqual({ invocations: 0, dispositions: 0, effects: 0 })
+      expect(AdvisoryPlanSuggestion.PERMISSION_PATTERN).toBe("advisory_plan_suggestion")
+    }),
+  )
+
   it.instance("derives one permission catalog from active tools", () =>
     Effect.gen(function* () {
       const registry = yield* ToolRegistry.Service
@@ -1412,6 +1517,8 @@ describe("tool.registry", () => {
       expect(catalog).toContain("assignment_read")
       expect(catalog).toContain("update_learner_state_judgment")
       expect(catalog).toContain("learner_state_judgment_read")
+      expect(catalog).toContain("update_advisory_plan_suggestion")
+      expect(catalog).toContain("advisory_plan_suggestion_read")
       expect(catalog).toContain("content_mutation")
       expect(catalog).not.toContain("content_write")
       expect(catalog).not.toContain("invalid")

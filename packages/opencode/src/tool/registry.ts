@@ -72,6 +72,8 @@ import { UpdateAssignmentTool } from "./update-assignment"
 import { AssignmentReadTool } from "./assignment-read"
 import { UpdateLearnerStateJudgmentTool } from "./update-learner-state-judgment"
 import { LearnerStateJudgmentReadTool } from "./learner-state-judgment-read"
+import { UpdateAdvisoryPlanSuggestionTool } from "./update-advisory-plan-suggestion"
+import { AdvisoryPlanSuggestionReadTool } from "./advisory-plan-suggestion-read"
 import {
   ContentInventoryTool,
   ContentReadTool,
@@ -95,6 +97,7 @@ import { Representation } from "@opencode-ai/core/representation"
 import { LearningContext } from "@opencode-ai/core/learning-context"
 import { Assignment } from "@opencode-ai/core/assignment"
 import { LearnerStateJudgment } from "@opencode-ai/core/learner-state-judgment"
+import { AdvisoryPlanSuggestion } from "@opencode-ai/core/advisory-plan-suggestion"
 
 export function webSearchEnabled(_providerID: ProviderV2.ID, flags = { exa: false, parallel: false }) {
   return flags.exa || flags.parallel
@@ -184,6 +187,8 @@ const layer = Layer.effect(
     const assignmentRead = yield* AssignmentReadTool
     const updateLearnerStateJudgment = yield* UpdateLearnerStateJudgmentTool
     const learnerStateJudgmentRead = yield* LearnerStateJudgmentReadTool
+    const updateAdvisoryPlanSuggestion = yield* UpdateAdvisoryPlanSuggestionTool
+    const advisoryPlanSuggestionRead = yield* AdvisoryPlanSuggestionReadTool
     const contentRoots = yield* ContentRootsTool
     const contentInventory = yield* ContentInventoryTool
     const contentSearch = yield* ContentSearchTool
@@ -324,6 +329,8 @@ const layer = Layer.effect(
           assignmentRead: Tool.init(assignmentRead),
           updateLearnerStateJudgment: Tool.init(updateLearnerStateJudgment),
           learnerStateJudgmentRead: Tool.init(learnerStateJudgmentRead),
+          updateAdvisoryPlanSuggestion: Tool.init(updateAdvisoryPlanSuggestion),
+          advisoryPlanSuggestionRead: Tool.init(advisoryPlanSuggestionRead),
           contentRoots: Tool.init(contentRoots),
           contentInventory: Tool.init(contentInventory),
           contentSearch: Tool.init(contentSearch),
@@ -358,6 +365,8 @@ const layer = Layer.effect(
             tool.assignmentRead,
             tool.updateLearnerStateJudgment,
             tool.learnerStateJudgmentRead,
+            tool.updateAdvisoryPlanSuggestion,
+            tool.advisoryPlanSuggestionRead,
             tool.contentRoots,
             tool.contentInventory,
             tool.contentSearch,
@@ -446,6 +455,7 @@ const layer = Layer.effect(
       const filtered = (yield* all()).filter((tool) => {
         if (tool.id === UpdateAssignmentTool.id && (input.authority?.length ?? 0) > 0) return false
         if (tool.id === UpdateLearnerStateJudgmentTool.id && (input.authority?.length ?? 0) > 0) return false
+        if (tool.id === UpdateAdvisoryPlanSuggestionTool.id && (input.authority?.length ?? 0) > 0) return false
         if (tool.id === WebSearchTool.id) {
           return webSearchEnabled(input.providerID, { exa: flags.enableExa, parallel: flags.enableParallel })
         }
@@ -623,6 +633,7 @@ export const node = LayerNode.make({
     Representation.node,
     Assignment.readNode,
     LearnerStateJudgment.readNode,
+    AdvisoryPlanSuggestion.readNode,
   ],
 })
 

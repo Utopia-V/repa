@@ -78,6 +78,7 @@ import { LearnerResponseEvidence } from "@opencode-ai/core/learner-response-evid
 import { FutureAttention } from "@opencode-ai/core/future-attention"
 import { Assignment } from "@opencode-ai/core/assignment"
 import { LearnerStateJudgment } from "@opencode-ai/core/learner-state-judgment"
+import { AdvisoryPlanSuggestion } from "@opencode-ai/core/advisory-plan-suggestion"
 import { AdmittedLearnerOccurrenceTable } from "@opencode-ai/core/learning-command/occurrence.sql"
 import { RetainedSteering } from "@opencode-ai/core/retained-steering"
 import { TurnLifecycle } from "@opencode-ai/core/turn/turn"
@@ -397,7 +398,10 @@ const cfg = {
           temperature: false,
           tool_call: true,
           release_date: "2025-01-01",
-          limit: { context: 200000, output: 10000 },
+          // This shared provider is a transport fixture, not a capacity-boundary oracle.
+          // Keep it comfortably above the complete released-v1 tool surface; focused
+          // capacity tests own the smaller-limit behavior.
+          limit: { context: 300000, output: 10000 },
           cost: { input: 0, output: 0 },
           options: {},
         },
@@ -3562,14 +3566,20 @@ it.instance(
   60_000,
 )
 
-it.instance(
+isolatedDatabaseBoundary.instance(
   "uses correctable learner-state memory across Sessions while useful teaching can remain zero-write",
   () =>
     Effect.gen(function* () {
-      const { llm } = yield* useServerConfig(providerCfg)
+      const { dir, llm } = yield* useServerConfig(providerCfg)
       const prompt = yield* SessionPrompt.Service
       const sessions = yield* Session.Service
       const database = yield* Database.Service
+      yield* database.db
+        .insert(ProjectTable)
+        .values({ id: Project.ID.global, worktree: AbsolutePath.make(dir), sandboxes: [] })
+        .onConflictDoNothing()
+        .run()
+        .pipe(Effect.orDie)
       const base = Math.floor(Date.now() / 1_000) * 1_000
       setSystemTime(new Date(base))
       yield* Effect.addFinalizer(() => Effect.sync(() => setSystemTime()))
@@ -3792,6 +3802,99 @@ it.instance(
           .pipe(Effect.orDie),
       ).toEqual(writesAfterCreate)
 
+      const initialStateRef = {
+        type: "learner_state_judgment_revision" as const,
+        judgmentID,
+        revisionID: firstRevisionID,
+        version: 1,
+      }
+      const initialAdviceSummary = "Binary search: guided invariant application before revisiting the definition."
+      const initialAdviceBody =
+        "For the next binary-search lesson, start with one guided application of the invariant to a concrete comparison, then ask the learner to choose the safely discarded half. Revisit the definition only if that application still breaks down."
+      const initialAdviceInput = {
+        cause: {
+          type: "proactive_tutor_proposal" as const,
+          rationale: "Use the exact current learner-state revision to keep later teaching focused and revisable.",
+        },
+        intents: [
+          {
+            operation: "create" as const,
+            operationOrdinal: 0,
+            createOrdinal: 0,
+            snapshot: {
+              learnerVisibleScope: "Binary-search teaching across later Sessions",
+              retrievalScope: {
+                type: "anchored" as const,
+                anchors: [
+                  {
+                    stableOwnerKey: { type: "learner_state_judgment" as const, judgmentID },
+                    exactBoundRef: initialStateRef,
+                  },
+                ],
+              },
+              purpose: "Adapt the next teaching move to the learner's currently recorded binary-search gap.",
+              directorySummary: initialAdviceSummary,
+              body: initialAdviceBody,
+              exactBasisRefs: [initialStateRef],
+              assumptionsAndUncertainty:
+                "This is fallible Tutor advice based on one exact learner-state revision, not a mastery or schedule claim.",
+            },
+          },
+        ],
+      }
+      const initialAdviceSessionID = SessionID.create()
+      const initialAdviceTurnID = Turn.ID.create()
+      yield* llm.toolMatch(
+        (hit) =>
+          hasApplicationRequest(hit.body) &&
+          hasExactDirectory(hit.body, { revisionID: firstRevisionID, version: 1 }),
+        LearnerStateJudgment.READ_CAPABILITY,
+        { action: "revision", judgmentID, revisionID: firstRevisionID },
+      )
+      yield* llm.toolMatch(
+        (hit) =>
+          hasApplicationRequest(hit.body) &&
+          hasExactRead(hit.body, { revisionID: firstRevisionID, version: 1, judgmentBody: initialBody }),
+        AdvisoryPlanSuggestion.UPDATE_CAPABILITY,
+        initialAdviceInput,
+      )
+      yield* llm.text("I kept one fallible, state-linked teaching suggestion and left it open to correction.")
+      yield* prompt.start({
+        sessionID: initialAdviceSessionID,
+        turnID: initialAdviceTurnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 3, tool: 2 },
+        session: {
+          title: "Learner-state-linked advisory creation",
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        },
+        parts: [{ type: "text", text: applicationRequest }],
+      })
+      expect((yield* prompt.awaitTurn(initialAdviceSessionID, initialAdviceTurnID)).terminal).toMatchObject({
+        outcome: "completed",
+        counters: { model: 3, tool: 2 },
+      })
+      const initialAdvice = (yield* database.db.transaction((tx) =>
+        AdvisoryPlanSuggestion.read(tx, { type: "discover", disposition: "active" }, { limit: 8 }),
+      )).items.find(
+        (item): item is AdvisoryPlanSuggestion.Suggestion =>
+          "current" in item && item.current.snapshot.directorySummary === initialAdviceSummary,
+      )
+      if (!initialAdvice) return yield* Effect.die("Learner-state-linked advice did not commit an exact head")
+      const adviceSuggestionID = initialAdvice.id
+      const initialAdviceRevisionID = initialAdvice.current.id
+      expect(initialAdvice.current.snapshot).toMatchObject({
+        body: initialAdviceBody,
+        retrievalScope: {
+          type: "anchored",
+          anchors: [{ stableOwnerKey: { type: "learner_state_judgment", judgmentID } }],
+        },
+        exactBasis: [{ ref: initialStateRef }],
+      })
+
       const beforeCorrection = yield* database.db.transaction((tx) =>
         LearnerStateJudgment.readCurrent(tx, judgmentID, Date.now()),
       )
@@ -3860,18 +3963,189 @@ it.instance(
         authorAndCause: { type: "learner_correction" },
       })
 
+      const hasAdviceDirectory = (
+        body: unknown,
+        input: { revisionID: string; version: number; directorySummary: string },
+      ) =>
+        providerText(body).some(
+          (value) =>
+            value.includes('"owner":"advisory_plan_suggestion"') &&
+            value.includes(`"suggestionID":"${adviceSuggestionID}"`) &&
+            value.includes(`"revisionID":"${input.revisionID}"`) &&
+            value.includes(`"version":${input.version}`) &&
+            value.includes(`"directorySummary":${JSON.stringify(input.directorySummary)}`),
+        )
+      const hasAdviceRead = (body: unknown, input: { revisionID: string; version: number; adviceBody: string }) =>
+        providerText(body).some(
+          (value) =>
+            value.includes('"page":{') &&
+            value.includes('"returnedCount":1') &&
+            value.includes(`"suggestionID":"${adviceSuggestionID}"`) &&
+            value.includes(`"id":"${input.revisionID}"`) &&
+            value.includes(`"version":${input.version}`) &&
+            value.includes(`"body":${JSON.stringify(input.adviceBody)}`),
+        )
+      const adviceBeforeStateCorrection = yield* database.db.transaction((tx) =>
+        AdvisoryPlanSuggestion.readCurrent(tx, adviceSuggestionID, Date.now()),
+      )
+      if (!adviceBeforeStateCorrection?.currentHead) {
+        return yield* Effect.die("Learner-state-linked advice lost its exact current head")
+      }
+      const correctedStateRef = {
+        type: "learner_state_judgment_revision" as const,
+        judgmentID,
+        revisionID: corrected.revision.id,
+        version: 2,
+      }
+      const correctedAdviceSummary = "Binary search: define the invariant before guided application."
+      const correctedAdviceBody =
+        "For the next binary-search lesson, begin by defining the invariant and checking it against the initial interval. Only then guide one comparison and ask which half remains possible. Keep later transfer work provisional."
+      const adviceCorrectionInput = {
+        cause: {
+          type: "tutor_revision" as const,
+          rationale: "The exact corrected learner-state revision changes the useful teaching order.",
+        },
+        intents: [
+          {
+            operation: "revise" as const,
+            operationOrdinal: 0,
+            suggestionID: adviceSuggestionID,
+            expectedHead: adviceBeforeStateCorrection.currentHead,
+            snapshot: {
+              learnerVisibleScope: "Binary-search teaching across later Sessions",
+              retrievalScope: {
+                type: "anchored" as const,
+                anchors: [
+                  {
+                    stableOwnerKey: { type: "learner_state_judgment" as const, judgmentID },
+                    exactBoundRef: correctedStateRef,
+                  },
+                ],
+              },
+              purpose: "Adapt the next teaching move to the learner's currently recorded binary-search gap.",
+              directorySummary: correctedAdviceSummary,
+              body: correctedAdviceBody,
+              exactBasisRefs: [correctedStateRef],
+              assumptionsAndUncertainty:
+                "This remains fallible Tutor advice; the learner-state correction changes its basis without certifying mastery.",
+            },
+            rationale: "Revise the same suggestion rather than deterministically recomputing a schedule.",
+          },
+        ],
+      }
+      const adviceCorrectionSessionID = SessionID.create()
+      const adviceCorrectionTurnID = Turn.ID.create()
+      const adviceCorrectionHit = (yield* llm.hits).length
+      yield* llm.toolMatch(
+        (hit) =>
+          hasApplicationRequest(hit.body) &&
+          hasExactDirectory(hit.body, { revisionID: corrected.revision.id, version: 2 }) &&
+          hasAdviceDirectory(hit.body, {
+            revisionID: initialAdviceRevisionID,
+            version: 1,
+            directorySummary: initialAdviceSummary,
+          }),
+        LearnerStateJudgment.READ_CAPABILITY,
+        { action: "revision", judgmentID, revisionID: corrected.revision.id },
+      )
+      yield* llm.toolMatch(
+        (hit) =>
+          hasApplicationRequest(hit.body) &&
+          hasExactRead(hit.body, {
+            revisionID: corrected.revision.id,
+            version: 2,
+            judgmentBody: correctedBody,
+          }) &&
+          hasAdviceDirectory(hit.body, {
+            revisionID: initialAdviceRevisionID,
+            version: 1,
+            directorySummary: initialAdviceSummary,
+          }),
+        AdvisoryPlanSuggestion.UPDATE_CAPABILITY,
+        adviceCorrectionInput,
+      )
+      yield* llm.text("I revised the same fallible teaching suggestion from the corrected learner-state source.")
+      yield* prompt.start({
+        sessionID: adviceCorrectionSessionID,
+        turnID: adviceCorrectionTurnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 3, tool: 2 },
+        session: {
+          title: "Learner-state-driven advisory correction",
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        },
+        parts: [{ type: "text", text: applicationRequest }],
+      })
+      expect((yield* prompt.awaitTurn(adviceCorrectionSessionID, adviceCorrectionTurnID)).terminal).toMatchObject({
+        outcome: "completed",
+        counters: { model: 3, tool: 2 },
+      })
+      const adviceCorrectionBodies = [
+        (yield* llm.hits)[adviceCorrectionHit]?.body,
+        (yield* llm.hits)[adviceCorrectionHit + 1]?.body,
+      ]
+      expect(
+        hasExactRead(adviceCorrectionBodies[1], {
+          revisionID: corrected.revision.id,
+          version: 2,
+          judgmentBody: correctedBody,
+        }),
+      ).toBe(true)
+      const correctedAdvice = yield* database.db.transaction((tx) =>
+        AdvisoryPlanSuggestion.readCurrent(tx, adviceSuggestionID, Date.now()),
+      )
+      if (!correctedAdvice) return yield* Effect.die("Learner-state-driven advice did not produce a successor")
+      expect(correctedAdvice.revision).toMatchObject({
+        version: 2,
+        predecessorRevisionID: initialAdviceRevisionID,
+        snapshot: {
+          directorySummary: correctedAdviceSummary,
+          body: correctedAdviceBody,
+          retrievalScope: {
+            type: "anchored",
+            anchors: [{ exactBound: { ref: correctedStateRef } }],
+          },
+          exactBasis: [{ ref: correctedStateRef }],
+        },
+        authorAndCause: { type: "tutor_revision" },
+      })
+      expect(
+        yield* database.db.transaction((tx) =>
+          AdvisoryPlanSuggestion.readExactRevision(tx, adviceSuggestionID, initialAdviceRevisionID),
+        ),
+      ).toEqual(initialAdvice.current)
+
       const definitionSessionID = SessionID.create()
       const definitionTurnID = Turn.ID.create()
       const definitionTeaching =
         "The invariant says: before every loop iteration, if the target exists, its index is still inside the current search interval. Start by checking that this is true before the first comparison."
       const definitionHit = (yield* llm.hits).length
       const pendingBeforeDefinition = yield* llm.pending
-      yield* queueTeachingMove({
-        revisionID: corrected.revision.id,
-        version: 2,
-        judgmentBody: correctedBody,
-        teaching: definitionTeaching,
-      })
+      yield* llm.toolMatch(
+        (hit) =>
+          hasApplicationRequest(hit.body) &&
+          hasExactDirectory(hit.body, { revisionID: corrected.revision.id, version: 2 }) &&
+          hasAdviceDirectory(hit.body, {
+            revisionID: correctedAdvice.revision.id,
+            version: 2,
+            directorySummary: correctedAdviceSummary,
+          }),
+        AdvisoryPlanSuggestion.READ_CAPABILITY,
+        { action: "revision", suggestionID: adviceSuggestionID, revisionID: correctedAdvice.revision.id },
+      )
+      yield* llm.textMatch(
+        (hit) =>
+          hasApplicationRequest(hit.body) &&
+          hasAdviceRead(hit.body, {
+            revisionID: correctedAdvice.revision.id,
+            version: 2,
+            adviceBody: correctedAdviceBody,
+          }),
+        definitionTeaching,
+      )
       yield* prompt.start({
         sessionID: definitionSessionID,
         turnID: definitionTurnID,
@@ -3896,7 +4170,9 @@ it.instance(
       const correctedContext = providerText(correctedContextBody).join("\n")
       expect(correctedContext).toContain(corrected.revision.id)
       expect(correctedContext).not.toContain(firstRevisionID)
-      expect(providerText(correctedReadBody).join("\n")).toContain(correctedBody)
+      expect(correctedContext).toContain(correctedAdvice.revision.id)
+      expect(correctedContext).not.toContain(initialAdviceRevisionID)
+      expect(providerText(correctedReadBody).join("\n")).toContain(correctedAdviceBody)
       expect(
         hasExactDirectory(applicationContextBody, { revisionID: corrected.revision.id, version: 1 }),
       ).toBe(false)
@@ -3909,10 +4185,10 @@ it.instance(
       ).toBe(false)
       expect(hasExactDirectory(correctedContextBody, { revisionID: corrected.revision.id, version: 2 })).toBe(true)
       expect(
-        hasExactRead(correctedReadBody, {
-          revisionID: corrected.revision.id,
+        hasAdviceRead(correctedReadBody, {
+          revisionID: correctedAdvice.revision.id,
           version: 2,
-          judgmentBody: correctedBody,
+          adviceBody: correctedAdviceBody,
         }),
       ).toBe(true)
       expect(hasExactDirectory(correctedContextBody, { revisionID: firstRevisionID, version: 2 })).toBe(false)
@@ -3928,20 +4204,20 @@ it.instance(
         .flatMap((message) => message.parts)
         .find(
           (part): part is SessionV1.ToolPart =>
-            part.type === "tool" && part.tool === LearnerStateJudgment.READ_CAPABILITY,
+            part.type === "tool" && part.tool === AdvisoryPlanSuggestion.READ_CAPABILITY,
         )
       if (!correctedRead || correctedRead.state.status !== "completed") {
-        return yield* Effect.die("Corrected teaching omitted its exact lazy read")
+        return yield* Effect.die("Corrected teaching omitted its exact advisory lazy read")
       }
       expect(JSON.parse(correctedRead.state.output)).toMatchObject({
         page: {
           returnedCount: 1,
           items: [
             {
-              id: corrected.revision.id,
-              judgmentID,
+              id: correctedAdvice.revision.id,
+              suggestionID: adviceSuggestionID,
               version: 2,
-              snapshot: { judgmentBody: correctedBody },
+              snapshot: { body: correctedAdviceBody },
             },
           ],
         },
@@ -4015,7 +4291,9 @@ it.instance(
 
       yield* sessions.remove(creationSessionID)
       yield* sessions.remove(applicationSessionID)
+      yield* sessions.remove(initialAdviceSessionID)
       yield* sessions.remove(correctionSessionID)
+      yield* sessions.remove(adviceCorrectionSessionID)
       yield* sessions.remove(definitionSessionID)
       yield* sessions.remove(zeroWriteSessionID)
 
@@ -4030,6 +4308,667 @@ it.instance(
     }),
   { config: cfg },
   90_000,
+)
+
+isolatedDatabaseBoundary.instance(
+  "uses exact fallback-scoped advisory suggestions across Sessions while useful teaching can remain zero-write",
+  () =>
+    Effect.gen(function* () {
+      const { dir, llm } = yield* useServerConfig(providerCfg)
+      const prompt = yield* SessionPrompt.Service
+      const sessions = yield* Session.Service
+      const database = yield* Database.Service
+      yield* database.db
+        .insert(ProjectTable)
+        .values({ id: Project.ID.global, worktree: AbsolutePath.make(dir), sandboxes: [] })
+        .onConflictDoNothing()
+        .run()
+        .pipe(Effect.orDie)
+
+      const proposal =
+        "When we continue with continuations, start from one concrete worked example before asking me to generalize."
+      const initialSummary = "Continuation study: worked example before generalization."
+      const initialBody =
+        "For the next continuation lesson, begin with one fully worked concrete continuation example, then ask the learner to explain the invariant in their own words before attempting a nearby transfer problem. Keep later steps as a revisable outline, not a schedule."
+      const createInput = {
+        cause: {
+          type: "responsive_tutor_proposal" as const,
+          excerpt: {
+            text: proposal,
+            startByte: 0,
+            endByte: new TextEncoder().encode(proposal).byteLength,
+          },
+          rationale: "Preserve useful cross-Session advice without turning it into a rigid schedule.",
+        },
+        intents: [
+          {
+            operation: "create" as const,
+            operationOrdinal: 0,
+            createOrdinal: 0,
+            snapshot: {
+              learnerVisibleScope: "Learning continuations across later Sessions",
+              retrievalScope: {
+                type: "learner_home_fallback" as const,
+                reason: "no_stable_owner_anchor" as const,
+              },
+              purpose: "Guide later continuation teaching when no durable topic owner exists yet.",
+              directorySummary: initialSummary,
+              body: initialBody,
+              exactBasisRefs: [],
+              assumptionsAndUncertainty:
+                "This is fallible Tutor advice inferred from the learner's request and should change naturally when corrected.",
+            },
+          },
+        ],
+      }
+      const creationSessionID = SessionID.create()
+      const creationTurnID = Turn.ID.create()
+      yield* llm.tool(AdvisoryPlanSuggestion.UPDATE_CAPABILITY, createInput)
+      yield* llm.text("I kept that as revisable learning advice, not as a schedule or commitment.")
+      yield* prompt.start({
+        sessionID: creationSessionID,
+        turnID: creationTurnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 2, tool: 1 },
+        session: {
+          title: "Continuation advisory proposal",
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        },
+        parts: [{ type: "text", text: proposal }],
+      })
+      const creationResult = yield* prompt.awaitTurn(creationSessionID, creationTurnID)
+      if (!creationResult.terminal || creationResult.terminal.outcome !== "completed") {
+        return yield* Effect.die(
+          JSON.stringify({
+            terminal: creationResult.terminal,
+            messages: yield* sessions.messages({ sessionID: creationSessionID }),
+          }),
+        )
+      }
+      expect(creationResult.terminal).toMatchObject({
+        outcome: "completed",
+        counters: { model: 2, tool: 1 },
+      })
+
+      const discovered = yield* database.db.transaction((tx) =>
+        AdvisoryPlanSuggestion.read(tx, { type: "discover", disposition: "active" }, { limit: 8 }),
+      )
+      const created = discovered.items.find(
+        (item): item is AdvisoryPlanSuggestion.Suggestion =>
+          "current" in item && item.current.snapshot.directorySummary === initialSummary,
+      )
+      if (!created) return yield* Effect.die("Released-v1 advisory proposal did not commit an exact current head")
+      expect(created.current).toMatchObject({
+        version: 1,
+        disposition: "active",
+        snapshot: {
+          retrievalScope: { type: "learner_home_fallback", reason: "no_stable_owner_anchor" },
+          directorySummary: initialSummary,
+          body: initialBody,
+          exactBasis: [],
+        },
+      })
+      const suggestionID = created.id
+      const firstRevisionID = created.current.id
+      expect(
+        yield* database.db.get(sql`
+          SELECT
+            (SELECT count(*) FROM course) AS courses,
+            (SELECT count(*) FROM learner_goal) AS goals,
+            (SELECT count(*) FROM assignment) AS assignments,
+            (SELECT count(*) FROM material_map) AS materials,
+            (SELECT count(*) FROM learner_response_evidence_record) AS evidence,
+            (SELECT count(*) FROM learner_state_judgment) AS learnerState
+        `),
+      ).toEqual({ courses: 0, goals: 0, assignments: 0, materials: 0, evidence: 0, learnerState: 0 })
+
+      const teachingRequest = "Continue our study of continuations using the current advice you retained for me."
+      const hasTeachingRequest = (body: unknown) =>
+        providerText(body).some((value) => value.includes(teachingRequest))
+      const hasExactDirectory = (
+        body: unknown,
+        input: { revisionID: string; version: number; directorySummary: string },
+      ) =>
+        providerText(body).some(
+          (value) =>
+            value.includes("[Repa learning context — protected]") &&
+            value.includes('"owner":"advisory_plan_suggestion"') &&
+            value.includes('"directoryCursor":') &&
+            value.includes(`"suggestionID":"${suggestionID}"`) &&
+            value.includes(`"revisionID":"${input.revisionID}"`) &&
+            value.includes(`"version":${input.version}`) &&
+            value.includes('"retrievalArm":"learner_home_fallback"') &&
+            value.includes(`"directorySummary":${JSON.stringify(input.directorySummary)}`),
+        )
+      const hasExactRead = (
+        body: unknown,
+        input: { revisionID: string; version: number; body: string },
+      ) =>
+        providerText(body).some(
+          (value) =>
+            value.includes('"page":{') &&
+            value.includes('"returnedCount":1') &&
+            value.includes(`"suggestionID":"${suggestionID}"`) &&
+            value.includes(`"id":"${input.revisionID}"`) &&
+            value.includes(`"version":${input.version}`) &&
+            value.includes(`"body":${JSON.stringify(input.body)}`),
+        )
+      const queueTeaching = (input: {
+        revisionID: string
+        version: number
+        directorySummary: string
+        body: string
+        teaching: string
+      }) =>
+        Effect.gen(function* () {
+          yield* llm.toolMatch(
+            (hit) => hasTeachingRequest(hit.body) && hasExactDirectory(hit.body, input),
+            AdvisoryPlanSuggestion.READ_CAPABILITY,
+            { action: "revision", suggestionID, revisionID: input.revisionID },
+          )
+          yield* llm.textMatch(
+            (hit) =>
+              hasTeachingRequest(hit.body) &&
+              hasExactDirectory(hit.body, input) &&
+              hasExactRead(hit.body, input),
+            input.teaching,
+          )
+        })
+
+      const writesAfterCreate = yield* database.db.get(sql`
+        SELECT
+          (SELECT count(*) FROM advisory_plan_suggestion_revision) AS revisions,
+          (SELECT count(*) FROM advisory_plan_suggestion_effect) AS effects,
+          (SELECT count(*) FROM advisory_plan_suggestion_commit_seal) AS seals
+      `)
+      const absentControl = "No retained advisory directory is available in this Session, so I need current guidance before using it."
+      const absentSessionID = SessionID.create()
+      const absentTurnID = Turn.ID.create()
+      const absentHit = (yield* llm.hits).length
+      const pendingBeforeAbsentControl = yield* llm.pending
+      yield* llm.textMatch(
+        (hit) =>
+          hasTeachingRequest(hit.body) &&
+          !providerText(hit.body).some((value) => value.includes(`"suggestionID":"${suggestionID}"`)),
+        absentControl,
+      )
+      yield* prompt.start({
+        sessionID: absentSessionID,
+        turnID: absentTurnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 1, tool: 1 },
+        session: {
+          title: "Continuation teaching without advisory visibility",
+          permission: [
+            { permission: "*", pattern: "*", action: "allow" },
+            { permission: AdvisoryPlanSuggestion.READ_CAPABILITY, pattern: "*", action: "deny" },
+          ],
+        },
+        parts: [{ type: "text", text: teachingRequest }],
+      })
+      expect((yield* prompt.awaitTurn(absentSessionID, absentTurnID)).terminal).toMatchObject({
+        outcome: "completed",
+        counters: { model: 1, tool: 0 },
+      })
+      expect(yield* llm.pending).toBe(pendingBeforeAbsentControl)
+      const absentContextBody = (yield* llm.hits)[absentHit]?.body
+      expect(hasTeachingRequest(absentContextBody)).toBe(true)
+      expect(providerText(absentContextBody).join("\n")).not.toContain(`"suggestionID":"${suggestionID}"`)
+      const absentMessages = yield* sessions.messages({ sessionID: absentSessionID })
+      expect(
+        absentMessages.flatMap((message) => message.parts).some((part) => part.type === "text" && part.text === absentControl),
+      ).toBe(true)
+      expect(
+        absentMessages
+          .flatMap((message) => message.parts)
+          .some(
+            (part) =>
+              part.type === "tool" &&
+              (part.tool === AdvisoryPlanSuggestion.READ_CAPABILITY ||
+                part.tool === AdvisoryPlanSuggestion.UPDATE_CAPABILITY),
+          ),
+      ).toBe(false)
+      expect(
+        yield* database.db.get(sql`
+          SELECT
+            (SELECT count(*) FROM advisory_plan_suggestion_revision) AS revisions,
+            (SELECT count(*) FROM advisory_plan_suggestion_effect) AS effects,
+            (SELECT count(*) FROM advisory_plan_suggestion_commit_seal) AS seals
+        `),
+      ).toEqual(writesAfterCreate)
+      const exampleTeaching =
+        "Take the continuation that receives k and immediately calls k(3): the surrounding computation is paused, while k names exactly what happens next. Trace that one concrete control transfer before generalizing the invariant."
+      const firstTeachingSessionID = SessionID.create()
+      const firstTeachingTurnID = Turn.ID.create()
+      const firstTeachingHit = (yield* llm.hits).length
+      const pendingBeforeFirstTeaching = yield* llm.pending
+      yield* queueTeaching({
+        revisionID: firstRevisionID,
+        version: 1,
+        directorySummary: initialSummary,
+        body: initialBody,
+        teaching: exampleTeaching,
+      })
+      yield* prompt.start({
+        sessionID: firstTeachingSessionID,
+        turnID: firstTeachingTurnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 2, tool: 1 },
+        session: {
+          title: "Continuation teaching from advisory memory",
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        },
+        parts: [{ type: "text", text: teachingRequest }],
+      })
+      expect((yield* prompt.awaitTurn(firstTeachingSessionID, firstTeachingTurnID)).terminal).toMatchObject({
+        outcome: "completed",
+        counters: { model: 2, tool: 1 },
+      })
+      expect(yield* llm.pending).toBe(pendingBeforeFirstTeaching)
+
+      const firstContextBody = (yield* llm.hits)[firstTeachingHit]?.body
+      const firstReadBody = (yield* llm.hits)[firstTeachingHit + 1]?.body
+      expect(hasExactDirectory(firstContextBody, {
+        revisionID: firstRevisionID,
+        version: 1,
+        directorySummary: initialSummary,
+      })).toBe(true)
+      expect(providerText(firstContextBody).join("\n")).not.toContain(initialBody)
+      expect(hasExactRead(firstReadBody, { revisionID: firstRevisionID, version: 1, body: initialBody })).toBe(true)
+      const firstTeachingMessages = yield* sessions.messages({ sessionID: firstTeachingSessionID })
+      const firstRead = firstTeachingMessages
+        .flatMap((message) => message.parts)
+        .find(
+          (part): part is SessionV1.ToolPart =>
+            part.type === "tool" && part.tool === AdvisoryPlanSuggestion.READ_CAPABILITY,
+        )
+      if (!firstRead || firstRead.state.status !== "completed") {
+        return yield* Effect.die("Cross-Session advisory consumer omitted its exact lazy read")
+      }
+      expect(JSON.parse(firstRead.state.output)).toMatchObject({
+        page: {
+          returnedCount: 1,
+          items: [
+            {
+              id: firstRevisionID,
+              suggestionID,
+              version: 1,
+              snapshot: { directorySummary: initialSummary, body: initialBody },
+            },
+          ],
+        },
+      })
+      expect(
+        firstTeachingMessages
+          .flatMap((message) => message.parts)
+          .some((part) => part.type === "text" && part.text === exampleTeaching),
+      ).toBe(true)
+      expect(
+        yield* database.db.get(sql`
+          SELECT
+            (SELECT count(*) FROM advisory_plan_suggestion_revision) AS revisions,
+            (SELECT count(*) FROM advisory_plan_suggestion_effect) AS effects,
+            (SELECT count(*) FROM advisory_plan_suggestion_commit_seal) AS seals
+        `),
+      ).toEqual(writesAfterCreate)
+
+      const current = yield* database.db.transaction((tx) =>
+        AdvisoryPlanSuggestion.readCurrent(tx, suggestionID, Date.now()),
+      )
+      if (!current?.currentHead) return yield* Effect.die("Advisory correction lost the exact current head")
+      const correction =
+        "Change that advice: start by defining continuations in plain language before showing the worked example."
+      const correctedSummary = "Continuation study: plain-language definition before the worked example."
+      const correctedBody =
+        "For the next continuation lesson, first give a plain-language definition of a continuation as the rest of a computation made explicit. Then show one worked example, check the learner's interpretation, and only afterward offer a nearby transfer problem. Keep the distant outline revisable."
+      const correctionInput = {
+        cause: {
+          type: "learner_revision" as const,
+          excerpt: {
+            text: correction,
+            startByte: 0,
+            endByte: new TextEncoder().encode(correction).byteLength,
+          },
+        },
+        intents: [
+          {
+            operation: "revise" as const,
+            operationOrdinal: 0,
+            suggestionID,
+            expectedHead: current.currentHead,
+            snapshot: {
+              learnerVisibleScope: "Learning continuations across later Sessions",
+              retrievalScope: {
+                type: "learner_home_fallback" as const,
+                reason: "no_stable_owner_anchor" as const,
+              },
+              purpose: "Guide later continuation teaching when no durable topic owner exists yet.",
+              directorySummary: correctedSummary,
+              body: correctedBody,
+              exactBasisRefs: [],
+              assumptionsAndUncertainty:
+                "This learner correction changes the suggested teaching order without becoming a schedule or mastery claim.",
+            },
+            rationale: "Honor the learner's natural correction in the next teaching move.",
+          },
+        ],
+      }
+      const correctionSessionID = SessionID.create()
+      const correctionTurnID = Turn.ID.create()
+      yield* llm.tool(AdvisoryPlanSuggestion.UPDATE_CAPABILITY, correctionInput)
+      yield* llm.text("I revised the advice to begin with the definition; it remains fallible and correctable.")
+      yield* prompt.start({
+        sessionID: correctionSessionID,
+        turnID: correctionTurnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 2, tool: 1 },
+        session: {
+          title: "Natural advisory correction",
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        },
+        parts: [{ type: "text", text: correction }],
+      })
+      expect((yield* prompt.awaitTurn(correctionSessionID, correctionTurnID)).terminal).toMatchObject({
+        outcome: "completed",
+        counters: { model: 2, tool: 1 },
+      })
+      const corrected = yield* database.db.transaction((tx) =>
+        AdvisoryPlanSuggestion.readCurrent(tx, suggestionID, Date.now()),
+      )
+      if (!corrected) return yield* Effect.die("Advisory correction did not produce a current successor")
+      expect(corrected.revision).toMatchObject({
+        version: 2,
+        predecessorRevisionID: firstRevisionID,
+        snapshot: { directorySummary: correctedSummary, body: correctedBody },
+        authorAndCause: { type: "learner_revision" },
+      })
+
+      const definitionTeaching =
+        "A continuation is the rest of a computation packaged as something you can call. In the concrete k(3) example, k is not the past work—it is exactly what should happen after the value 3 is produced."
+      const correctedTeachingSessionID = SessionID.create()
+      const correctedTeachingTurnID = Turn.ID.create()
+      const correctedTeachingHit = (yield* llm.hits).length
+      const pendingBeforeCorrectedTeaching = yield* llm.pending
+      yield* queueTeaching({
+        revisionID: corrected.revision.id,
+        version: 2,
+        directorySummary: correctedSummary,
+        body: correctedBody,
+        teaching: definitionTeaching,
+      })
+      yield* prompt.start({
+        sessionID: correctedTeachingSessionID,
+        turnID: correctedTeachingTurnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 2, tool: 1 },
+        session: {
+          title: "Corrected continuation teaching",
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        },
+        parts: [{ type: "text", text: teachingRequest }],
+      })
+      const correctedTeachingResult = yield* prompt.awaitTurn(correctedTeachingSessionID, correctedTeachingTurnID)
+      if (!correctedTeachingResult.terminal || correctedTeachingResult.terminal.outcome !== "completed") {
+        return yield* Effect.die(
+          JSON.stringify({
+            terminal: correctedTeachingResult.terminal,
+            messages: yield* sessions.messages({ sessionID: correctedTeachingSessionID }),
+          }),
+        )
+      }
+      expect(correctedTeachingResult.terminal).toMatchObject({
+        outcome: "completed",
+        counters: { model: 2, tool: 1 },
+      })
+      expect(yield* llm.pending).toBe(pendingBeforeCorrectedTeaching)
+      const correctedContextBody = (yield* llm.hits)[correctedTeachingHit]?.body
+      const correctedReadBody = (yield* llm.hits)[correctedTeachingHit + 1]?.body
+      expect(hasExactDirectory(correctedContextBody, {
+        revisionID: corrected.revision.id,
+        version: 2,
+        directorySummary: correctedSummary,
+      })).toBe(true)
+      expect(hasExactRead(correctedReadBody, {
+        revisionID: corrected.revision.id,
+        version: 2,
+        body: correctedBody,
+      })).toBe(true)
+      expect(hasExactDirectory(firstContextBody, {
+        revisionID: corrected.revision.id,
+        version: 2,
+        directorySummary: correctedSummary,
+      })).toBe(false)
+      expect(hasExactRead(firstReadBody, {
+        revisionID: corrected.revision.id,
+        version: 2,
+        body: correctedBody,
+      })).toBe(false)
+      expect(hasExactDirectory(correctedContextBody, {
+        revisionID: firstRevisionID,
+        version: 2,
+        directorySummary: correctedSummary,
+      })).toBe(false)
+      const correctedTeachingMessages = yield* sessions.messages({ sessionID: correctedTeachingSessionID })
+      expect(
+        correctedTeachingMessages
+          .flatMap((message) => message.parts)
+          .some((part) => part.type === "text" && part.text === definitionTeaching),
+      ).toBe(true)
+      expect(
+        correctedTeachingMessages
+          .flatMap((message) => message.parts)
+          .some((part) => part.type === "text" && part.text === exampleTeaching),
+      ).toBe(false)
+      expect(
+        firstTeachingMessages
+          .flatMap((message) => message.parts)
+          .some((part) => part.type === "text" && part.text === definitionTeaching),
+      ).toBe(false)
+
+      const currentControlTeaching =
+        "The retained revision is the corrected definition-first advice, so this control follows that exact body rather than the superseded example-first revision."
+      const staleBodyTeaching = "This response must never be selected from the superseded advisory body."
+      const wrongRevisionSessionID = SessionID.create()
+      const wrongRevisionTurnID = Turn.ID.create()
+      const wrongRevisionHit = (yield* llm.hits).length
+      const pendingBeforeWrongRevisionControl = yield* llm.pending
+      yield* llm.toolMatch(
+        (hit) =>
+          hasTeachingRequest(hit.body) &&
+          hasExactDirectory(hit.body, {
+            revisionID: firstRevisionID,
+            version: 1,
+            directorySummary: initialSummary,
+          }),
+        AdvisoryPlanSuggestion.READ_CAPABILITY,
+        { action: "revision", suggestionID, revisionID: firstRevisionID },
+      )
+      yield* llm.toolMatch(
+        (hit) =>
+          hasTeachingRequest(hit.body) &&
+          hasExactDirectory(hit.body, {
+            revisionID: corrected.revision.id,
+            version: 2,
+            directorySummary: correctedSummary,
+          }),
+        AdvisoryPlanSuggestion.READ_CAPABILITY,
+        { action: "revision", suggestionID, revisionID: corrected.revision.id },
+      )
+      yield* llm.textMatch(
+        (hit) =>
+          hasTeachingRequest(hit.body) &&
+          hasExactRead(hit.body, { revisionID: firstRevisionID, version: 1, body: initialBody }),
+        staleBodyTeaching,
+      )
+      yield* llm.textMatch(
+        (hit) =>
+          hasTeachingRequest(hit.body) &&
+          hasExactRead(hit.body, { revisionID: corrected.revision.id, version: 2, body: correctedBody }),
+        currentControlTeaching,
+      )
+      yield* prompt.start({
+        sessionID: wrongRevisionSessionID,
+        turnID: wrongRevisionTurnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 2, tool: 1 },
+        session: {
+          title: "Continuation advisory wrong-revision control",
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        },
+        parts: [{ type: "text", text: teachingRequest }],
+      })
+      expect((yield* prompt.awaitTurn(wrongRevisionSessionID, wrongRevisionTurnID)).terminal).toMatchObject({
+        outcome: "completed",
+        counters: { model: 2, tool: 1 },
+      })
+      expect(yield* llm.pending).toBe(pendingBeforeWrongRevisionControl + 2)
+      const wrongRevisionContextBody = (yield* llm.hits)[wrongRevisionHit]?.body
+      const wrongRevisionReadBody = (yield* llm.hits)[wrongRevisionHit + 1]?.body
+      expect(hasExactDirectory(wrongRevisionContextBody, {
+        revisionID: corrected.revision.id,
+        version: 2,
+        directorySummary: correctedSummary,
+      })).toBe(true)
+      expect(hasExactDirectory(wrongRevisionContextBody, {
+        revisionID: firstRevisionID,
+        version: 1,
+        directorySummary: initialSummary,
+      })).toBe(false)
+      expect(hasExactRead(wrongRevisionReadBody, {
+        revisionID: corrected.revision.id,
+        version: 2,
+        body: correctedBody,
+      })).toBe(true)
+      expect(hasExactRead(wrongRevisionReadBody, {
+        revisionID: firstRevisionID,
+        version: 1,
+        body: initialBody,
+      })).toBe(false)
+      const wrongRevisionMessages = yield* sessions.messages({ sessionID: wrongRevisionSessionID })
+      expect(
+        wrongRevisionMessages
+          .flatMap((message) => message.parts)
+          .some((part) => part.type === "text" && part.text === currentControlTeaching),
+      ).toBe(true)
+      expect(
+        wrongRevisionMessages
+          .flatMap((message) => message.parts)
+          .some(
+            (part) => part.type === "text" && part.text === staleBodyTeaching,
+          ),
+      ).toBe(false)
+      yield* llm.reset
+
+      const writesBeforeZeroWrite = yield* database.db.get(sql`
+        SELECT
+          (SELECT count(*) FROM advisory_plan_suggestion_revision) AS revisions,
+          (SELECT count(*) FROM advisory_plan_suggestion_effect) AS effects,
+          (SELECT count(*) FROM advisory_plan_suggestion_commit_seal) AS seals
+      `)
+      const zeroWriteSessionIDs = yield* Effect.forEach(
+        [
+          {
+            title: "Useful advisory zero-write explanation",
+            request: "Explain tail recursion with one concrete call trace; no durable planning update is needed.",
+            response:
+              "For sum(3, 0), each tail call passes the whole remaining state forward: sum(2, 3), then sum(1, 5), then sum(0, 6). Nothing remains to do while the calls return.",
+          },
+          {
+            title: "Useful advisory zero-write demonstration",
+            request: "Demonstrate one breadth-first-search queue update without turning it into a study plan.",
+            response:
+              "Start with queue [A]. Remove A, then append its unseen neighbors B and C, giving [B, C]. The queue now shows exactly why breadth-first search visits every node one edge farther only after the current layer.",
+          },
+          {
+            title: "Useful advisory zero-write guided work",
+            request: "Guide me through the first step of deriving the product rule; do not store planning advice.",
+            response:
+              "Write (f(x+h)g(x+h)-f(x)g(x))/h, then add and subtract f(x+h)g(x). Which two difference quotients appear after you split the numerator?",
+          },
+        ],
+        (item) =>
+          Effect.gen(function* () {
+            const sessionID = SessionID.create()
+            const turnID = Turn.ID.create()
+            const hit = (yield* llm.hits).length
+            const pending = yield* llm.pending
+            yield* llm.textMatch(
+              (request) => providerText(request.body).some((value) => value.includes(item.request)),
+              item.response,
+            )
+            yield* prompt.start({
+              sessionID,
+              turnID,
+              inputID: Turn.InputID.create(),
+              messageID: MessageID.ascending(),
+              agent: "repa",
+              model: ref,
+              limits: { model: 1, tool: 1 },
+              session: { title: item.title },
+              parts: [{ type: "text", text: item.request }],
+            })
+            expect((yield* prompt.awaitTurn(sessionID, turnID)).terminal).toMatchObject({
+              outcome: "completed",
+              counters: { model: 1, tool: 0 },
+            })
+            expect(yield* llm.pending).toBe(pending)
+            expect(providerText((yield* llm.hits)[hit]?.body).join("\n")).toContain(
+              "Useful planning, explanation, demonstration, and guided work may remain zero-write.",
+            )
+            const messages = yield* sessions.messages({ sessionID })
+            expect(
+              messages.flatMap((message) => message.parts).some((part) => part.type === "text" && part.text === item.response),
+            ).toBe(true)
+            expect(
+              messages
+                .flatMap((message) => message.parts)
+                .some((part) => part.type === "tool" && part.tool === AdvisoryPlanSuggestion.UPDATE_CAPABILITY),
+            ).toBe(false)
+            return sessionID
+          }),
+      )
+      expect(
+        yield* database.db.get(sql`
+          SELECT
+            (SELECT count(*) FROM advisory_plan_suggestion_revision) AS revisions,
+            (SELECT count(*) FROM advisory_plan_suggestion_effect) AS effects,
+            (SELECT count(*) FROM advisory_plan_suggestion_commit_seal) AS seals
+        `),
+      ).toEqual(writesBeforeZeroWrite)
+
+      yield* sessions.remove(creationSessionID)
+      yield* sessions.remove(absentSessionID)
+      yield* sessions.remove(firstTeachingSessionID)
+      yield* sessions.remove(correctionSessionID)
+      yield* sessions.remove(correctedTeachingSessionID)
+      yield* sessions.remove(wrongRevisionSessionID)
+      yield* Effect.forEach(zeroWriteSessionIDs, (sessionID) => sessions.remove(sessionID), { discard: true })
+      expect(
+        yield* database.db.transaction((tx) =>
+          AdvisoryPlanSuggestion.readExactRevision(tx, suggestionID, corrected.revision.id),
+        ),
+      ).toEqual(corrected.revision)
+    }),
+  { config: cfg },
+  120_000,
 )
 
 isolatedDatabaseBoundary.instance(

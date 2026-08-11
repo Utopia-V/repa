@@ -1,6 +1,7 @@
 export * as LearningCommandPresentation from "./presentation"
 
 import { Course } from "@opencode-ai/core/course"
+import { AdvisoryPlanSuggestion } from "@opencode-ai/core/advisory-plan-suggestion"
 import { Assignment } from "@opencode-ai/core/assignment"
 import { LearnerStateJudgment } from "@opencode-ai/core/learner-state-judgment"
 import { FutureAttention } from "@opencode-ai/core/future-attention"
@@ -34,6 +35,7 @@ type Capability =
   | typeof LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY
   | typeof LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY
   | typeof LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY
+  | typeof LearningCommand.UPDATE_ADVISORY_PLAN_SUGGESTION_CAPABILITY
 
 type BindingInput = Readonly<{
   sessionID: string
@@ -469,6 +471,75 @@ function learnerStateJudgmentEffect(settlement: LearningCommand.PhysicalSettleme
     ...(value.outcome === "applied" || value.outcome === "already_applied"
       ? { operation: value.operation, disposition: value.disposition }
       : {}),
+  }
+}
+
+export function advisoryPlanSuggestionCapability(
+  candidate: AdvisoryPlanSuggestion.Candidate,
+  envelope: BindingInput,
+) {
+  if (candidate.agentAction.kind !== "root") {
+    throw new Error("Advisory-plan suggestion capability requires a root Agent action")
+  }
+  return SemanticPresentation.proposal({
+    kind: "advisory_plan_suggestion_capability",
+    binding: binding(envelope),
+    commandFingerprint: candidate.commandFingerprint,
+    issuance: "root",
+    scope: SemanticPresentation.advisoryPlanSuggestionScope(candidate),
+  })
+}
+
+export function advisoryPlanSuggestionSettlementResult(
+  settlement: LearningCommand.PhysicalSettlement,
+  state: AdvisoryPlanSuggestion.InvocationVersion,
+  envelope: BindingInput,
+) {
+  if (settlement.outcome === "error" && typeof settlement.code !== "string") {
+    throw new Error("Failed advisory-plan suggestion settlement has no exact error code")
+  }
+  if (state.candidate?.agentAction.kind === "delegated") {
+    throw new Error("Advisory-plan suggestion settlement contains an illegal delegated Agent action")
+  }
+  const effect = advisoryPlanSuggestionEffect(settlement)
+  return SemanticPresentation.result({
+    kind: "advisory_plan_suggestion_result",
+    binding: binding(envelope),
+    settlement:
+      settlement.outcome === "error"
+        ? { outcome: settlement.outcome, code: settlement.code as string }
+        : { outcome: settlement.outcome },
+    disposition: state.disposition,
+    ...(state.semanticTerminal ? { semanticOutcome: state.semanticTerminal.outcome } : {}),
+    ...(state.candidate ? { issuance: "root" as const } : {}),
+    ...(state.capabilityOutcome ? { capabilityOutcome: state.capabilityOutcome } : {}),
+    ...(state.permissionRequestID ? { permissionRequestID: state.permissionRequestID } : {}),
+    ...(effect ? { effect } : {}),
+  })
+}
+
+function advisoryPlanSuggestionEffect(settlement: LearningCommand.PhysicalSettlement) {
+  if (
+    settlement.outcome === "error" ||
+    !("advisoryPlanSuggestionKind" in settlement) ||
+    settlement.advisoryPlanSuggestionKind !== "change_set"
+  ) {
+    return undefined
+  }
+  const value = settlement as unknown as
+    | AdvisoryPlanSuggestion.AppliedSettlement
+    | AdvisoryPlanSuggestion.AlreadyAppliedSettlement
+    | AdvisoryPlanSuggestion.NoChangeSettlement
+  return {
+    ...(value.outcome === "already_applied"
+      ? { existingOutcome: "applied" as const }
+      : value.outcome === "no_change"
+        ? { existingOutcome: "no_change" as const, noChangeReason: value.existingOutcome }
+        : {}),
+    ...(value.outcome === "applied" || value.outcome === "already_applied"
+      ? { effectID: value.effectID, receiptID: value.receiptID }
+      : {}),
+    intentResults: structuredClone(value.intentResults),
   }
 }
 

@@ -176,6 +176,31 @@ export type {
 } from "./learner-state-judgment"
 
 export {
+  PERMISSION_PATTERN as ADVISORY_PLAN_SUGGESTION_PERMISSION_PATTERN,
+  READ_CAPABILITY as ADVISORY_PLAN_SUGGESTION_READ_CAPABILITY,
+  READ_VERSION as ADVISORY_PLAN_SUGGESTION_READ_VERSION,
+  UPDATE_CAPABILITY as UPDATE_ADVISORY_PLAN_SUGGESTION_CAPABILITY,
+  UPDATE_VERSION as UPDATE_ADVISORY_PLAN_SUGGESTION_VERSION,
+  canonicalizeCommand as canonicalizeAdvisoryPlanSuggestion,
+  issueCapabilityPrompt as issueAdvisoryPlanSuggestionCapabilityPrompt,
+  readInvocationVersion as readAdvisoryPlanSuggestionInvocationVersion,
+  recover as recoverAdvisoryPlanSuggestion,
+  recoverCapability as recoverAdvisoryPlanSuggestionCapability,
+  reserve as reserveAdvisoryPlanSuggestion,
+  settle as settleAdvisoryPlanSuggestion,
+  settleFailure as settleAdvisoryPlanSuggestionFailure,
+  settlePolicy as settleAdvisoryPlanSuggestionPolicy,
+  settlePrompt as settleAdvisoryPlanSuggestionPrompt,
+} from "./advisory-plan-suggestion"
+export type {
+  Invocation as AdvisoryPlanSuggestionInvocation,
+  InvocationVersion as AdvisoryPlanSuggestionInvocationVersion,
+  PolicyInput as AdvisoryPlanSuggestionPolicyInput,
+  PromptIssueInput as AdvisoryPlanSuggestionPromptIssueInput,
+  PromptSettlementInput as AdvisoryPlanSuggestionPromptSettlementInput,
+} from "./advisory-plan-suggestion"
+
+export {
   assertAssistantDeletable,
   assertPartDeletable,
   exactSettlement,

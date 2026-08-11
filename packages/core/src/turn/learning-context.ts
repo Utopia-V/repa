@@ -18,9 +18,9 @@ import {
   SessionHistoricalPartPresentationTable,
   SessionTable,
 } from "../session/sql"
-import type { SessionSchema } from "../session/schema"
+import { SessionSchema } from "../session/schema"
 import { SessionV1, type MessageID, type PartID } from "../v1/session"
-import type { Turn } from "@opencode-ai/schema/turn"
+import { Turn } from "@opencode-ai/schema/turn"
 import { LearnerOccurrencePresentationTable } from "../learning-command/occurrence.sql"
 import {
   TurnInputPresentationTable,
@@ -79,6 +79,98 @@ export type ProjectionEntry = Readonly<{
   locator: Locator
   navigationHint?: Readonly<{ sessionTitle: string; trust: "untrusted_navigation_hint" }>
 }>
+
+export function isLocator(value: unknown): value is Locator {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false
+  const locator = value as Record<string, unknown>
+  const optional = [
+    ...(locator.inputID === undefined ? [] : ["inputID"]),
+    ...(locator.causalOccurrenceID === undefined ? [] : ["causalOccurrenceID"]),
+    ...(locator.terminalReason === undefined ? [] : ["terminalReason"]),
+    ...(locator.sessionParentID === undefined ? [] : ["sessionParentID"]),
+    ...(locator.messageRange === undefined ? [] : ["messageRange"]),
+    ...(locator.partRange === undefined ? [] : ["partRange"]),
+    ...(locator.timeDeleted === undefined ? [] : ["timeDeleted"]),
+  ]
+  if (
+    !exactObjectKeys(locator, [
+      "status",
+      "sessionID",
+      "turnID",
+      "timeAdmitted",
+      "timeTerminal",
+      "terminalState",
+      "presentationProvenance",
+      ...optional,
+    ]) ||
+    !Schema.is(SessionSchema.ID)(locator.sessionID) ||
+    !Schema.is(Turn.ID)(locator.turnID) ||
+    (locator.inputID !== undefined && !Schema.is(Turn.InputID)(locator.inputID)) ||
+    (locator.causalOccurrenceID !== undefined &&
+      (typeof locator.causalOccurrenceID !== "string" || !locator.causalOccurrenceID.startsWith("lco_"))) ||
+    !nonnegativeInteger(locator.timeAdmitted) ||
+    !nonnegativeInteger(locator.timeTerminal) ||
+    !Schema.is(Turn.State)(locator.terminalState) ||
+    locator.terminalState === "running" ||
+    (locator.terminalReason !== undefined && !Schema.is(Turn.TerminalReason)(locator.terminalReason)) ||
+    (locator.sessionParentID !== undefined && !Schema.is(SessionSchema.ID)(locator.sessionParentID)) ||
+    (locator.messageRange !== undefined && !rangeShape(locator.messageRange)) ||
+    (locator.partRange !== undefined && !rangeShape(locator.partRange))
+  ) {
+    return false
+  }
+  if (locator.status === "available") {
+    return locator.timeDeleted === undefined && presentationProvenanceShape(locator.presentationProvenance)
+  }
+  return (
+    locator.status === "source_unavailable" &&
+    locator.presentationProvenance === "source_unavailable" &&
+    nonnegativeInteger(locator.timeDeleted)
+  )
+}
+
+function rangeShape(value: unknown) {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false
+  const range = value as Record<string, unknown>
+  return (
+    exactObjectKeys(range, [
+      ...(range.first === undefined ? [] : ["first"]),
+      ...(range.last === undefined ? [] : ["last"]),
+      "count",
+      "fingerprint",
+    ]) &&
+    (range.first === undefined || typeof range.first === "string") &&
+    (range.last === undefined || typeof range.last === "string") &&
+    nonnegativeInteger(range.count) &&
+    typeof range.fingerprint === "string" &&
+    /^[0-9a-f]{64}$/.test(range.fingerprint)
+  )
+}
+
+function presentationProvenanceShape(value: unknown) {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false
+  const provenance = value as Record<string, unknown>
+  return (
+    exactObjectKeys(provenance, ["count", "kinds", "fingerprint", "historicalMessageOrPart"]) &&
+    nonnegativeInteger(provenance.count) &&
+    Array.isArray(provenance.kinds) &&
+    provenance.kinds.every((kind) => ["origin", "compaction_replay", "fork_clone"].includes(String(kind))) &&
+    new Set(provenance.kinds).size === provenance.kinds.length &&
+    typeof provenance.fingerprint === "string" &&
+    /^[0-9a-f]{64}$/.test(provenance.fingerprint) &&
+    typeof provenance.historicalMessageOrPart === "boolean"
+  )
+}
+
+function exactObjectKeys(value: Record<string, unknown>, keys: readonly string[]) {
+  const expected = [...keys].sort()
+  const actual = Object.keys(value).sort()
+  return expected.length === actual.length && expected.every((key, index) => key === actual[index])
+}
+
+function nonnegativeInteger(value: unknown): value is number {
+  return Number.isSafeInteger(value) && Number(value) >= 0
+}
 
 function range(ids: readonly string[], bodies: readonly unknown[]): Range {
   return {

@@ -1,4 +1,5 @@
 import { describe, expect, setSystemTime, test } from "bun:test"
+import { AdvisoryPlanSuggestion } from "@opencode-ai/core/advisory-plan-suggestion"
 import { Assignment } from "@opencode-ai/core/assignment"
 import {
   AssignmentCapabilitySettlementTable,
@@ -36,6 +37,10 @@ import path from "path"
 import { admitModelWithLearningContext } from "./fixture/model-admission"
 import { tmpdir } from "./fixture/tmpdir"
 import { testEffect } from "./lib/effect"
+import {
+  applyAdvisoryPlanSuggestionInvocation,
+  seedAdvisoryPlanSuggestionInvocation,
+} from "./fixture/advisory-plan-suggestion"
 
 const database = Database.layerFromPath(":memory:").pipe(Layer.orDie)
 const it = testEffect(
@@ -45,6 +50,144 @@ const windowsTest = process.platform === "win32" ? test : test.skip
 const model = { modelID: ModelV2.ID.make("model"), providerID: ProviderV2.ID.make("provider") }
 
 describe.serial("Assignment", () => {
+  it.effect("keeps advisory Assignment timing and head currentness separate from immutable advice", () =>
+    Effect.gen(function* () {
+      const db = (yield* Database.Service).db
+      const time = Date.parse("2037-01-01T09:00:00Z")
+      const sourceText = "The amortized-analysis worksheet is due on January 3."
+      const assignment = yield* seedAgentInvocation(
+        db,
+        "advisory_assignment_source",
+        createCommand(sourceText, snapshot("Complete the amortized-analysis worksheet", "Connect it to worked examples")),
+        sourceText,
+        time,
+      )
+      const assignmentApplied = yield* applyInvocation(db, assignment, time + 2)
+      if (assignmentApplied.type !== "settled" || assignmentApplied.settlement.outcome !== "applied") {
+        return yield* Effect.die("Expected the exact Assignment source")
+      }
+      const assignmentChange = assignmentApplied.settlement.changes[0]!
+      const ref = {
+        type: "assignment_revision" as const,
+        assignmentID: assignmentChange.assignmentID,
+        revisionID: assignmentChange.committedRevision.revisionID,
+        version: assignmentChange.committedRevision.version,
+      }
+      const suggestion = yield* seedAdvisoryPlanSuggestionInvocation(
+        db,
+        "assignment_reference",
+        {
+          cause: {
+            type: "proactive_tutor_proposal",
+            rationale: "Preserve one deadline-aware teaching suggestion without changing Assignment truth.",
+          },
+          intents: [
+            {
+              operation: "create",
+              operationOrdinal: 0,
+              createOrdinal: 0,
+              snapshot: {
+                learnerVisibleScope: "Amortized-analysis worksheet learning approach",
+                retrievalScope: {
+                  type: "anchored",
+                  anchors: [
+                    {
+                      stableOwnerKey: { type: "assignment", assignmentID: assignmentChange.assignmentID },
+                      exactBoundRef: ref,
+                    },
+                  ],
+                },
+                purpose: "Keep the near-term explanation aligned with an exact obligation and clock relation.",
+                directorySummary: "Use one worked accounting example before the worksheet.",
+                body: "Explain one accounting-method example, then let the learner attempt the analogous worksheet step.",
+                exactBasisRefs: [ref],
+                assumptionsAndUncertainty: "The deadline is exact; this advice does not imply completion or mastery.",
+              },
+            },
+          ],
+        },
+        "Keep the Assignment-related teaching approach available.",
+        time + 10,
+      )
+      const applied = yield* applyAdvisoryPlanSuggestionInvocation(db, suggestion, time + 12)
+      if (applied.type !== "settled" || applied.settlement.outcome !== "applied") {
+        return yield* Effect.die("Expected the Assignment-backed suggestion")
+      }
+      const result = applied.settlement.intentResults[0]
+      if (!result || result.outcome !== "changed") {
+        return yield* Effect.die("Expected one Assignment-backed advisory revision")
+      }
+      const before = yield* db.transaction((tx) =>
+        AdvisoryPlanSuggestion.readCurrent(tx, result.suggestionID, time + 20),
+      )
+      expect(before).toMatchObject({
+        retrievalAnchorRelations: [
+          {
+            exactBoundRef: ref,
+            relation: { state: "current", current: { dueRelationAtCut: { relation: "before", overdue: false } } },
+          },
+        ],
+        basisDependencies: [
+          { ref, state: "current", current: { dueRelationAtCut: { relation: "before", overdue: false } } },
+        ],
+      })
+      const overdue = yield* db.transaction((tx) =>
+        AdvisoryPlanSuggestion.readCurrent(tx, result.suggestionID, Date.parse("2037-01-04T09:00:00Z")),
+      )
+      expect(overdue).toMatchObject({
+        retrievalAnchorRelations: [
+          { exactBoundRef: ref, relation: { state: "current", current: { dueRelationAtCut: { overdue: true } } } },
+        ],
+      })
+
+      const current = yield* currentAssignment(db, assignmentChange.assignmentID, Date.parse("2037-01-04T09:00:00Z"))
+      const correctionText = "Correction: the worksheet also asks for a potential-method comparison."
+      const correction = yield* seedAgentInvocation(
+        db,
+        "advisory_assignment_correction",
+        {
+          cause: learnerReport(correctionText),
+          intents: [
+            {
+              type: "revise",
+              assignmentID: assignmentChange.assignmentID,
+              expectedHead: expectedHead(current),
+              snapshot: snapshot(
+                "Complete the amortized-analysis worksheet and potential-method comparison",
+                "Connect both methods to worked examples",
+              ),
+              sourceAction: { type: "rebind_current_source_to_cause" },
+              relationAction: { type: "preserve" },
+              rationale: "Preserve the corrected obligation without rewriting the advisory revision.",
+            },
+          ],
+        },
+        correctionText,
+        Date.parse("2037-01-04T10:00:00Z"),
+      )
+      const corrected = yield* applyInvocation(db, correction, Date.parse("2037-01-04T10:00:02Z"))
+      if (corrected.type !== "settled" || corrected.settlement.outcome !== "applied") {
+        return yield* Effect.die("Expected the later Assignment head")
+      }
+      const successor = corrected.settlement.changes[0]!
+      const after = yield* db.transaction((tx) =>
+        AdvisoryPlanSuggestion.readCurrent(tx, result.suggestionID, Date.parse("2037-01-04T10:00:10Z")),
+      )
+      expect(after).toMatchObject({
+        retrievalAnchorRelations: [
+          {
+            exactBoundRef: ref,
+            relation: { state: "changed", current: { revisionID: successor.committedRevision.revisionID } },
+          },
+        ],
+        basisDependencies: [
+          { ref, state: "changed", current: { revisionID: successor.committedRevision.revisionID } },
+        ],
+      })
+      expect(after?.revision).toEqual(before?.revision)
+    }),
+  )
+
   it.effect("keeps immutable obligation meaning while clock and source availability change only read-time projections", () =>
     Effect.gen(function* () {
       const db = (yield* Database.Service).db
@@ -2952,12 +3095,11 @@ describe.serial("Assignment", () => {
           return { invocation, assignmentID: result.settlement.changes[0]!.assignmentID }
         }),
       )
-      const prepared = yield* prepareLearningContext(db, created[1]!.invocation, time + 500, 40)
+      const prepared = yield* prepareLearningContext(db, created[1]!.invocation, time + 500, 110)
       const section = prepared.cut.sections.find((item) => item.owner === "assignment")
       if (!section || section.owner !== "assignment" || section.coverage === "not_authorized") {
         return yield* Effect.die("Expected an authorized Assignment byte-fit section")
       }
-
       expect(section).toMatchObject({
         countAtCut: 2,
         mode: "multiple_candidate_pressure",

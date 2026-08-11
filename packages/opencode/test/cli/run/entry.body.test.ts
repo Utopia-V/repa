@@ -273,6 +273,81 @@ describe("run entry body", () => {
     expect(JSON.stringify(final)).not.toContain('"outcome":"applied"')
   })
 
+  test("renders an advisory suggestion settlement instead of generic success or raw command output", () => {
+    const presentation = SemanticPresentation.result({
+      kind: "advisory_plan_suggestion_result",
+      binding: {
+        sessionID: "session-1",
+        messageID: "msg-update_advisory_plan_suggestion",
+        callID: "call-update_advisory_plan_suggestion-1",
+        partID: "update_advisory_plan_suggestion-1",
+      },
+      settlement: { outcome: "applied" },
+      disposition: "candidate_v1",
+      issuance: "root",
+      capabilityOutcome: "policy_allow",
+      effect: {
+        effectID: `ape_${"0".repeat(26)}`,
+        receiptID: "lcr_advisory_run",
+        intentResults: [
+          {
+            outcome: "changed",
+            suggestionID: `aps_${"0".repeat(26)}`,
+            revisionID: `apr_${"0".repeat(26)}`,
+            version: 1,
+            operation: "create",
+            operationOrdinal: 0,
+            disposition: "active",
+          },
+        ],
+      },
+    })
+    const projection = SemanticPresentation.projectResultBasis(presentation.basis)
+    if (!projection) throw new Error("Expected a valid advisory result projection")
+    const part = toolPart(LearningCommand.UPDATE_ADVISORY_PLAN_SUGGESTION_CAPABILITY, {
+      status: "completed",
+      input: { hidden: "provider command must not become the learner-facing result" },
+      output: JSON.stringify({ generic: "success", hiddenInternal: "must not render" }),
+      title: projection.title,
+      metadata: {
+        command: LearningCommand.UPDATE_ADVISORY_PLAN_SUGGESTION_CAPABILITY,
+        commandVersion: LearningCommand.UPDATE_ADVISORY_PLAN_SUGGESTION_VERSION,
+        outcome: "applied",
+        durablySettled: true,
+        truncated: false,
+        ...SemanticPresentation.metadata(presentation),
+      },
+      time: { start: 1, end: 2 },
+    })
+    const final = entryBody(
+      commit({
+        kind: "tool",
+        text: "",
+        phase: "final",
+        source: "tool",
+        tool: LearningCommand.UPDATE_ADVISORY_PLAN_SUGGESTION_CAPABILITY,
+        toolState: "completed",
+        part,
+      }),
+    )
+
+    expect(toolInlineInfo(part)).toMatchObject({
+      icon: "◇",
+      title: "Advisory learning suggestion settlement — Committed",
+      body: expect.stringContaining(`aps_${"0".repeat(26)}/apr_${"0".repeat(26)}`),
+    })
+    expect(final).toEqual({
+      type: "text",
+      content: [
+        projection.summary,
+        ...projection.facts.map((fact) => `${fact.label}: ${fact.value}`),
+        "Durable settlement: yes",
+      ].join("\n"),
+    })
+    expect(JSON.stringify(final)).not.toContain("hiddenInternal")
+    expect(JSON.stringify(final)).not.toContain('"generic":"success"')
+  })
+
   test("renders retained steering acknowledgement title and body instead of the generic tool fallback", () => {
     const presentation = SemanticPresentation.result({
       kind: "retained_learning_steering_result",

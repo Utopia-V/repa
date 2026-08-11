@@ -47,13 +47,31 @@ whole-Gate review run
   credentialed-provider qualification remain separate.
   The
   [redefined Gate 21 advisory-planning candidate](research/repa-gate-21-advisory-learning-planning-2026-08-09.md)
-  remains an unreviewed derived contract/theory candidate. Its local product
-  grill and documentation reconciliation do not constitute fresh independent
-  review or implementation authority. The earlier
+  received its first fresh contract/theory review under
+  `G21-WG-20260810-019fe065-01` from reviewer
+  `019fe9c2-c8b6-7913-a988-ab7c955ffd36`. The direction survived, but the pass
+  returned `Revise` with `G21-CR-001..004` open for retrieval scope, exact
+  alternative lineage, revision-owned compact semantics, and typed
+  permission/settlement presentation. The same reviewer closed all four and
+  accepted exact repaired semantic snapshot SHA-256
+  `9CA7DB48...D69D567C`, with no replacement finding, owner blocker, or material
+  contract unknown. The first implementation/evidence pass bound the 41-file
+  candidate and returned `Revise` for `G21-IE-001..005`: Course/View retrieval
+  reachability, Course working-selection drift, aggregate 2 KiB Context fit,
+  real absent/wrong-revision consumer controls, and four owner-native
+  composition oracles. The first repair closure closed `G21-IE-001`, `002`,
+  `004`, and `005`, but kept `G21-IE-003` open because two exact-reference
+  current-revision fields were absent from the compact-capacity envelope. The
+  exact second-repair
+  [46-file implementation/evidence candidate](research/repa-gate-21-advisory-learning-planning-implementation-evidence-2026-08-11.md)
+  is ready for the same reviewer's second repair closure at 5,254 canonical
+  manifest bytes / SHA-256 `668FBC64...A598D78`; it is not yet accepted,
+  integrated, or committed. The earlier
   [deterministic Planning candidate](research/repa-gate-21-cross-day-planning-authority-2026-08-08.md)
   is retained as an unreviewed superseded record. Gate 20A mainline merge,
-  Gate 21 review, Gate 21A+, release, and credentialed provider work remain
-  unstarted; Gate 20B is accepted and published on its feature branch.
+  Gate 21 implementation acceptance, Gate 21A+, release, and credentialed
+  provider work remain pending; Gate 20B is accepted and published on its
+  feature branch.
 Gate 17 is fixed at implementation/evidence commit `39a8c2f4`. The baseline
 omits `/learn`; the accepted ordinary-Agent bootstrap
 preserves Gate 10's local-read union and one-new-Artifact ceiling, uses the
@@ -406,7 +424,7 @@ in the [inherited-material index](inherited/README.md).
 | 20. [Source-linked future attention and Tutor return](research/repa-gate-20-source-linked-future-attention-2026-08-06.md) | Accepted contract for one source-bound concern authority whose target/time-derived eligibility, conditional current-purpose projection, and purpose-appropriate complete-occurrence/outcome service remain distinct. | **Contract/theory and [implementation/evidence](research/repa-gate-20-source-linked-future-attention-implementation-evidence-2026-08-07.md) accepted and integrated into `origin/main` at exact implementation commit `1f9216984` through integration/status commit `228126535`.** Reviewer `019fd773-84c3-7841-9fc5-45f1b18d4a9f` closed `G20-CR-001..010` and `G20-IR-001..011` under `G20-WG-20260806-019fd69a-01`, with no new finding, material unknown, or owner blocker. Accepted behavior includes physical-epoch durable catch-up, failure-retained TUI reconnect recovery, queued owner-read generations, acknowledged ACP redelivery, eager global event registration, and complete exact-time spelling/provenance checks. Historical ALS aggregates are not acceptance evidence. Release, Gate 20A, and Gate 21+ remain separately governed. |
 | 20A. [Learning-relevant Assignment authority](research/repa-gate-20a-assignment-authority-2026-08-08.md) | Accepted contract for a source-relative substantial learning obligation with generated identity, immutable exact revisions, direct truthful correction, explicit source-bearing lifecycle, bounded exact-cardinality Context/lazy-read use, immutable source basis plus cut-bound current source status, and an exact-revision downstream-advice handoff. Completion prevents stale pressure but is not learning, activity, submission, grade, or product success. | **Contract/theory and [implementation/evidence](research/repa-gate-20a-assignment-authority-implementation-evidence-2026-08-09.md) accepted and published on `origin/codex/gate-20a-assignment-authority` at implementation commit `5099ecc64` plus its docs-only closure/status successor.** Whole-Gate run `G20A-WG-20260808-019fe065-01`, reviewer `019fe134-5860-7ed3-a754-ca22c9689b18`, accepted exact contract SHA-256 `3E6BC18F...E3A7F` and exact 41-file / 4,521-byte package candidate SHA-256 `D00E8DB8...80078B`, closing `G20A-CR-001..005` and `G20A-IR-001..009`. The earlier broad filtered runtime stall remains a disclosed, nonblocking later-release qualification unknown. Gate 20A is not merged to mainline and has no release or credentialed-provider qualification; Gate 20B and later status are owned by their following rows. |
 | 20B. [Learner-state judgment memory](research/repa-gate-20b-learner-state-judgment-memory-2026-08-09.md) | Accepted contract for reusable, scoped, source-bearing, fuzzy judgments about what the learner has learned, roughly understands, can do, or still finds difficult. It keeps LLM/learner authorship and correction separate from evidence and never promotes the judgment into a program-computed mastery score. | **Contract/theory and [implementation/evidence](research/repa-gate-20b-learner-state-judgment-memory-implementation-evidence-2026-08-10.md) accepted and published on `origin/codex/gate-20a-assignment-authority` at implementation commit `b04051859` plus its docs-only publication/status successor.** Whole-Gate run `G20B-WG-20260809-019fe065-01`, retained reviewer `019fe6da-d33f-71f1-b405-1cf240c7862a`, accepted semantic candidate SHA-256 `FF6EAB70...10BCC54`, raised `G20B-IE-001..004` on the first implementation pass, and then closed all four against the exact 42-file / 4,791-byte working-tree package candidate SHA-256 `1F5CCB66...052146A`. Git's existing CRLF-to-LF clean filter produced commit-tree manifest SHA-256 `601F4C64...CCA304F` with no non-EOL byte difference. The reviewer is retired. Gate 20B is not merged to mainline and has no release or credentialed-provider qualification; Gate 21 status is owned by the following row. |
-| 21. [Advisory learning-plan suggestions](research/repa-gate-21-advisory-learning-planning-2026-08-09.md) | Candidate contract for multiple scoped, source-bearing, correctable learning-plan suggestions authored by the ordinary Tutor or learner. A suggestion may cite exact Goal, Assignment, Course, evidence, and learner-state revisions, becomes more concrete near term and coarser farther out, and remains advice rather than a global schedule or learner commitment. | **Contract/theory candidate only; fresh independent review not begun.** The 2026-08-08 deterministic Planning candidate is superseded rather than accepted; its sound exact-revision, recovery, no-inferred-activity, and arithmetic-research parts are classified for reuse. No implementation authority, migration, package change, integration, release, credentialed provider call, or Gate 21A+ transition exists. |
+| 21. [Advisory learning-plan suggestions](research/repa-gate-21-advisory-learning-planning-2026-08-09.md) | Accepted contract for multiple scoped, source-bearing, correctable learning-plan suggestions authored by the ordinary Tutor or learner. A suggestion separates learner-visible meaning, deterministic retrieval scope, and exact bases; may cite exact Goal, Assignment, Course, evidence, learner-state, and suggestion revisions; becomes more concrete near term and coarser farther out; and remains advice rather than a global schedule or learner commitment. | **Contract/theory accepted; exact [implementation/evidence second-repair candidate](research/repa-gate-21-advisory-learning-planning-implementation-evidence-2026-08-11.md) ready for retained closure and not yet accepted.** Whole-Gate run `G21-WG-20260810-019fe065-01`, retained reviewer `019fe9c2-c8b6-7913-a988-ab7c955ffd36`, accepted exact repaired semantic snapshot SHA-256 `9CA7DB48...D69D567C` after closing `G21-CR-001..004`, then returned implementation/evidence `Revise` for `G21-IE-001..005`. First repair closure closed `G21-IE-001`, `002`, `004`, and `005`; `G21-IE-003` remains reviewer-open pending closure of the complete compact-relation bound. The current 46-file / 5,254-byte package candidate is bound at SHA-256 `668FBC64...A598D78`. No implementation/evidence acceptance, integration, commit, release, credentialed-provider qualification, or Gate 21A+ transition exists. |
 
 Gate numbers are maintainer-facing acceptance units, not a claim that every
 later Gate depends on every earlier one. Exact close commits, review runs,
@@ -449,7 +467,8 @@ reopen chains, and evidence qualifications live in the
 - [Gate 20A learning-relevant Assignment authority contract](research/repa-gate-20a-assignment-authority-2026-08-08.md)
 - [Gate 20A implementation/evidence record](research/repa-gate-20a-assignment-authority-implementation-evidence-2026-08-09.md)
 - [Gate 20B learner-state judgment memory contract candidate](research/repa-gate-20b-learner-state-judgment-memory-2026-08-09.md)
-- [Gate 21 advisory learning-plan suggestion contract candidate](research/repa-gate-21-advisory-learning-planning-2026-08-09.md)
+- [Gate 21 accepted advisory learning-plan suggestion contract](research/repa-gate-21-advisory-learning-planning-2026-08-09.md)
+- [Gate 21 advisory learning-plan suggestion implementation/evidence candidate](research/repa-gate-21-advisory-learning-planning-implementation-evidence-2026-08-11.md)
 - [Gate 21 superseded deterministic Planning contract candidate](research/repa-gate-21-cross-day-planning-authority-2026-08-08.md)
 - [Pre-fork asset disposition](research/pre-fork-repa-asset-audit-2026-07-13.md)
 

@@ -856,6 +856,82 @@ describe("acp event routing", () => {
     })
   })
 
+  it("projects a verified advisory suggestion settlement through ACP without trusting raw output", async () => {
+    const harness = createHarness()
+    await Effect.runPromise(harness.session.create({ id: "ses_advisory", cwd: "/workspace" }))
+    const presentation = SemanticPresentation.result({
+      kind: "advisory_plan_suggestion_result",
+      binding: {
+        sessionID: "ses_advisory",
+        messageID: "msg_call_advisory",
+        callID: "call_advisory",
+        partID: "part_call_advisory",
+      },
+      settlement: { outcome: "applied" },
+      disposition: "candidate_v1",
+      issuance: "root",
+      capabilityOutcome: "policy_allow",
+      effect: {
+        effectID: `ape_${"0".repeat(26)}`,
+        receiptID: "lcr_advisory_acp",
+        intentResults: [
+          {
+            outcome: "changed",
+            suggestionID: `aps_${"0".repeat(26)}`,
+            revisionID: `apr_${"0".repeat(26)}`,
+            version: 1,
+            operation: "create",
+            operationOrdinal: 0,
+            disposition: "active",
+          },
+        ],
+      },
+    })
+    const projection = SemanticPresentation.projectResultBasis(presentation.basis)
+    if (!projection) throw new Error("Expected a valid advisory result projection")
+    const metadata = {
+      command: "update_advisory_plan_suggestion",
+      commandVersion: 1,
+      outcome: "applied",
+      durablySettled: true,
+      truncated: false,
+      ...SemanticPresentation.metadata(presentation),
+    }
+    const raw = JSON.stringify({ generic: "success", internal: "must not become the ACP result" })
+
+    await harness.subscription.handle(
+      toolUpdated(
+        completedTool("ses_advisory", "call_advisory", raw, [], {
+          tool: "update_advisory_plan_suggestion",
+          input: { hidden: "provider command" },
+          title: projection.title,
+          metadata,
+        }),
+      ),
+    )
+
+    expect(harness.updates.at(-1)?.update).toMatchObject({
+      sessionUpdate: "tool_call_update",
+      toolCallId: "call_advisory",
+      status: "completed",
+      title: "Advisory learning suggestion settlement — Committed",
+      content: [
+        {
+          type: "content",
+          content: {
+            type: "text",
+            text: expect.stringContaining(`aps_${"0".repeat(26)}/apr_${"0".repeat(26)}`),
+          },
+        },
+      ],
+      rawOutput: { output: raw, metadata },
+    })
+    const finalUpdate = harness.updates.at(-1)?.update
+    expect(JSON.stringify(finalUpdate && "content" in finalUpdate ? finalUpdate.content : undefined)).not.toContain(
+      "must not become the ACP result",
+    )
+  })
+
   it("emits clean read display content and preserves rawOutput", async () => {
     const harness = createHarness()
     await Effect.runPromise(harness.session.create({ id: "ses_read", cwd: "/workspace" }))

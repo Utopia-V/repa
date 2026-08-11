@@ -1,4 +1,5 @@
 import { describe, expect } from "bun:test"
+import { AdvisoryPlanSuggestion } from "@opencode-ai/core/advisory-plan-suggestion"
 import { admitModelWithLearningContext } from "./fixture/model-admission"
 import { eq, sql } from "drizzle-orm"
 import { Effect, Exit, Layer } from "effect"
@@ -23,6 +24,10 @@ import { ProviderV2 } from "@opencode-ai/core/provider"
 import { RetainedSteering } from "@opencode-ai/core/retained-steering"
 import { Turn } from "@opencode-ai/schema/turn"
 import { testEffect } from "./lib/effect"
+import {
+  applyAdvisoryPlanSuggestionInvocation,
+  seedAdvisoryPlanSuggestionInvocation,
+} from "./fixture/advisory-plan-suggestion"
 
 const database = Database.layerFromPath(":memory:").pipe(Layer.orDie)
 const it = testEffect(LayerNode.compile(LayerNode.group([Course.node, Database.node]), [[Database.node, database]]))
@@ -209,6 +214,115 @@ describe("Agent-native learner Goal authority", () => {
         ),
       ).toBeInstanceOf(LearnerGoal.LearningContextReadError)
       expect(yield* db.all(sql`PRAGMA foreign_key_check`)).toEqual([])
+    }),
+  )
+
+  it.effect("keeps an advisory Goal reference exact while a later Goal head changes", () =>
+    Effect.gen(function* () {
+      const db = (yield* Database.Service).db
+      const time = 20_000
+      const created = yield* seedAgentInvocation(
+        db,
+        "advisory-source-create",
+        { operations: [{ type: "create", outcome: "Understand amortized analysis" }] },
+        time,
+      )
+      const createdGoal = yield* applyGoalInvocation(db, created, time + 1)
+      if (
+        createdGoal.type !== "settled" ||
+        createdGoal.settlement.outcome !== "applied" ||
+        createdGoal.settlement.schemaVersion !== 2
+      ) {
+        return yield* Effect.die("Expected the exact Goal source")
+      }
+      const source = createdGoal.settlement.operations[0]!
+      const ref = {
+        type: "goal_revision" as const,
+        goalID: source.goalID,
+        revisionID: source.revisionID,
+        version: source.version,
+      }
+      const suggestion = yield* seedAdvisoryPlanSuggestionInvocation(
+        db,
+        "goal_reference",
+        {
+          cause: {
+            type: "proactive_tutor_proposal",
+            rationale: "Keep one Goal-related teaching approach inspectable without making it Goal truth.",
+          },
+          intents: [
+            {
+              operation: "create",
+              operationOrdinal: 0,
+              createOrdinal: 0,
+              snapshot: {
+                learnerVisibleScope: "Amortized-analysis learning approach",
+                retrievalScope: {
+                  type: "anchored",
+                  anchors: [{ stableOwnerKey: { type: "goal", goalID: source.goalID }, exactBoundRef: ref }],
+                },
+                purpose: "Carry useful Goal-scoped advice into later teaching.",
+                directorySummary: "Start from one accounting-method example.",
+                body: "Work one concrete accounting-method example before comparing it with the potential method.",
+                exactBasisRefs: [ref],
+                assumptionsAndUncertainty: "The advice remains fallible and does not certify Goal progress.",
+              },
+            },
+          ],
+        },
+        "Keep the Goal-related learning advice available.",
+        time + 10,
+      )
+      const applied = yield* applyAdvisoryPlanSuggestionInvocation(db, suggestion, time + 12)
+      if (applied.type !== "settled" || applied.settlement.outcome !== "applied") {
+        return yield* Effect.die("Expected the Goal-backed suggestion")
+      }
+      const suggestionResult = applied.settlement.intentResults[0]
+      if (!suggestionResult || suggestionResult.outcome !== "changed") {
+        return yield* Effect.die("Expected one Goal-backed advisory revision")
+      }
+      const before = yield* db.transaction((tx) =>
+        AdvisoryPlanSuggestion.readCurrent(tx, suggestionResult.suggestionID, time + 20),
+      )
+      expect(before).toMatchObject({
+        retrievalAnchorRelations: [{ exactBoundRef: ref, relation: { state: "current" } }],
+        basisDependencies: [{ ref, state: "current" }],
+      })
+
+      const revised = yield* seedAgentInvocation(
+        db,
+        "advisory-source-revise",
+        {
+          operations: [
+            {
+              type: "update",
+              goalID: source.goalID,
+              headRevisionID: source.revisionID,
+              patch: { outcome: "Explain and apply amortized analysis" },
+            },
+          ],
+        },
+        time + 30,
+      )
+      const revisedGoal = yield* applyGoalInvocation(db, revised, time + 31)
+      if (
+        revisedGoal.type !== "settled" ||
+        revisedGoal.settlement.outcome !== "applied" ||
+        revisedGoal.settlement.schemaVersion !== 2
+      ) {
+        return yield* Effect.die("Expected the later Goal head")
+      }
+      const successor = revisedGoal.settlement.operations[0]!
+      const after = yield* db.transaction((tx) =>
+        AdvisoryPlanSuggestion.readCurrent(tx, suggestionResult.suggestionID, time + 40),
+      )
+      expect(after).toMatchObject({
+        retrievalAnchorRelations: [
+          { exactBoundRef: ref, relation: { state: "changed", current: { revisionID: successor.revisionID } } },
+        ],
+        basisDependencies: [{ ref, state: "changed", current: { revisionID: successor.revisionID } }],
+      })
+      expect(after?.revision).toEqual(before?.revision)
     }),
   )
 
@@ -1078,6 +1192,37 @@ function seedAgentInvocation(
       command,
     } satisfies LearnerGoal.AgentInvocationV2
   }).pipe(Effect.orDie)
+}
+
+function applyGoalInvocation(
+  db: Database.Interface["db"],
+  invocation: LearnerGoal.AgentInvocationV2,
+  time: number,
+) {
+  return Effect.gen(function* () {
+    const reserved = yield* db.transaction((tx) =>
+      LearningCommand.reserveLearnerGoalsV2(tx, {
+        ...invocation,
+        settlement: { time, order: 1 },
+      }),
+    )
+    if (reserved.type !== "admitted") return reserved
+    yield* db.transaction((tx) =>
+      LearningCommand.settleLearnerGoalPolicyV2(tx, {
+        partID: invocation.envelope.partID,
+        outcome: "policy_allow",
+        policyBasis: { source: "advisory-goal-composition-test", rule: "allow" },
+        time: time + 1,
+        order: 2,
+      }),
+    )
+    return yield* db.transaction((tx) =>
+      LearningCommand.settleLearnerGoalsV2(tx, {
+        partID: invocation.envelope.partID,
+        settlement: { time: time + 2, order: 3 },
+      }),
+    )
+  })
 }
 
 function userData(time: number): Omit<SessionV1.User, "id" | "sessionID"> {

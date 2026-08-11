@@ -3519,9 +3519,10 @@ two historical Gate 21 records. These are product/contract documentation
 changes only. Gate 20B was then integrated and published on
 `origin/codex/gate-20a-assignment-authority` at implementation commit
 `b040518591a2f065aec9b82214496a113c81ed35` plus its docs-only
-publication/status successor. Gate 21 remains an unreviewed candidate. No
-mainline merge, pull request, release, credentialed-provider work, Gate 21A, or
-later-Gate authority follows from that publication.
+publication/status successor. Gate 21 subsequently entered the separately
+recorded fresh contract review below. No mainline merge, pull request, release,
+credentialed-provider work, Gate 21A, or later-Gate authority follows from that
+publication.
 
 The independent review bound exact Windows working-tree bytes at package
 manifest SHA-256 `1F5CCB66...052146A`. Git's existing clean filter normalized
@@ -3542,6 +3543,182 @@ same file while preserving unrelated prior content. Read-only scouts changed no
 files. The exact documentation diff remained uncommitted through independent
 acceptance and was included in the separately authorized implementation commit
 and its publication/status successor.
+
+## 2026-08-10 Gate 21 first contract review and repair
+
+Fresh top-level reviewer task `019fe9c2-c8b6-7913-a988-ab7c955ffd36` opened
+whole-Gate run `G21-WG-20260810-019fe065-01` against exact advisory-planning
+contract SHA-256
+`3431CFCD38901EC3BC9A3695F4A757D45E2D990B06D90A5CABF2E4749F8DB2D2`.
+The reviewer left the checkout unmodified and returned contract/theory
+`Revise`. It accepted the parent direction: durable scoped advice has an
+independent cross-Session teaching consumer, is not a scheduler/Todo/plan-mode
+artifact, and should reuse the existing command, cut, lazy-read, permission,
+settlement, replay, and recovery substrate rather than add another runtime.
+
+Four acceptance-changing contract gaps remained:
+
+- `G21-CR-001`: occurrence-only advice had no deterministic fresh-Session
+  discovery route when no Course, Goal, Assignment, material, or learner-state
+  anchor existed;
+- `G21-CR-002`: an alternative linked only to a suggestion identity rather
+  than the exact revision whose advice it opposed;
+- `G21-CR-003`: the automatic directory could expose a host-authored summary
+  and composite stale verdict that no immutable revision owned; and
+- `G21-CR-004`: the new owner did not yet contract the repository-required
+  typed permission proposal and settlement result across TUI and retained
+  carriers.
+
+The executor sustained all four findings without reopening the advisory-not-
+scheduler product decision or asking for a new maintainer choice. The repair
+separates authored learner-visible scope, a closed deterministic retrieval
+scope, and exact basis references. Suggestions with no stable durable owner
+anchor use an explicit bounded `learner_home_fallback`; this is directory
+eligibility, not global semantic applicability, ranking, transcript import, or
+topic search. Alternative topology now binds an immutable exact suggestion
+revision and reports target-head drift separately. Every compact semantic byte
+is revision-owned through an authored directory summary, while fresh projection
+reports only named structural axes rather than a program judgment that open
+advice is stale. A closed semantic change-set slot/ordinal contract and one
+typed proposal/result carrier now cover exact preapproval scope and generated
+IDs plus committed, already-applied, no-change/no-effect, conflict/failure,
+deny, and abort truth.
+
+The implementation/evidence boundary now also requires a no-other-owner
+fresh-Session fallback oracle, exact alternative drift, old-cut compact-summary
+immutability, and a production-path released-v1 semantic oracle whose learning
+response can be selected only after the expected exact directory locator and
+lazy-read revision/body appear. No keyword index, embeddings, topic model,
+ranker, selector, generic Context gateway, or second Agent loop entered the
+repair. The exact repaired contract target submitted for first closure is
+SHA-256 `9CA7DB485C3726752570868A574423F515BD3CC5F536B6285DD4A7A8D69D567C`.
+The same reviewer remains retained for closure of `G21-CR-001..004`;
+until it returns `Accept`, Gate 21 has no implementation, migration,
+integration, commit, release, credentialed-provider, or Gate 21A authority.
+
+The retained reviewer then re-read that exact repair and returned
+contract/theory `Accept`. `G21-CR-001..004` are closed against their original
+counterexamples and acceptance impacts; none was superseded or replaced, and no
+new finding, owner blocker, or material contract unknown remained. The accepted
+semantic snapshot is SHA-256
+`9CA7DB485C3726752570868A574423F515BD3CC5F536B6285DD4A7A8D69D567C`.
+This accepts the advisory-suggestion ownership, retrieval, exact alternative,
+compact semantic, permission, and proposed evidence boundaries only. Under the
+maintainer's existing Whole-Gate authorization, implementation/evidence may now
+begin and must return to reviewer
+`019fe9c2-c8b6-7913-a988-ab7c955ffd36`; no implementation acceptance,
+integration, release, credentialed-provider qualification, Gate 21A, or later
+Gate follows from the contract verdict.
+
+## 2026-08-11 Gate 21 implementation/evidence candidate
+
+The executor completed the first exact Gate 21 implementation/evidence
+candidate under the accepted semantic contract SHA-256
+`9CA7DB485C3726752570868A574423F515BD3CC5F536B6285DD4A7A8D69D567C`.
+The candidate is the 41-file / 4,672-byte package manifest SHA-256
+`2508B3B3032717D031D304EC4C576B80E106E28FD81135D90D087F679167E374`
+on branch `codex/gate-20a-assignment-authority` at unchanged derivation `HEAD`
+and upstream tip `a5acb1a1752eb9297d4c06b13db2cd18e0f9ff3f`. The index is
+empty; no commit, ref, remote, release, credentialed provider, or external
+durable system changed.
+
+The candidate adds one independent `AdvisoryPlanSuggestion` owner with bounded
+ordered change sets, immutable complete revisions, exact historical
+alternatives, revision-authored compact summaries, separate learner-visible
+and retrieval scopes, exact basis refs, retire/restore, structural effect or
+no-change sealing, semantic race settlement, root-only mutation, and
+Session-deletion preservation. Forward migration V23 freezes Gate 20B Context
+generation 5 and adds Context generation 6. The Context extension reuses the
+existing operation-exact cut, permission-filtered directory, lazy owner read,
+provider Tool Part, replay, and recovery substrate; no scheduler, topic index,
+ranker, selector, second runtime, or host-authored advice meaning was added.
+
+Fresh executor evidence includes Core typecheck and migration generation,
+11/108 Advisory owner assertions, the complete 48/500 migration file, 13/49
+Context assertions, 26/267 Assignment regression assertions, and the Gate20B
+and Gate19 owner regressions. Schema, OpenCode, and TUI typechecks pass. Exact
+Gate 21 hooks/presentation/runtime/registry filtering passes 9/80; complete
+presentation, hooks, registry, ACP/CLI, and TUI files pass 20/130, 6/27,
+38/323, 43/95, and 6/22. A serialized complete Prompt run passes 30/410,
+including the released-v1 fallback directory -> exact lazy body -> changed
+teaching -> natural correction chain and useful zero-write teaching.
+
+Two harness facts remain disclosed rather than promoted into semantic evidence.
+A full Windows Bun 1.3.14 runtime process reported its executed tests passing
+and then segfaulted during aggregate teardown near 0.91 GiB RSS. A non-serial
+full Prompt attempt let multiple runtime test layers compete for one exclusive
+process-private LearnerHome; the exact serialized file passes. The focused
+Gate 21 paths reproduce no semantic failure. No credentialed-provider
+qualification was attempted.
+
+The implementation/evidence record is
+`docs/research/repa-gate-21-advisory-learning-planning-implementation-evidence-2026-08-11.md`.
+It states candidate evidence only. The executor must now resume retained
+top-level reviewer `019fe9c2-c8b6-7913-a988-ab7c955ffd36` under the same
+whole-Gate run. Until that reviewer returns implementation/evidence `Accept`,
+Gate 21 is not integrated, committed, published, released, or eligible to
+start Gate 21A.
+
+The retained reviewer's first implementation/evidence pass bound that exact
+41-file candidate and returned `Revise`, leaving contract/theory accepted. It
+opened `G21-IE-001..005`: advisory lookup lost Course/View identities when a
+working selection exposed no item endpoint; exact historical Course membership
+did not report later working-selection drift; a write-valid revision could
+overflow the mandatory 2 KiB compact Context semantic; the released-v1 trace
+did not run real same-request absent and wrong-revision controls; and Goal,
+Assignment, Material, and Gate 19 evidence refs lacked Gate 21 composition
+oracles. The reviewer found no owner blocker, contract reopen condition, or
+unavoidable maintainer product choice and retained the same review task for
+repair closure.
+
+The root executor repaired those findings within the accepted owner and mature
+Context/tool substrate. Course/View lookup now derives stable keys from the
+admitted Course locator, and owner-native observed-working status reports
+selection drift without retargeting the historical revision. A conservative
+maximum compact projection is checked before mutation; the exact 2,048-byte
+fixture succeeds and its first extra byte fails atomically. The production-path
+Prompt oracle now uses the same request with advisory read visibility withheld,
+and separately leaves superseded directory/body branches unconsumed while the
+current exact lazy read drives the response. A shared ordinary root invocation
+fixture supplies focused Goal-head, Assignment-head/time, Material-withdrawal,
+and Gate 19 version-zero/source-deletion composition cases.
+
+The first-repair candidate is 45 package paths / 5,139 canonical manifest bytes
+/ SHA-256
+`0F67B236C51DD068BEEFC7B1DED1D25CEC6EE9345CDBE22A07A35FE10A432E7E`.
+Current repair evidence includes Core and OpenCode typechecks, Advisory owner
+11/112, LearningContext 13/49, four owner composition filters totaling 4/13,
+the released-v1 Gate 21 filter 1/55, and the correctly serialized complete
+Prompt file 30/423. The first attempted full Prompt command used the ineffective
+spelling `--max-concurrency 1`; Bun 1.3.14 therefore used its default concurrency
+and produced 25 same-cause exclusive-database busy failures. Changing only the
+spelling to `--max-concurrency=1` produced the 30/423 pass. The earlier runtime
+aggregate teardown segfault and absence of credentialed-provider qualification
+remain disclosed, non-acceptance evidence. This repair candidate is awaiting
+the retained reviewer's first repair closure; it is not pre-accepted,
+integrated, committed, pushed, released, or Gate 21A authority.
+
+The retained first-repair closure then closed `G21-IE-001`, `G21-IE-002`,
+`G21-IE-004`, and `G21-IE-005`. It kept `G21-IE-003` open at High severity:
+the pre-write compact-capacity envelope still omitted `currentRevision` for
+learner-state and prior-advisory exact refs, although both fresh dependency
+projections emit that field. A legal write could therefore pass admission and
+make later mandatory Context construction exceed 2,048 bytes. Contract/theory
+remained accepted; no replacement finding, owner blocker, contract reopen, or
+maintainer product choice appeared.
+
+The executor's second repair adds those two owner-specific current-revision
+arms to the same conservative capacity envelope. Real learner-state and
+prior-advisory revision fixtures each admit the complete 2,048-byte envelope,
+remain complete in fresh Context, and reject the first extra summary byte with
+no owner write or frontier movement. Core typecheck passes, and the complete
+Advisory plus learner-state files pass **30/30 with 234 assertions** under
+`--max-concurrency=1`. The second-repair candidate contains **46 package paths /
+5,254 canonical manifest bytes** at SHA-256
+`668FBC647AD9C7448F7942E177496A668568FE021CE98AF665C32EE73A598D78`.
+This remains executor evidence pending the same reviewer's second repair
+closure; it is not implementation acceptance, integration, commit, push,
+release, credentialed-provider qualification, or Gate 21A authority.
 
 ## Historical evidence locators
 

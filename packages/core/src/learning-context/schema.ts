@@ -8,17 +8,20 @@ export const LEGACY_POLICY_VERSION = 1 as const
 export const GATE19_POLICY_VERSION = 2 as const
 export const GATE20_POLICY_VERSION = 3 as const
 export const GATE20A_POLICY_VERSION = 4 as const
-export const POLICY_VERSION = 5 as const
+export const GATE20B_POLICY_VERSION = 5 as const
+export const POLICY_VERSION = 6 as const
 export const LEGACY_RENDERER_VERSION = 1 as const
 export const GATE19_RENDERER_VERSION = 2 as const
 export const GATE20_RENDERER_VERSION = 3 as const
 export const GATE20A_RENDERER_VERSION = 4 as const
-export const RENDERER_VERSION = 5 as const
+export const GATE20B_RENDERER_VERSION = 5 as const
+export const RENDERER_VERSION = 6 as const
 export const LEGACY_CAPABILITY_CATALOG_VERSION = 1 as const
 export const GATE19_CAPABILITY_CATALOG_VERSION = 2 as const
 export const GATE20_CAPABILITY_CATALOG_VERSION = 3 as const
 export const GATE20A_CAPABILITY_CATALOG_VERSION = 4 as const
-export const CAPABILITY_CATALOG_VERSION = 5 as const
+export const GATE20B_CAPABILITY_CATALOG_VERSION = 5 as const
+export const CAPABILITY_CATALOG_VERSION = 6 as const
 
 export const MAX_CANONICAL_BYTES = 32_768
 export const MAX_RENDERED_BYTES = 16_384
@@ -27,6 +30,7 @@ export const MAX_CANDIDATES_PER_FAMILY = 8
 export const MAX_INTERACTION_CANDIDATES = 4
 export const MAX_ASSIGNMENT_CONTEXT_ENTRIES = 8
 export const MAX_LEARNER_STATE_JUDGMENT_CONTEXT_ENTRIES = 8
+export const MAX_ADVISORY_PLAN_SUGGESTION_CONTEXT_ENTRIES = 8
 export const MAX_LAZY_BYTES = 32_768
 export const MAX_LAZY_ITEMS = 64
 
@@ -48,9 +52,13 @@ export const GATE20_LAZY_READ_CAPABILITY_IDS = [
   "future_attention_read",
 ] as const
 export const GATE20A_LAZY_READ_CAPABILITY_IDS = [...GATE20_LAZY_READ_CAPABILITY_IDS, "assignment_read"] as const
-export const LAZY_READ_CAPABILITY_IDS = [
+export const GATE20B_LAZY_READ_CAPABILITY_IDS = [
   ...GATE20A_LAZY_READ_CAPABILITY_IDS,
   "learner_state_judgment_read",
+] as const
+export const LAZY_READ_CAPABILITY_IDS = [
+  ...GATE20B_LAZY_READ_CAPABILITY_IDS,
+  "advisory_plan_suggestion_read",
 ] as const
 
 export type LazyReadCapabilityID = (typeof LAZY_READ_CAPABILITY_IDS)[number]
@@ -184,6 +192,7 @@ export type Entry = Readonly<{
     | "future_attention"
     | "assignment"
     | "learner_state_judgment"
+    | "advisory_plan_suggestion"
   locator: Readonly<Record<string, JsonValue>>
   semantic?: BoundedValue
 }>
@@ -261,12 +270,40 @@ export type LearnerStateJudgmentWithheldSection = SectionBase &
     countAtCut: "unknown"
   }>
 
+export type AdvisoryPlanSuggestionContextOwnerCut = Readonly<{
+  frontierSequence: number
+  frontierTime: number
+  headCount: number
+  fingerprint: string
+}>
+
+export type AdvisoryPlanSuggestionAuthorizedSection = SectionBase &
+  Readonly<{
+    owner: "advisory_plan_suggestion"
+    coverage: Exclude<Coverage, "not_authorized">
+    countAtCut: number
+    advisoryPlanSuggestionOwnerCut?: AdvisoryPlanSuggestionContextOwnerCut
+    asOf?: number
+    eligibleKeyCount?: number
+    eligibleKeysFingerprint?: string
+    directoryCursor?: string
+  }>
+
+export type AdvisoryPlanSuggestionWithheldSection = SectionBase &
+  Readonly<{
+    owner: "advisory_plan_suggestion"
+    coverage: "not_authorized"
+    countAtCut: "unknown"
+  }>
+
 export type Section =
   | LegacySection
   | AssignmentAuthorizedSection
   | AssignmentWithheldSection
   | LearnerStateJudgmentAuthorizedSection
   | LearnerStateJudgmentWithheldSection
+  | AdvisoryPlanSuggestionAuthorizedSection
+  | AdvisoryPlanSuggestionWithheldSection
 
 export type HardLimits = Readonly<{
   canonicalBytes: typeof MAX_CANONICAL_BYTES
@@ -301,12 +338,14 @@ export type Cut = Readonly<{
     | typeof GATE19_POLICY_VERSION
     | typeof GATE20_POLICY_VERSION
     | typeof GATE20A_POLICY_VERSION
+    | typeof GATE20B_POLICY_VERSION
     | typeof POLICY_VERSION
   rendererVersion:
     | typeof LEGACY_RENDERER_VERSION
     | typeof GATE19_RENDERER_VERSION
     | typeof GATE20_RENDERER_VERSION
     | typeof GATE20A_RENDERER_VERSION
+    | typeof GATE20B_RENDERER_VERSION
     | typeof RENDERER_VERSION
   operation: Operation
   cutAsOf: number

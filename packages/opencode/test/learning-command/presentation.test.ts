@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { Assignment } from "@opencode-ai/core/assignment"
+import { AdvisoryPlanSuggestion } from "@opencode-ai/core/advisory-plan-suggestion"
 import type { Course } from "@opencode-ai/core/course"
 import { FutureAttention } from "@opencode-ai/core/future-attention"
 import { LearningBootstrap } from "@opencode-ai/core/learning-bootstrap"
@@ -2075,6 +2076,456 @@ describe("learner-state judgment semantic presentation", () => {
     })
   })
 })
+
+describe("advisory learning suggestion semantic presentation", () => {
+  test("shows the complete revision-authored advice and generated identity before approval", () => {
+    const candidate = advisoryPlanSuggestionCandidate()
+    const proposal = LearningCommandPresentation.advisoryPlanSuggestionCapability(candidate, envelope)
+    const scope = SemanticPresentation.advisoryPlanSuggestionScope(candidate)
+    const exact = request({
+      permission: AdvisoryPlanSuggestion.UPDATE_CAPABILITY,
+      patterns: [AdvisoryPlanSuggestion.PERMISSION_PATTERN],
+      always: [AdvisoryPlanSuggestion.PERMISSION_PATTERN],
+      metadata: {
+        advisoryPlanSuggestionKind: "change_set",
+        commandFingerprint: candidate.commandFingerprint,
+        issuance: "root",
+        scope,
+        ...SemanticPresentation.metadata(proposal),
+      },
+    })
+
+    expect(SemanticPresentation.readProposal(exact)).toMatchObject({
+      type: "valid",
+      value: {
+        capability: AdvisoryPlanSuggestion.UPDATE_CAPABILITY,
+        title: "Store or revise advisory learning suggestions",
+        approval: "policy",
+        facts: expect.arrayContaining([
+          { label: "Suggestion action 1", value: expect.stringContaining("create") },
+          { label: "Learner-visible scope", value: "Continuation practice across the next sessions" },
+          { label: "Directory summary", value: "Examples first, then one guided attempt." },
+          { label: "Advisory body", value: expect.stringContaining("Work through one concrete example") },
+          { label: "Does not imply", value: expect.stringContaining("advice_not_schedule_commitment") },
+        ]),
+      },
+    })
+    expect(
+      SemanticPresentation.readProposal({
+        ...exact,
+        metadata: {
+          ...exact.metadata,
+          scope: {
+            ...scope,
+            materialized: scope.materialized.map((item) => ({ ...item, body: "Forged rigid schedule" })),
+          },
+        },
+      }),
+    ).toEqual({ type: "invalid" })
+    expect(() =>
+      LearningCommandPresentation.advisoryPlanSuggestionCapability(
+        { ...candidate, agentAction: { ...candidate.agentAction, kind: "delegated" } },
+        envelope,
+      ),
+    ).toThrow("Advisory-plan suggestion capability requires a root Agent action")
+  })
+
+  test("distinguishes committed, already-applied, no-change, and failed suggestion truth", () => {
+    const candidate = advisoryPlanSuggestionCandidate()
+    const item = candidate.materialized[0]!
+    const intentResult = {
+      outcome: "changed" as const,
+      suggestionID: item.suggestionID,
+      revisionID: item.revisionID,
+      version: item.version,
+      operation: item.operation,
+      operationOrdinal: item.operationOrdinal,
+      disposition: item.disposition,
+    }
+    const applied = {
+      outcome: "applied" as const,
+      advisoryPlanSuggestionKind: "change_set" as const,
+      receiptID: LearningCommand.createReceiptID(),
+      effectID: candidate.effectID,
+      intentResults: [intentResult],
+      settlementTime: 2,
+      settlementOrder: 1,
+      frontierSequence: 1,
+    }
+    const committed = LearningCommandPresentation.advisoryPlanSuggestionSettlementResult(
+      applied as unknown as LearningCommand.PhysicalSettlement,
+      {
+        version: 1,
+        disposition: "candidate_v1",
+        status: "applied",
+        settlement: applied,
+        candidate,
+        capabilityOutcome: "policy_allow",
+        timeAdmitted: 1,
+      },
+      envelope,
+    )
+    expect(SemanticPresentation.projectResultBasis(committed.basis)).toMatchObject({
+      capability: AdvisoryPlanSuggestion.UPDATE_CAPABILITY,
+      title: "Advisory learning suggestion settlement",
+      outcome: "committed",
+      facts: expect.arrayContaining([
+        { label: "Suggestion result 1", value: expect.stringContaining("changed; create") },
+        { label: "Advisory status", value: expect.stringContaining("not a schedule") },
+      ]),
+    })
+
+    const already = { ...applied, outcome: "already_applied" as const, existingOutcome: "applied" as const }
+    const alreadyResult = LearningCommandPresentation.advisoryPlanSuggestionSettlementResult(
+      already as unknown as LearningCommand.PhysicalSettlement,
+      {
+        version: 1,
+        disposition: "semantic_terminal_v1",
+        status: "already_applied",
+        settlement: already,
+        semanticTerminal: {
+          kind: "semantic_terminal_v1",
+          outcome: "same_effect",
+          commandFingerprint: candidate.commandFingerprint,
+          semanticAddressFingerprint: candidate.semanticAddressFingerprint,
+          existingOwner: { type: "effect", effectID: candidate.effectID },
+        },
+        timeAdmitted: 1,
+      },
+      envelope,
+    )
+    expect(SemanticPresentation.projectResultBasis(alreadyResult.basis)).toMatchObject({
+      outcome: "already_applied",
+      facts: expect.arrayContaining([{ label: "Existing semantic outcome", value: "applied" }]),
+    })
+
+    const unchangedResult = { ...intentResult, outcome: "no_change" as const }
+    const noChange = {
+      outcome: "no_change" as const,
+      advisoryPlanSuggestionKind: "change_set" as const,
+      existingOutcome: "materialized_no_change" as const,
+      intentResults: [unchangedResult],
+      settlementTime: 3,
+      settlementOrder: 2,
+    }
+    const noChangePresentation = LearningCommandPresentation.advisoryPlanSuggestionSettlementResult(
+      noChange as unknown as LearningCommand.PhysicalSettlement,
+      {
+        version: 1,
+        disposition: "candidate_v1",
+        status: "no_change",
+        settlement: noChange,
+        candidate,
+        capabilityOutcome: "policy_allow",
+        timeAdmitted: 1,
+      },
+      envelope,
+    )
+    expect(SemanticPresentation.projectResultBasis(noChangePresentation.basis)).toMatchObject({
+      outcome: "no_effect",
+      facts: expect.arrayContaining([
+        { label: "Existing semantic outcome", value: "no_change" },
+        { label: "No-change reason", value: "materialized_no_change" },
+      ]),
+    })
+
+    const failed = { outcome: "error" as const, code: "semantic_conflict", settlementTime: 4, settlementOrder: 3 }
+    const failedPresentation = LearningCommandPresentation.advisoryPlanSuggestionSettlementResult(
+      failed as unknown as LearningCommand.PhysicalSettlement,
+      {
+        version: 1,
+        disposition: "semantic_terminal_v1",
+        status: "error",
+        settlement: failed,
+        semanticTerminal: {
+          kind: "semantic_terminal_v1",
+          outcome: "semantic_conflict",
+          commandFingerprint: candidate.commandFingerprint,
+          semanticAddressFingerprint: candidate.semanticAddressFingerprint,
+          existingOwner: { type: "effect", effectID: candidate.effectID },
+        },
+        timeAdmitted: 1,
+      },
+      envelope,
+    )
+    expect(SemanticPresentation.projectResultBasis(failedPresentation.basis)).toMatchObject({
+      outcome: "failed",
+      facts: expect.arrayContaining([{ label: "Failure", value: "semantic_conflict" }]),
+    })
+  })
+
+  test("keeps alternative, revise, retire, and restore scope exact before approval", () => {
+    for (const operation of ["alternative", "revise", "retire", "restore"] as const) {
+      const candidate = advisoryPlanSuggestionCandidateForOperation(operation)
+      const proposal = LearningCommandPresentation.advisoryPlanSuggestionCapability(candidate, envelope)
+      const scope = SemanticPresentation.advisoryPlanSuggestionScope(candidate)
+      const exact = request({
+        permission: AdvisoryPlanSuggestion.UPDATE_CAPABILITY,
+        patterns: [AdvisoryPlanSuggestion.PERMISSION_PATTERN],
+        always: [AdvisoryPlanSuggestion.PERMISSION_PATTERN],
+        metadata: {
+          advisoryPlanSuggestionKind: "change_set",
+          commandFingerprint: candidate.commandFingerprint,
+          issuance: "root",
+          scope,
+          ...SemanticPresentation.metadata(proposal),
+        },
+      })
+      const projected = SemanticPresentation.readProposal(exact)
+      expect(projected).toMatchObject({ type: "valid" })
+      if (projected.type !== "valid") throw new Error(`Expected a valid ${operation} proposal`)
+      expect(projected.value.facts).toContainEqual({
+        label: "Suggestion action 1",
+        value: expect.stringContaining(operation),
+      })
+      if (operation === "alternative") {
+        expect(projected.value.facts).toContainEqual({
+          label: "Exact alternative target",
+          value: `${`aps_${"9".repeat(26)}`}/${`apr_${"9".repeat(26)}`} v1`,
+        })
+      } else {
+        expect(projected.value.facts).toContainEqual({
+          label: "Expected heads",
+          value: `${candidate.materialized[0]!.suggestionID}/${`apr_${"0".repeat(26)}`} v1`,
+        })
+      }
+      expect(projected.value.facts).toContainEqual({
+        label: "Does not imply",
+        value: expect.stringContaining("retire_or_restore_implies_no_adherence_rejection"),
+      })
+    }
+  })
+})
+
+function advisoryPlanSuggestionCandidateForOperation(
+  operation: "alternative" | "revise" | "retire" | "restore",
+): AdvisoryPlanSuggestion.Candidate {
+  const base = advisoryPlanSuggestionCandidate()
+  const item = base.materialized[0]!
+  const snapshot = {
+    learnerVisibleScope: item.snapshot.learnerVisibleScope,
+    retrievalScope:
+      item.snapshot.retrievalScope.type === "learner_home_fallback"
+        ? item.snapshot.retrievalScope
+        : {
+            type: "anchored" as const,
+            anchors: item.snapshot.retrievalScope.anchors.map((anchor) => ({
+              stableOwnerKey: anchor.stableOwnerKey,
+              exactBoundRef: anchor.exactBound.ref,
+            })),
+          },
+    purpose: item.snapshot.purpose,
+    directorySummary: item.snapshot.directorySummary,
+    body: item.snapshot.body,
+    exactBasisRefs: item.snapshot.exactBasis.map((binding) => binding.ref),
+    ...(item.snapshot.assumptionsAndUncertainty
+      ? { assumptionsAndUncertainty: item.snapshot.assumptionsAndUncertainty }
+      : {}),
+  }
+  if (operation === "alternative") {
+    const alternativeToRevision = {
+      suggestionID: `aps_${"9".repeat(26)}` as AdvisoryPlanSuggestion.SuggestionID,
+      revisionID: `apr_${"9".repeat(26)}` as AdvisoryPlanSuggestion.RevisionID,
+      version: 1,
+    }
+    const command = AdvisoryPlanSuggestion.canonicalizeCommand({
+      cause: { type: "proactive_tutor_proposal", rationale: "Offer a distinct, correctable learning approach." },
+      intents: [
+        {
+          operation: "alternative",
+          operationOrdinal: 0,
+          createOrdinal: 0,
+          alternativeToRevision,
+          snapshot,
+        },
+      ],
+    })
+    return {
+      ...base,
+      commandFingerprint: AdvisoryPlanSuggestion.commandFingerprint(command),
+      canonicalCommand: command,
+      materialized: [
+        {
+          ...item,
+          operation: "alternative",
+          alternativeToRevision,
+          authorAndCause: { ...item.authorAndCause, type: "proactive_tutor_proposal" },
+        },
+      ],
+    } as unknown as AdvisoryPlanSuggestion.Candidate
+  }
+
+  const source = `Learner requested an exact ${operation} of this advisory suggestion.`
+  const expectedHead = {
+    revisionID: item.revisionID,
+    version: 1,
+    ownerCutFingerprint: "4".repeat(64),
+  }
+  const intent =
+    operation === "retire"
+      ? {
+          operation,
+          operationOrdinal: 0,
+          suggestionID: item.suggestionID,
+          expectedHead,
+          rationale: `Keep the ${operation} transition exact and naturally correctable.`,
+        }
+      : operation === "revise"
+        ? {
+            operation,
+            operationOrdinal: 0,
+            suggestionID: item.suggestionID,
+            expectedHead,
+            snapshot,
+            rationale: `Keep the ${operation} transition exact and naturally correctable.`,
+          }
+        : {
+            operation,
+            operationOrdinal: 0,
+            suggestionID: item.suggestionID,
+            expectedHead,
+            snapshot,
+            rationale: `Keep the ${operation} transition exact and naturally correctable.`,
+          }
+  const command = AdvisoryPlanSuggestion.canonicalizeCommand({
+    cause: {
+      type: "learner_revision",
+      excerpt: { text: source, startByte: 0, endByte: new TextEncoder().encode(source).byteLength },
+    },
+    intents: [intent],
+  })
+  return {
+    ...base,
+    commandFingerprint: AdvisoryPlanSuggestion.commandFingerprint(command),
+    canonicalCommand: command,
+    materialized: [
+      {
+        ...item,
+        revisionID: `apr_${"1".repeat(26)}` as AdvisoryPlanSuggestion.RevisionID,
+        previous: undefined,
+        predecessorRevisionID: item.revisionID,
+        version: 2,
+        operation,
+        createOrdinal: undefined,
+        disposition: operation === "retire" ? "retired" : "active",
+        authorAndCause: { ...item.authorAndCause, type: "learner_revision" },
+      },
+    ],
+  } as unknown as AdvisoryPlanSuggestion.Candidate
+}
+
+function advisoryPlanSuggestionCandidate(): AdvisoryPlanSuggestion.Candidate {
+  const source = "Use concrete continuation examples before timed practice."
+  const excerpt = { text: source, startByte: 0, endByte: new TextEncoder().encode(source).byteLength }
+  const rationale = "Preserve useful and correctable advice for later teaching."
+  const snapshotIntent = {
+    learnerVisibleScope: "Continuation practice across the next sessions",
+    retrievalScope: { type: "learner_home_fallback" as const, reason: "no_stable_owner_anchor" as const },
+    purpose: "Help later teaching continue without a rigid schedule.",
+    directorySummary: "Examples first, then one guided attempt.",
+    body: "Work through one concrete example, then try one guided continuation; keep later steps provisional.",
+    exactBasisRefs: [],
+    assumptionsAndUncertainty: "Fallible Tutor advice; revise when it stops helping.",
+  }
+  const command = AdvisoryPlanSuggestion.canonicalizeCommand({
+    cause: {
+      type: "responsive_tutor_proposal",
+      excerpt,
+      rationale,
+    },
+    intents: [
+      {
+        operation: "create",
+        operationOrdinal: 0,
+        createOrdinal: 0,
+        snapshot: snapshotIntent,
+      },
+    ],
+  })
+  const suggestionID = `aps_${"0".repeat(26)}` as AdvisoryPlanSuggestion.SuggestionID
+  const revisionID = `apr_${"0".repeat(26)}` as AdvisoryPlanSuggestion.RevisionID
+  const effectID = `ape_${"0".repeat(26)}` as AdvisoryPlanSuggestion.EffectID
+  const learnerBasis = {
+    type: "learner_occurrence" as const,
+    occurrenceID: envelope.occurrenceID,
+    sourceOrder: 1,
+    sessionID: envelope.sessionID,
+    messageID: envelope.parentUserMessageID,
+    turnID: envelope.turnID,
+    inputID: envelope.inputID,
+    timeAdmitted: 1,
+    sourceTemporalContext: { state: "resolved" as const, instant: 1, timeZone: "UTC", utcOffsetMinutes: 0 },
+    excerpt: {
+      ...excerpt,
+      sha256: new Bun.CryptoHasher("sha256").update(source).digest("hex"),
+    },
+  }
+  const snapshot = {
+    learnerVisibleScope: snapshotIntent.learnerVisibleScope,
+    retrievalScope: snapshotIntent.retrievalScope,
+    purpose: snapshotIntent.purpose,
+    directorySummary: snapshotIntent.directorySummary,
+    body: snapshotIntent.body,
+    exactBasis: [],
+    assumptionsAndUncertainty: snapshotIntent.assumptionsAndUncertainty,
+  }
+  const authorAndCause = {
+    type: "responsive_tutor_proposal" as const,
+    rootModelOperationID: envelope.assistantMessageID,
+    mutationOccurrenceID: envelope.occurrenceID,
+    mutationPartID: envelope.partID,
+    source: {
+      type: "model_operation" as const,
+      assistantMessageID: envelope.assistantMessageID,
+      sessionID: envelope.sessionID,
+      turnID: envelope.turnID,
+      inputID: envelope.inputID,
+      occurrenceID: envelope.occurrenceID,
+      learningContextFingerprint: "1".repeat(64),
+      learningContextCutAsOf: 1,
+      rationale,
+      responsiveLearnerBasis: learnerBasis,
+    },
+  }
+  return {
+    kind: "candidate_v1",
+    commandFingerprint: AdvisoryPlanSuggestion.commandFingerprint(command),
+    semanticAddressFingerprint: "2".repeat(64),
+    agentActionFingerprint: "3".repeat(64),
+    canonicalCommand: command,
+    agentAction: {
+      schemaVersion: 1,
+      kind: "root",
+      occurrenceID: envelope.occurrenceID,
+      sessionID: envelope.sessionID,
+      turnID: envelope.turnID,
+      inputID: envelope.inputID,
+      assistantMessageID: envelope.assistantMessageID,
+      invocationPartID: envelope.partID,
+      providerCallID: envelope.providerCallID,
+      emissionOrdinal: 0,
+      capabilityIdentity: AdvisoryPlanSuggestion.UPDATE_CAPABILITY,
+      capabilityVersion: AdvisoryPlanSuggestion.UPDATE_VERSION,
+      lineage: [],
+    },
+    effectID,
+    materialized: [
+      {
+        outcome: "changed",
+        suggestionID,
+        revisionID,
+        effectID,
+        version: 1,
+        operation: "create",
+        operationOrdinal: 0,
+        createOrdinal: 0,
+        disposition: "active",
+        snapshot,
+        authorAndCause,
+      },
+    ],
+  }
+}
 
 function learnerStateJudgmentCandidate(): LearnerStateJudgment.Candidate {
   const source = "I understand the definition, but applying the invariant remains uncertain."

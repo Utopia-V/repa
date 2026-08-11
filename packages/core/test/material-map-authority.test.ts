@@ -4,6 +4,7 @@ import { tmpdir } from "node:os"
 import path from "node:path"
 import { sql } from "drizzle-orm"
 import { Deferred, Effect, Layer, ManagedRuntime } from "effect"
+import { AdvisoryPlanSuggestion } from "@opencode-ai/core/advisory-plan-suggestion"
 import { Artifact } from "@opencode-ai/core/artifact"
 import { ContentRoot } from "@opencode-ai/core/content-root"
 import { Course } from "@opencode-ai/core/course"
@@ -12,6 +13,10 @@ import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { MaterialMap } from "@opencode-ai/core/material-map"
 import { Representation } from "@opencode-ai/core/representation"
 import { PDFTextProfile } from "@opencode-ai/core/representation/pdf-text-profile"
+import {
+  applyAdvisoryPlanSuggestionInvocation,
+  seedAdvisoryPlanSuggestionInvocation,
+} from "./fixture/advisory-plan-suggestion"
 
 const windowsTest = process.platform === "win32" ? test : test.skip
 
@@ -115,6 +120,92 @@ async function closeFixture(fixture: Fixture) {
 }
 
 describe("Material Map authority", () => {
+  windowsTest(
+    "projects a real Material selector into advisory currentness without rewriting the advice",
+    async () => {
+      const fixture = await prepareFixture()
+      try {
+        const input = artifactMapInput(fixture)
+        const map = await fixture.runtime.runPromise(fixture.maps.createMap(input))
+        const selectorID = input.proposal.outline[1]!.selectors[0]!.id
+        const ref = { type: "material_selector" as const, mapID: map.id, selectorID }
+        const time = Date.now() + 1_000
+        const invocation = await fixture.runtime.runPromise(
+          seedAdvisoryPlanSuggestionInvocation(
+            fixture.database.db,
+            "material_reference",
+            {
+              cause: {
+                type: "proactive_tutor_proposal",
+                rationale: "Keep one exact-material teaching suggestion inspectable without changing the map.",
+              },
+              intents: [
+                {
+                  operation: "create",
+                  operationOrdinal: 0,
+                  createOrdinal: 0,
+                  snapshot: {
+                    learnerVisibleScope: "Exact source-section learning approach",
+                    retrievalScope: {
+                      type: "anchored",
+                      anchors: [
+                        {
+                          stableOwnerKey: { type: "material_selector", mapID: map.id, selectorID },
+                          exactBoundRef: ref,
+                        },
+                      ],
+                    },
+                    purpose: "Keep advice tied to an exact inspectable source selector.",
+                    directorySummary: "Read the selected source section before attempting transfer.",
+                    body: "Read the exact selected section, explain its central invariant, then try one transfer example.",
+                    exactBasisRefs: [ref],
+                    assumptionsAndUncertainty: "Material availability is owner truth; the advice remains fallible.",
+                  },
+                },
+              ],
+            },
+            "Keep this material-specific learning approach available.",
+            time,
+          ),
+        )
+        const applied = await fixture.runtime.runPromise(
+          applyAdvisoryPlanSuggestionInvocation(fixture.database.db, invocation, time + 2),
+        )
+        if (applied.type !== "settled" || applied.settlement.outcome !== "applied") {
+          throw new Error("Expected the Material-backed suggestion")
+        }
+        const result = applied.settlement.intentResults[0]
+        if (!result || result.outcome !== "changed") throw new Error("Expected one Material-backed revision")
+        const before = await fixture.runtime.runPromise(
+          fixture.database.db.transaction((tx) =>
+            AdvisoryPlanSuggestion.readCurrent(tx, result.suggestionID, time + 10),
+          ),
+        )
+        expect(before).toMatchObject({
+          retrievalAnchorRelations: [{ exactBoundRef: ref, relation: { state: "current" } }],
+          basisDependencies: [{ ref, state: "current" }],
+        })
+
+        await fixture.runtime.runPromise(
+          fixture.maps.withdrawMap({ mapID: map.id, expectedVersion: 0, reason: "source outline withdrawn" }),
+        )
+        const after = await fixture.runtime.runPromise(
+          fixture.database.db.transaction((tx) =>
+            AdvisoryPlanSuggestion.readCurrent(tx, result.suggestionID, time + 20),
+          ),
+        )
+        expect(after).toMatchObject({
+          retrievalAnchorRelations: [{ exactBoundRef: ref, relation: { state: "source_unavailable" } }],
+          basisDependencies: [{ ref, state: "source_unavailable" }],
+        })
+        expect(after?.revision).toEqual(before?.revision)
+      } finally {
+        await closeFixture(fixture)
+      }
+    },
+    120_000,
+  )
+
   windowsTest("rejects Map ABA between pinned Tutor locator inspection and byte admission", async () => {
     const fixture = await prepareFixture()
     try {

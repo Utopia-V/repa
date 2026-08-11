@@ -102,7 +102,7 @@ const noChangeBlock = `        OR (NEW.status = 'no_change' AND (
           ))
         ))`
 
-const noChangeBlockV22 = `        OR (NEW.status = 'no_change' AND (
+export const noChangeBlockV22 = `        OR (NEW.status = 'no_change' AND (
           NEW.receipt_id IS NOT NULL
           OR (NEW.command_name = 'update_assignment' AND NEW.command_version = 1 AND NOT EXISTS (
             SELECT 1
@@ -156,7 +156,7 @@ const noChangeBlockV22 = `        OR (NEW.status = 'no_change' AND (
         ))`
 
 const terminalErrorBlock = `        OR (NEW.status = 'error' AND NEW.receipt_id IS NOT NULL);`
-const terminalErrorBlockV22 = `        OR (NEW.status = 'error' AND (
+export const terminalErrorBlockV22 = `        OR (NEW.status = 'error' AND (
           NEW.receipt_id IS NOT NULL
           OR (NEW.command_name = 'update_learner_state_judgment'
             AND NEW.command_version = 1

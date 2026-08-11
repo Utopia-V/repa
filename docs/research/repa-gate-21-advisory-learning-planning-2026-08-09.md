@@ -1,10 +1,24 @@
 # Repa Gate 21: advisory learning-plan suggestions
 
-Status: **Contract/theory candidate only. Fresh independent review has not
-begun.** This candidate supersedes the unreviewed
+Status: **Contract/theory accepted.** Whole-Gate review run
+`G21-WG-20260810-019fe065-01`, retained reviewer
+`019fe9c2-c8b6-7913-a988-ab7c955ffd36`, accepted exact semantic snapshot
+SHA-256 `9CA7DB485C3726752570868A574423F515BD3CC5F536B6285DD4A7A8D69D567C`
+after closing `G21-CR-001..004`, with no replacement finding, owner blocker, or
+material contract unknown. This record supersedes the unreviewed
 [2026-08-08 deterministic Planning candidate](repa-gate-21-cross-day-planning-authority-2026-08-08.md).
-It is not implementation, migration, integration, release, or Gate 21A
-authority.
+The accepted layer authorizes the already requested Gate 21 implementation.
+The retained reviewer's first implementation/evidence pass returned `Revise`
+for `G21-IE-001..005` without reopening this semantic contract. Its first
+repair closure closed `G21-IE-001`, `002`, `004`, and `005`, while leaving
+`G21-IE-003` open because two legal exact-reference relations were absent from
+the pre-write compact-capacity envelope. The exact second-repair
+[implementation/evidence candidate](repa-gate-21-advisory-learning-planning-implementation-evidence-2026-08-11.md)
+is ready for second repair closure at 46 files / 5,254 canonical manifest
+bytes / SHA-256
+`668FBC647AD9C7448F7942E177496A668568FE021CE98AF665C32EE73A598D78`.
+It is not implementation/evidence acceptance, integration, commit, release, or
+Gate 21A authority.
 
 Date: 2026-08-09
 
@@ -16,14 +30,20 @@ by its documentation status successor. `main` and `origin/main` remain
 `c100b431fe174d1993b2baa89a7d1b133300b579`. Existing maintainer edits in
 `AGENTS.md` are preserved; this Gate 21 candidate changes no production package.
 
-Review run reserved for fresh dispatch:
-**`G21-WG-20260810-019fe065-01`**. Gate 20B contract/theory and
-implementation/evidence are accepted and published on the feature branch, so
-this candidate may bind its exact
-learner-state judgment handoff and proceed to a fresh independent review. A suggestion may still arise directly from the current
-learner occurrence, Goal, Assignment, Course, material, or evidence without a
-stored learner-state judgment. Gate 20B and Gate 21 remain separate acceptance
-units and require separate fresh top-level reviewers.
+Review run: **`G21-WG-20260810-019fe065-01`**. The fresh top-level reviewer
+confirmed that advisory suggestions are an independently useful owner and that
+the current fork already supplies the command, cut, lazy-read, permission,
+settlement, replay, and recovery substrate. Its first contract/theory pass
+returned `Revise`, not rejection: `G21-CR-001..004` are repairable within the
+advisory-not-scheduler boundary and require no maintainer-owned product choice.
+Gate 20B contract/theory and implementation/evidence are accepted and published
+on the feature branch, so this repair binds its exact learner-state judgment
+handoff. A suggestion may still arise directly from the current learner
+occurrence, Goal, Assignment, Course, material, or evidence without a stored
+learner-state judgment. Gate 20B and Gate 21 remain separate acceptance units;
+the retained Gate 21 reviewer closed this layer and remains reserved only for
+the later implementation/evidence round and any contract reopen caused by that
+evidence.
 
 Authority and correction routing:
 [product origin](../foundation/00-product-origin.md),
@@ -77,8 +97,9 @@ currently seeking.
 
 Every revision preserves:
 
-- one learner-visible purpose and scope;
-- one bounded open-language suggestion body;
+- one learner-visible purpose/scope and one separate closed retrieval scope;
+- one authored compact directory summary and one bounded open-language
+  suggestion body;
 - author, causal occurrence/model operation, and exact LearningContext cut;
 - optional exact references to Goals, Assignments, Courses, materials,
   evidence, learner-state judgments, and other admitted owner revisions;
@@ -153,17 +174,65 @@ LearningPlanSuggestionRevision {
   version
   predecessorRevisionID?
   disposition: active | retired
-  scope
+  learnerVisibleScope
+  retrievalScope
   purpose
+  directorySummary
   body
   authorAndCause
   exactBasisRefs[]
   assumptionsAndUncertainty?
   recordedAt
   correctionOf?
-  alternativeToSuggestionID?
+  alternativeToRevision?
+}
+
+SuggestionRevisionRef {
+  suggestionID
+  revisionID
+  version
+}
+
+SuggestionRetrievalScope =
+  | anchored { anchors: SuggestionRetrievalAnchor[] }
+  | learner_home_fallback {
+      reason: no_stable_owner_anchor | deliberately_cross_cutting
+    }
+
+SuggestionRetrievalAnchor {
+  stableOwnerKey
+  exactBoundRef
 }
 ```
+
+Three relations that may mention the same subject remain separate:
+
+- `learnerVisibleScope` is bounded authored semantic text telling the learner
+  what the advice is about. It is not a query or access-control expression.
+- `retrievalScope` is a closed, program-checkable discovery relation. An
+  anchored arm carries a stable owner key plus the exact owner revision or
+  selector against which it was bound. The first boundary admits Course/View,
+  Goal, Assignment, material selector, and learner-state judgment anchors. An
+  occurrence, model operation, deadline phrase, body keyword, or basis
+  reference is not silently promoted into a retrieval anchor.
+- `exactBasisRefs` preserve the evidence and context the author actually used.
+  They support provenance and fresh currentness projection; they do not decide
+  where the suggestion appears.
+
+The stable owner key lets a fresh operation match the same durable subject;
+the exact bound reference preserves historical meaning and lets a fresh read
+report head or source drift. A correction may deliberately replace the full
+retrieval scope in its successor, but no current producer state retargets an
+old revision.
+
+If useful advice has no lawful durable retrieval anchor—for example, it was
+authored only from the current learner occurrence—its author must select the
+explicit `learner_home_fallback` arm. That arm means “eligible for the bounded
+LearnerHome suggestion directory,” not “semantically applies to every Course”
+and not “rank this suggestion globally.” `no_stable_owner_anchor` records the
+absence of another durable retrieval key; `deliberately_cross_cutting` records
+a genuinely cross-cutting strategy. The program never infers either arm from
+the body.
 
 There is no singleton LearnerHome portfolio. Several active suggestions may
 coexist for different Courses, Goals, Assignments, time horizons, learning
@@ -173,9 +242,20 @@ promote one into “the plan.”
 One stable identity represents one continuing advisory proposal. Revising its
 details, sequence, emphasis, or horizon appends a successor. A materially
 different purpose or a deliberate alternative creates a new identity and may
-reference the other suggestion. The ordinary Agent proposes same-versus-new;
-the learner can correct that interpretation. The program owns exact heads and
-relations, not semantic equivalence.
+reference one exact revision of the other suggestion. The ordinary Agent
+proposes same-versus-new; the learner can correct that interpretation. The
+program owns exact heads and relations, not semantic equivalence.
+
+`alternativeToRevision`, when present, is set only when the alternative's
+stable identity is created and is carried unchanged through every revision of
+that identity. The target must be an existing exact current head at both
+admission and settlement and cannot be a sibling first created in the same
+change set. Later advancement or retirement of the target never rewrites the
+relation. A fresh projection reports the exact target and a separate relation
+such as `same_head`, `head_advanced`, `retired`, or `source_unavailable`.
+Retargeting an alternative requires a new suggestion identity; a correction of
+the alternative may change its advice but not what historical revision it was
+authored against.
 
 Every revision is a complete immutable snapshot. An old revision keeps its
 exact body and exact producer references after any Goal, Assignment, Course,
@@ -189,12 +269,27 @@ appends an active successor.
 
 ## Open semantic body and rolling granularity
 
-The suggestion body is a bounded, versioned semantic document. It may include
-an explanation of trade-offs, a near-term sequence, example learning blocks,
-review checkpoints, materials to use, questions to resolve, and a coarse later
-direction. The runtime treats this as authored semantic content; it validates
-encoding, size, identity, exact references, and settlement, not pedagogy or
-schedule correctness.
+The complete revision owns two bounded authored semantic values:
+
+- `directorySummary` is the compact, learner-visible orientation that may be
+  placed in LearningContext; and
+- `body` is the full suggestion document, normally loaded lazily.
+
+The author supplies both in the same command. The runtime validates encoding,
+size, identity, exact references, and settlement; it does not generate,
+truncate, paraphrase, or certify the summary, and it does not prove the summary
+entails or faithfully compresses the body. A misleading summary is therefore a
+fallible authored fact that can be corrected, not an unversioned host
+projection. Every implementation fixes and maximum-tests bounds that keep the
+largest valid compact entry within Gate 18's existing semantic-value ceiling;
+the first byte over a bound rejects atomically rather than being substring
+truncated.
+
+The body may include an explanation of trade-offs, a near-term sequence,
+example learning blocks, review checkpoints, materials to use, questions to
+resolve, and a coarse later direction. When a teaching move depends on detail
+not stated in the directory summary, the Agent must exact-read the revision;
+directory visibility alone does not prove body consumption.
 
 The preferred product shape is rolling:
 
@@ -220,7 +315,14 @@ A suggestion can cite a closed tagged set of exact owner references, including:
 - exact Course/View/item, Artifact/Representation/MaterialMap selector;
 - exact Gate 19 evidence revision;
 - exact Gate 20B learner-state judgment revision; and
-- another exact suggestion revision when revising or presenting an alternative.
+- another exact suggestion revision as an authored basis, plus the dedicated
+  `alternativeToRevision` topology field when the new identity is an
+  alternative.
+
+An optional occurrence or owner reference in `exactBasisRefs` cannot substitute
+for `retrievalScope`, and an optional basis reference to another suggestion
+cannot substitute for `alternativeToRevision`. The former relations explain
+authorship; the latter two own discoverability and alternative topology.
 
 The cited owner retains its meaning. A Goal target or Assignment due boundary
 is not copied into suggestion authority. A fresh read may derive before/on/after
@@ -299,6 +401,21 @@ when atomic multi-intent settlement is already mature. Separate operation names
 must correspond to different legal transitions rather than imagined workflow
 stages.
 
+The first boundary uses one bounded canonical suggestion change set per causal
+semantic-effect address. Responsive/proactive proposals and Tutor revisions
+use `(rootModelOperationID, suggestion_change_set)`; a learner revision uses
+`(learnerOccurrenceID, suggestion_change_set)` and retains the issuing root
+model operation as authorship/provenance rather than as a second address. A
+change set may carry bounded ordered intents, each with a unique
+`operationOrdinal`; create and alternative intents also carry a unique
+`createOrdinal` from which generated identities are deterministically
+materialized. Exact physical replay returns its stored settlement. Reuse of an
+occupied semantic address with the identical canonical change set returns
+already-applied or the original no-change truth; a changed payload conflicts.
+A later self-correction uses a new admitted model operation and exact current
+head rather than reopening the prior address. These rules make multiple
+results unambiguous without giving every row a free-floating effect identity.
+
 Every write binds causal occurrence/model operation, physical invocation,
 semantic effect address, expected current head, author, exact source refs,
 capability, permission, domain revision, receipt, and terminal Tool settlement.
@@ -313,6 +430,48 @@ later accepted boundary earns narrower authority. Authorized reads follow the
 Gate 18 operation-specific capability projection. A hidden suggestion cannot
 leak identity, count, or content to an operation without that owner capability.
 
+### Typed permission and settlement presentation
+
+Gate 21 extends the repository's existing semantic-presentation carrier rather
+than emitting generic tool text. One versioned typed projection is validated
+and rendered consistently across the primary TUI, direct run/attach, ACP, the
+durable Tool Part, replay, and restart recovery.
+
+Before an `ask` decision, the projection shows the exact action the learner is
+authorizing:
+
+- create and alternative show the materialized generated suggestion and
+  revision identities, authored purpose, learner-visible scope, retrieval
+  scope, directory summary, bounded body, cause, exact basis references, and,
+  for an alternative, its exact target revision;
+- revise/direct correction shows the exact expected current head and the full
+  successor snapshot, including any deliberate scope or summary change;
+- retire and restore show the exact expected head, resulting disposition, and
+  the fact that the action does not imply adherence, rejection, learning,
+  completion, or producer lifecycle change; and
+- every action shows the root author/cause and material currentness or source
+  preconditions that settlement will revalidate.
+
+Permission `allow | ask | deny | abort` decides whether the durable write may
+occur; it is not learner agreement with the pedagogy and does not create a plan
+approval state. After settlement the same typed carrier distinguishes:
+
+- `committed`, with the exact effect, receipt, suggestion, revision, version,
+  operation, and disposition;
+- `already_applied`, preserving the original effect/receipt and generated IDs;
+- `no_change`/`no_effect`, preserving the exact current head and the reason no
+  revision was appended;
+- semantic conflict or typed failure, with zero partial domain truth;
+- permission denial; and
+- prompt abort/interruption, with zero suggestion/effect.
+
+“Success” without this semantic result is not acceptance evidence. Focused TUI
+and retained-carrier oracles must prove exact proposal scope and byte-equivalent
+typed result meaning for create, revise/correct, alternative, retire, restore,
+replay, no-change, conflict/failure, deny, and abort. This closes the new
+owner's permission surface; it does not absorb Gate 22's general inspection,
+history browsing, correction UI, or carrier-wide product-loop work.
+
 ## Bounded Context index and lazy reads
 
 Gate 21 adopts the existing Gate 18 computational substrate:
@@ -325,19 +484,50 @@ exact owner/current snapshot
 -> exact detail only when useful to the current move
 ```
 
-The automatic eligible set contains active current suggestions whose exact
-scope anchors intersect exact Course, Goal, Assignment, material, or
-learner-state owners already in the operation's Context, plus explicitly
-LearnerHome-wide suggestions. It does not use request keywords, embeddings,
-deadline rank, hidden model calls, static priority, or first-row selection.
+The automatic eligible set contains:
+
+1. active current suggestions whose `retrievalScope.anchors` share a stable
+   owner key with an exact Course/View, Goal, Assignment, material selector, or
+   learner-state entry already admitted to the operation's Context; and
+2. every active current suggestion whose retrieval arm is the explicit bounded
+   `learner_home_fallback`.
+
+The exact bound revision/selector on each matched anchor remains in the locator
+and currentness projection; matching the stable owner key never retargets its
+historical meaning. The eligible set does not inspect `learnerVisibleScope`,
+`directorySummary`, body text, current request, occurrence wording, or
+`exactBasisRefs`. It does not use keywords, embeddings, topic models, deadline
+rank, hidden model calls, static priority, or first-row selection. An
+occurrence-only suggestion is therefore discoverable in a fresh Session only
+through its explicit fallback arm, not by importing the old transcript or
+performing a blind semantic search.
 
 Within Gate 18's current owner-contribution limit, at most eight compact entries
-are included in stable identity-creation order. Each entry contains suggestion
-and revision locators, learner-visible purpose/scope, author class, exact anchor
-kinds, a short summary, active/current/stale relation, temporal/source caveats,
-and lazy-read availability. It does not include the full body, full source
-graph, or history. Multiple entries remain alternatives/constraints, not an
-ordered Tutor policy.
+are included in stable identity-creation order across anchored and fallback
+candidates. Each entry contains suggestion and revision locators, the exact
+revision-owned `directorySummary`, learner-visible purpose/scope, author class,
+retrieval arm and anchor kinds, alternative-target locator when present, named
+structural relation axes, and lazy-read availability. It does not include the
+full body, full source graph, or history. Multiple entries remain
+alternatives/constraints, not an ordered Tutor policy. Neither fallback status
+nor stable storage order is pedagogical priority.
+
+There is no program-authored composite `stale advice` verdict. Fresh projection
+reports only named facts whose derivation is structurally owned:
+
+- suggestion lifecycle and whether the cited revision is the current head;
+- each retrieval anchor's exact bound/current/source relation;
+- each exact basis reference's current head/source relation;
+- the exact alternative target plus its independent head/lifecycle relation;
+  and
+- raw before/on/after or due/overdue relation only for an exact structured
+  Goal/Assignment temporal reference and the trusted cut clock.
+
+Clock passage cannot interpret the open body or approximate deadline prose and
+cannot make an active suggestion program-stale. A compact entry never rewrites
+or summarizes these axes into a host-authored usefulness judgment. The ordinary
+Agent may decide that the advice is no longer useful and may ignore, revise, or
+retire it through the normal semantic path.
 
 The cut binds pre-truncation count, retained count, candidate-limit omission,
 byte-budget omission, exact owner dependencies, and effective read capability.
@@ -345,6 +535,11 @@ Every compact entry fits Gate 18's existing 2,048-byte semantic-value ceiling.
 If more suggestions exist, exact omission and a bounded cursor-stable discover
 read let the ordinary Agent expand the directory. Withheld capability returns
 explicit not-authorized truth and reveals neither hidden identities nor counts.
+The discover query consumes the same exact directory owner/dependency cut that
+produced the automatic omission; it does not silently restart at a newer
+current state. The fallback arm supplies discoverability, not authorization:
+without the operation's actual suggestion read capability, its candidates and
+pre-truncation count remain undisclosed.
 
 This is a deliberate on-demand loading strategy. Like the resource discipline
 behind greedy or dynamic-programming techniques, the system keeps a small
@@ -399,10 +594,13 @@ may revise the future direction from a learner report or changed exact owner
 fact. It does not ask the learner to reconstruct every day or settle an
 adherence ledger.
 
-Fresh reads report independent currentness axes: suggestion head, cited Goal or
-Assignment head, cited source availability, cited learner-state/evidence head,
-and trusted-time relation. Drift does not mutate or automatically retire the
-suggestion. A new semantic command is required for a successor.
+Fresh reads report the independent structural axes defined above: suggestion
+head/lifecycle, exact retrieval and basis owner relations, exact alternative
+target relation, and raw trusted-time relation only where an exact structured
+temporal owner boundary exists. They do not collapse those facts into a
+program-authored “stale,” “followed,” “failed,” or “still good” judgment. Drift
+does not mutate or automatically retire the suggestion. A new semantic command
+is required for a successor.
 
 ## Earned consumers and causal evidence
 
@@ -423,6 +621,17 @@ deadline source it actually needs, then starts a move consistent with the
 near-term advice. Evidence must bind S1 revision -> Context cut -> lazy read ->
 model operation -> learning move.
 
+The decisive base case has no Course, Goal, Assignment, material, evidence, or
+stored learner-state anchor. S1 was authored from only the current learner
+occurrence and explicitly uses `learner_home_fallback { reason:
+no_stable_owner_anchor }`. A fresh Session with the same ordinary request sees
+S1 through the authorized bounded fallback directory, lazy-reads the exact body,
+and begins the learning move; a withheld read capability exposes neither S1 nor
+its count. More-than-eight fallback candidates preserve exact count/omission
+and expand through the cursor bound to that same directory cut. This oracle
+must fail if the implementation relies on request words, old transcript import,
+or a hidden topic search.
+
 ### Natural correction trace
 
 The learner says the advice is too theoretical, too intense, poorly ordered, or
@@ -430,6 +639,22 @@ otherwise unsuitable. The root Agent appends S2 against exact S1, preserving
 the learner occurrence and unchanged source refs. A fresh Session/cut consumes
 S2 and begins a materially different teaching or guided-work move. No explicit
 accept/reject plan state is introduced.
+
+S1 and S2 carry independently authored directory summaries. An already
+admitted C1 and its provider retry preserve S1's exact compact bytes after S2
+exists; a fresh C2 exposes only S2 as the head with its new exact summary. The
+ordinary consumer must exact-read the body when the changed teaching move
+depends on content beyond that summary. Host-side truncation or summarization
+cannot satisfy this trace.
+
+### Exact alternative trace
+
+Create A1 as an alternative to exact S1/R1, then advance S1 to R2. A1's
+immutable relation remains `S1/R1`; a fresh projection reports the target's
+`head_advanced` relation without presenting A1 as an alternative to R2. Exact
+replay preserves the original IDs and relation, and an attempted same-address
+payload that retargets A1 conflicts. A new alternative to R2 receives a new
+stable identity.
 
 ### Changed learner-state trace
 
@@ -458,6 +683,9 @@ collision arbitration remains Gate 21A.
 | cited Goal/Assignment/learner-state head advances | old revision remains exact; fresh projection reports drift; no automatic retarget |
 | approximate deadline later proves wrong | preserve old authored assumption; cite exact correction or owner revision in a successor |
 | several active suggestions coexist | expose bounded directory and omission; do not select/rank one as global plan |
+| occurrence-only suggestion has no durable owner anchor | require explicit bounded LearnerHome fallback retrieval; do not import transcript, search body text, or relabel semantic scope as global |
+| alternative target advances | preserve the exact target revision; report target-head drift separately; never retarget the historical relation |
+| compact summary is weak or misleading | preserve it as fallible revision-owned authorship; allow correction; never replace it with a host-generated paraphrase |
 | permission denied or prompt aborted | no suggestion/effect; exact terminal settlement |
 | crash after admission or commit | recover domain/effect/receipt/Tool truth without blind redispatch |
 | provider fails after committed write | revision remains current; later model operation can inspect it |
@@ -603,6 +831,22 @@ Gate 21 does not establish:
 7. **Maximum candidate count:** more than eight active suggestions exist. The
    cut exposes exact count/omission and a bounded read path without leaking to
    unauthorized child operations or inventing a global winner.
+8. **No-other-owner continuation:** an occurrence-only examples-first strategy
+   has no Course, Goal, Assignment, material, evidence, or learner-state anchor.
+   A fresh Session must still find it through its explicit bounded fallback;
+   adding request-keyword or topic retrieval fails the Gate.
+9. **Alternative target drift:** A1 is alternative to S1/R1; S1 advances to R2.
+   An identity-only relation would silently change A1's meaning even though all
+   storage tests pass. The exact relation must remain S1/R1.
+10. **Host summary inversion:** the body says not to start timed practice before
+    one concrete example, while an implementation-derived compact paraphrase
+    says “start timed practice.” The host may not author that semantic byte;
+    the stored summary must be revision-owned and detail-dependent teaching
+    must read the exact body.
+11. **Generic approval/result text:** SQLite correctly revises S1/R3, but the
+    learner sees only “update learning plan” before approval and “success” after
+    replay. Gate 21 fails because exact authorization and already-applied truth
+    were not carried to the TUI and retained Tool Part.
 
 ## Contract falsifiers and reopen conditions
 
@@ -634,24 +878,43 @@ Gate 20B handoff, implementation/evidence must cover:
 - a normal forward migration from a frozen exact Gate 20B predecessor and fresh
   versus upgraded schema/behavior parity;
 - stable multiple identities, complete immutable revisions, alternatives,
-  retire/restore, current-head, exact-source, and effect/receipt/settlement
-  invariants;
+  exact alternative-revision topology, retire/restore, current-head,
+  exact-source, deterministic change-set slot/ordinal identity, and
+  effect/receipt/settlement invariants;
+- separate learner-visible scope, closed retrieval scope, exact basis refs, an
+  authored directory summary, and atomic maximum/first-overflow behavior;
 - responsive proposal, non-disruptive proactive proposal, learner revision,
   and Tutor revision source arms;
 - exact replay, duplicate, changed conflict, stale head/source, permission
   allow/ask/deny/abort, cancellation, crash, restart, and Session deletion;
+- one typed proposal/result semantic projection across the primary TUI and
+  retained carriers for create, revise/correct, alternative, retire, restore,
+  committed, already-applied, no-change/no-effect, conflict/failure, deny, and
+  abort, including exact generated IDs and preapproval scope/head/cause;
 - root write, restricted/delegated default-deny mutation, authorized reads, and
   withheld-context non-disclosure;
 - exact/current/history/discover reads, cursor/source drift, old-cut retry,
   omission, maximum-value fit, and more-than-eight-candidate behavior;
+- an authorized occurrence-only `learner_home_fallback` fresh-Session path with
+  no other durable owner anchor, plus capability-withheld non-disclosure and
+  fallback-only overflow/discovery at the original directory cut;
 - exact Goal, Assignment, Course/material, evidence, and learner-state
-  reference/currentness separation;
+  reference/currentness separation, exact alternative-target drift, and no
+  composite program-authored advice-staleness verdict;
+- correction and retry evidence proving compact summaries are immutable
+  revision-owned bytes, while detail-dependent behavior consumes the exact
+  lazy-read body rather than a host paraphrase;
 - provider-visible negative traces proving explanation, demonstration, guided
   work, and zero-write teaching are not displaced by planning;
 - the responsive, fresh-Session, natural-correction, changed-learner-state, and
   non-disruptive traces above; and
-- one ordinary released-v1 qualification that begins a real learning move
-  rather than merely listing or administering tasks.
+- one ordinary released-v1 production-path semantic oracle whose response
+  policy can select the real learning move only when the provider request
+  contains the expected exact suggestion directory locator and the subsequent
+  exact lazy-read revision/body. The test holds the learner request and
+  unrelated owner state fixed, includes absent/wrong-revision controls, and
+  fails if canned output, a direct scripted tool call, or mere task listing can
+  pass without consuming the suggestion.
 
 The exact physical schema, package/tool names, byte and row bounds, and TUI
 wording are implementation choices only after they preserve this contract and
@@ -670,7 +933,8 @@ The fresh reviewer should try to reject this candidate by asking:
 4. Can the learner revise advice naturally while exact replay, conflict,
    permission, and recovery remain closed?
 5. Does bounded Context plus lazy reads preserve old cuts, omission truth,
-   authorization, and useful discovery without eager loading or blind search?
+   authorization, occurrence-only fallback discovery, and exact authored
+   compact semantics without eager loading, blind search, or a host summary?
 6. Can outside learning, silence, deadline drift, and stale learner state occur
    without inferred adherence, failure, or automatic plan mutation?
 7. Do actual Tutor consumers use the suggestion to help learning while explicit
@@ -685,9 +949,11 @@ The fresh reviewer should try to reject this candidate by asking:
 
 ## Current boundary
 
-This candidate and the reconciled owner documents complete only the local
-Gate-opening derivation. After the Gate 20B contract shape is independently
-accepted, Gate 21 requires its own fresh independent contract/theory review.
-Implementation, migration, integration, commit, push, release,
+The retained reviewer accepted the exact repaired semantic snapshot after
+closing `G21-CR-001..004`. Gate 20B is independently accepted and supplies only
+its exact producer handoff; it does not pre-accept Gate 21 implementation.
+Implementation/evidence is now authorized and in progress under the original
+Whole-Gate request, but it must return to the same reviewer and receive a
+separate `Accept` before integration. Integration, commit, push, release,
 credentialed-provider qualification, Gate 21A, and later Gates remain
 separately governed.

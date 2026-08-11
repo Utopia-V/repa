@@ -1,4 +1,5 @@
 import { ArtifactSchema } from "@opencode-ai/core/artifact/schema"
+import { AdvisoryPlanSuggestion } from "@opencode-ai/core/advisory-plan-suggestion"
 import { ContentRootSchema } from "@opencode-ai/core/content-root/schema"
 import { Course } from "@opencode-ai/core/course"
 import { FutureAttention } from "@opencode-ai/core/future-attention"
@@ -9,7 +10,11 @@ import { MaterialMap } from "@opencode-ai/core/material-map"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
 import { Turn } from "@opencode-ai/schema/turn"
 import { Plugin } from "@/plugin"
-import { normalizeFutureAttention, normalizeLearnerStateJudgment } from "@/learning-command/input"
+import {
+  normalizeAdvisoryPlanSuggestion,
+  normalizeFutureAttention,
+  normalizeLearnerStateJudgment,
+} from "@/learning-command/input"
 import { MessageID, SessionID } from "@/session/schema"
 import { observeLearningCommandResult, prepareLearningCommandCall } from "@/session/tools"
 import { SessionProcessor } from "@/session/processor"
@@ -168,6 +173,31 @@ describe("learning-command hooks", () => {
     expect(() => normalizeLearnerStateJudgment(learnerStateJudgmentInput(9, 16))).toThrow()
     expect(() => normalizeLearnerStateJudgment(learnerStateJudgmentInput(8, 17))).toThrow()
   })
+
+  test("keeps advisory change sets at eight ordered intents with eight anchors and sixteen bases", () => {
+    const maximum = advisoryPlanSuggestionInput(8, 8, 16)
+    const normalized = normalizeAdvisoryPlanSuggestion(maximum)
+    expect(normalized.intents).toHaveLength(AdvisoryPlanSuggestion.MAX_INTENTS)
+    expect(normalized.intents.map((item) => item.operationOrdinal)).toEqual([0, 1, 2, 3, 4, 5, 6, 7])
+    const first = normalized.intents[0]
+    if (!first || first.operation !== "create") throw new Error("Expected the maximum advisory fixture to create")
+    expect(first.snapshot.retrievalScope.type).toBe("anchored")
+    if (first.snapshot.retrievalScope.type !== "anchored") throw new Error("Expected anchored retrieval")
+    expect(first.snapshot.retrievalScope.anchors).toHaveLength(AdvisoryPlanSuggestion.MAX_RETRIEVAL_ANCHORS)
+    expect(first.snapshot.exactBasisRefs).toHaveLength(AdvisoryPlanSuggestion.MAX_BASIS_REFS)
+
+    expect(() => normalizeAdvisoryPlanSuggestion(advisoryPlanSuggestionInput(9, 8, 16))).toThrow()
+    expect(() => normalizeAdvisoryPlanSuggestion(advisoryPlanSuggestionInput(8, 9, 16))).toThrow()
+    expect(() => normalizeAdvisoryPlanSuggestion(advisoryPlanSuggestionInput(8, 8, 17))).toThrow()
+    expect(() =>
+      normalizeAdvisoryPlanSuggestion({
+        ...maximum,
+        intents: maximum.intents.map((intent, index) =>
+          index === 7 ? { ...intent, operationOrdinal: 6, createOrdinal: 6 } : intent,
+        ),
+      }),
+    ).toThrow()
+  })
 })
 
 function mockPlugin(trigger: Plugin.Interface["trigger"]): Plugin.Interface {
@@ -234,5 +264,43 @@ function learnerStateJudgmentInput(anchorCount: number, basisCount: number) {
       uncertaintyAndLimits: "Whole-judgment sources remain fallible.",
       basisScope: "whole_judgment" as const,
     },
+  }
+}
+
+function advisoryPlanSuggestionInput(intentCount: number, anchorCount: number, basisCount: number) {
+  const source = "Use examples first, then adapt this advice naturally when it stops helping."
+  const mapID = MaterialMap.createMapID()
+  const materialRefs = Array.from({ length: 17 }, () => ({
+    type: "material_selector" as const,
+    mapID,
+    selectorID: MaterialMap.createSelectorID(),
+  }))
+  const snapshot = {
+    learnerVisibleScope: "Continuation practice across the next few Sessions",
+    retrievalScope: {
+      type: "anchored" as const,
+      anchors: materialRefs.slice(0, anchorCount).map((ref) => ({
+        stableOwnerKey: { type: "material_selector" as const, mapID: ref.mapID, selectorID: ref.selectorID },
+        exactBoundRef: ref,
+      })),
+    },
+    purpose: "Help later teaching continue without a rigid schedule.",
+    directorySummary: "Examples first, then one guided attempt.",
+    body: "Work through one concrete example, then try one guided continuation; keep later steps provisional.",
+    exactBasisRefs: materialRefs.slice(0, basisCount),
+    assumptionsAndUncertainty: "Fallible Tutor advice; revise naturally when it stops helping.",
+  }
+  return {
+    cause: {
+      type: "responsive_tutor_proposal" as const,
+      excerpt: { text: source, startByte: 0, endByte: new TextEncoder().encode(source).byteLength },
+      rationale: "Preserve useful, source-bearing advice for later teaching.",
+    },
+    intents: Array.from({ length: intentCount }, (_, operationOrdinal) => ({
+      operation: "create" as const,
+      operationOrdinal,
+      createOrdinal: operationOrdinal,
+      snapshot,
+    })),
   }
 }

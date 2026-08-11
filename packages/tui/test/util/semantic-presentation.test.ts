@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import { AdvisoryPlanSuggestion } from "@opencode-ai/core/advisory-plan-suggestion"
 import { SemanticPresentation } from "@opencode-ai/core/semantic-presentation"
 import type { PermissionRequest, ToolPart } from "@opencode-ai/sdk/v2"
 import {
@@ -95,6 +96,90 @@ function contentResultMetadata(presentation: ReturnType<typeof SemanticPresentat
     relativePath: "notes\\lesson.md",
     ...SemanticPresentation.metadata(presentation),
   }
+}
+
+function advisoryPlanSuggestionCandidate() {
+  const snapshotIntent = {
+    learnerVisibleScope: "Continuation practice across later Sessions",
+    retrievalScope: { type: "learner_home_fallback" as const, reason: "no_stable_owner_anchor" as const },
+    purpose: "Help later teaching continue without turning advice into a schedule.",
+    directorySummary: "Examples first, then one guided attempt.",
+    body: "Work through one concrete example, then try one guided continuation; keep later steps provisional.",
+    exactBasisRefs: [],
+    assumptionsAndUncertainty: "Fallible Tutor advice; revise it when it stops helping.",
+  }
+  const command = AdvisoryPlanSuggestion.canonicalizeCommand({
+    cause: {
+      type: "proactive_tutor_proposal",
+      rationale: "Preserve useful, correctable advice for later teaching.",
+    },
+    intents: [{ operation: "create", operationOrdinal: 0, createOrdinal: 0, snapshot: snapshotIntent }],
+  })
+  const suggestionID = `aps_${"0".repeat(26)}` as AdvisoryPlanSuggestion.SuggestionID
+  const revisionID = `apr_${"0".repeat(26)}` as AdvisoryPlanSuggestion.RevisionID
+  const effectID = `ape_${"0".repeat(26)}` as AdvisoryPlanSuggestion.EffectID
+  return {
+    kind: "candidate_v1",
+    commandFingerprint: AdvisoryPlanSuggestion.commandFingerprint(command),
+    semanticAddressFingerprint: "1".repeat(64),
+    agentActionFingerprint: "2".repeat(64),
+    canonicalCommand: command,
+    agentAction: {
+      schemaVersion: 1,
+      kind: "root",
+      occurrenceID: "lco_tui_advisory",
+      sessionID: binding.sessionID,
+      turnID: "trn_tui_advisory",
+      inputID: "inp_tui_advisory",
+      assistantMessageID: binding.messageID,
+      invocationPartID: binding.partID,
+      providerCallID: "provider_tui_advisory",
+      emissionOrdinal: 0,
+      capabilityIdentity: AdvisoryPlanSuggestion.UPDATE_CAPABILITY,
+      capabilityVersion: AdvisoryPlanSuggestion.UPDATE_VERSION,
+      lineage: [],
+    },
+    effectID,
+    materialized: [
+      {
+        outcome: "changed",
+        suggestionID,
+        revisionID,
+        effectID,
+        version: 1,
+        operation: "create",
+        operationOrdinal: 0,
+        createOrdinal: 0,
+        disposition: "active",
+        snapshot: {
+          learnerVisibleScope: snapshotIntent.learnerVisibleScope,
+          retrievalScope: snapshotIntent.retrievalScope,
+          purpose: snapshotIntent.purpose,
+          directorySummary: snapshotIntent.directorySummary,
+          body: snapshotIntent.body,
+          exactBasis: [],
+          assumptionsAndUncertainty: snapshotIntent.assumptionsAndUncertainty,
+        },
+        authorAndCause: {
+          type: "proactive_tutor_proposal",
+          rootModelOperationID: binding.messageID,
+          mutationOccurrenceID: "lco_tui_advisory",
+          mutationPartID: binding.partID,
+          source: {
+            type: "model_operation",
+            assistantMessageID: binding.messageID,
+            sessionID: binding.sessionID,
+            turnID: "trn_tui_advisory",
+            inputID: "inp_tui_advisory",
+            occurrenceID: "lco_tui_advisory",
+            learningContextFingerprint: "3".repeat(64),
+            learningContextCutAsOf: 1,
+            rationale: "Preserve useful, correctable advice for later teaching.",
+          },
+        },
+      },
+    ],
+  } as unknown as AdvisoryPlanSuggestion.Candidate
 }
 
 describe("primary TUI semantic presentation adapter", () => {
@@ -201,6 +286,102 @@ describe("primary TUI semantic presentation adapter", () => {
           },
           { label: "Working selection", value: "none" },
           { label: "Route anchor", value: "none; unusable: absent; head none" },
+        ]),
+      },
+    })
+    expect(shouldHideCompletedTool(part, false)).toBe(false)
+  })
+
+  test("shows exact advisory advice before approval and its typed settlement afterward", () => {
+    const candidate = advisoryPlanSuggestionCandidate()
+    const scope = SemanticPresentation.advisoryPlanSuggestionScope(candidate)
+    const proposal = SemanticPresentation.proposal({
+      kind: "advisory_plan_suggestion_capability",
+      binding,
+      commandFingerprint: candidate.commandFingerprint,
+      issuance: "root",
+      scope,
+    })
+    const exact = request({
+      permission: AdvisoryPlanSuggestion.UPDATE_CAPABILITY,
+      patterns: [AdvisoryPlanSuggestion.PERMISSION_PATTERN],
+      always: [AdvisoryPlanSuggestion.PERMISSION_PATTERN],
+      metadata: {
+        advisoryPlanSuggestionKind: "change_set",
+        commandFingerprint: candidate.commandFingerprint,
+        issuance: "root",
+        scope,
+        ...SemanticPresentation.metadata(proposal),
+      },
+    })
+
+    expect(permissionPresentation(exact)).toMatchObject({
+      type: "valid",
+      value: {
+        capability: AdvisoryPlanSuggestion.UPDATE_CAPABILITY,
+        title: "Store or revise advisory learning suggestions",
+        facts: expect.arrayContaining([
+          { label: "Directory summary", value: "Examples first, then one guided attempt." },
+          { label: "Advisory body", value: expect.stringContaining("one concrete example") },
+          { label: "Does not imply", value: expect.stringContaining("advice_not_schedule_commitment") },
+        ]),
+      },
+    })
+    expect(
+      permissionPresentation({
+        ...exact,
+        metadata: {
+          ...exact.metadata,
+          scope: {
+            ...scope,
+            materialized: scope.materialized.map((item) => ({ ...item, body: "Follow a rigid schedule." })),
+          },
+        },
+      }),
+    ).toEqual({ type: "invalid" })
+
+    const item = candidate.materialized[0]!
+    const result = SemanticPresentation.result({
+      kind: "advisory_plan_suggestion_result",
+      binding,
+      settlement: { outcome: "applied" },
+      disposition: "candidate_v1",
+      issuance: "root",
+      capabilityOutcome: "policy_allow",
+      effect: {
+        effectID: candidate.effectID,
+        receiptID: "lcr_tui_advisory",
+        intentResults: [
+          {
+            outcome: "changed",
+            suggestionID: item.suggestionID,
+            revisionID: item.revisionID,
+            version: item.version,
+            operation: item.operation,
+            operationOrdinal: item.operationOrdinal,
+            disposition: item.disposition,
+          },
+        ],
+      },
+    })
+    const projection = SemanticPresentation.projectResultBasis(result.basis)
+    if (!projection) throw new Error("Expected a valid advisory result projection")
+    const part = completed(AdvisoryPlanSuggestion.UPDATE_CAPABILITY, projection.title, {
+      command: AdvisoryPlanSuggestion.UPDATE_CAPABILITY,
+      commandVersion: AdvisoryPlanSuggestion.UPDATE_VERSION,
+      outcome: "applied",
+      durablySettled: true,
+      truncated: false,
+      ...SemanticPresentation.metadata(result),
+    })
+
+    expect(resultPresentation(part)).toMatchObject({
+      type: "valid",
+      value: {
+        outcome: "committed",
+        facts: expect.arrayContaining([
+          { label: "Suggestion result 1", value: expect.stringContaining(`${item.suggestionID}/${item.revisionID}`) },
+          { label: "Advisory status", value: expect.stringContaining("not a schedule") },
         ]),
       },
     })

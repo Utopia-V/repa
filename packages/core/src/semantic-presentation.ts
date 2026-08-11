@@ -2,6 +2,7 @@ export * as SemanticPresentation from "./semantic-presentation"
 
 import { SemanticPresentationV1 } from "@opencode-ai/schema/semantic-presentation-v1"
 import { Option, Schema } from "effect"
+import { AdvisoryPlanSuggestion } from "./advisory-plan-suggestion"
 import { Assignment } from "./assignment"
 import { LearningBootstrap } from "./learning-bootstrap"
 import { FutureAttention } from "./future-attention"
@@ -29,6 +30,7 @@ const consequentialPermissionCapabilities = new Set([
   "update_future_attention",
   "update_assignment",
   "update_learner_state_judgment",
+  "update_advisory_plan_suggestion",
 ])
 
 const consequentialResultTools = new Set([
@@ -44,6 +46,7 @@ const consequentialResultTools = new Set([
   "update_future_attention",
   "update_assignment",
   "update_learner_state_judgment",
+  "update_advisory_plan_suggestion",
 ])
 
 export type Fact = Readonly<{ label: string; value: string }>
@@ -97,6 +100,10 @@ type AssignmentScope = Extract<
 type LearnerStateJudgmentScope = Extract<
   SemanticPresentationV1.ProposalBasis,
   { readonly kind: "learner_state_judgment_capability" }
+>["scope"]
+type AdvisoryPlanSuggestionScope = Extract<
+  SemanticPresentationV1.ProposalBasis,
+  { readonly kind: "advisory_plan_suggestion_capability" }
 >["scope"]
 
 export type ProposalProjection = Readonly<{
@@ -542,6 +549,30 @@ function expectedProposal(value: SemanticPresentationV1.Proposal): ProposalExpec
       },
     })
   }
+  if (basis.kind === "advisory_plan_suggestion_capability") {
+    const command = canonicalAdvisoryPlanSuggestionCommand(basis.scope)
+    if (
+      !command ||
+      !same(command, basis.scope.command) ||
+      !validAdvisoryPlanSuggestionScope(command, basis.scope) ||
+      AdvisoryPlanSuggestion.commandFingerprint(command) !== basis.commandFingerprint
+    ) {
+      return undefined
+    }
+    return expected(value, {
+      capability: AdvisoryPlanSuggestion.UPDATE_CAPABILITY,
+      patterns: [AdvisoryPlanSuggestion.PERMISSION_PATTERN],
+      always: [AdvisoryPlanSuggestion.PERMISSION_PATTERN],
+      promptRequired: false,
+      approval: "policy",
+      domain: {
+        advisoryPlanSuggestionKind: "change_set",
+        commandFingerprint: basis.commandFingerprint,
+        issuance: basis.issuance,
+        scope: basis.scope,
+      },
+    })
+  }
   if (basis.kind === "course_route_anchor") {
     if (
       (basis.target === null && basis.locator !== undefined) ||
@@ -904,6 +935,198 @@ function validLearnerStateJudgmentScope(
     )
   }
   return true
+}
+
+function canonicalAdvisoryPlanSuggestionCommand(scope: AdvisoryPlanSuggestionScope) {
+  try {
+    const value = scope.command as AdvisoryPlanSuggestion.CanonicalCommand
+    const command = AdvisoryPlanSuggestion.canonicalizeCommand({ cause: value.cause, intents: value.intents })
+    return same(command, scope.command) ? command : undefined
+  } catch {
+    return undefined
+  }
+}
+
+const advisoryPlanSuggestionNonImplications = [
+  "advice_not_schedule_commitment_or_approved_plan",
+  "permission_allows_storage_but_is_not_pedagogical_agreement",
+  "retire_or_restore_implies_no_adherence_rejection_learning_completion_or_producer_lifecycle_change",
+  "clock_silence_and_absence_imply_no_following_progress_or_mastery",
+] as const
+
+export function advisoryPlanSuggestionScope(candidate: AdvisoryPlanSuggestion.Candidate) {
+  const command = candidate.canonicalCommand
+  return {
+    command: structuredClone(command),
+    materialized: candidate.materialized.map((item) => ({
+      outcome: item.outcome,
+      suggestionID: item.suggestionID,
+      revisionID: item.revisionID,
+      effectID: item.effectID,
+      ...(item.predecessorRevisionID ? { previousRevisionID: item.predecessorRevisionID } : {}),
+      version: item.version,
+      operation: item.operation,
+      operationOrdinal: item.operationOrdinal,
+      ...(item.createOrdinal === undefined ? {} : { createOrdinal: item.createOrdinal }),
+      disposition: item.disposition,
+      ...(item.alternativeToRevision ? { alternativeToRevision: item.alternativeToRevision } : {}),
+      materializedSnapshot: structuredClone(item.snapshot),
+      learnerVisibleScope: item.snapshot.learnerVisibleScope,
+      retrievalScope: structuredClone(item.snapshot.retrievalScope),
+      purpose: item.snapshot.purpose,
+      directorySummary: item.snapshot.directorySummary,
+      body: item.snapshot.body,
+      exactBasisRefs: item.snapshot.exactBasis.map((binding) => structuredClone(binding.ref)),
+      exactBasisBindings: item.snapshot.exactBasis.map((binding) => structuredClone(binding)),
+      ...(item.snapshot.assumptionsAndUncertainty
+        ? { assumptionsAndUncertainty: item.snapshot.assumptionsAndUncertainty }
+        : {}),
+      authorAndCause: structuredClone(item.authorAndCause),
+    })),
+    operationCount: command.intents.length,
+    causeType: command.cause.type,
+    targetedSuggestionIDs: command.intents.flatMap((intent) =>
+      "suggestionID" in intent ? [intent.suggestionID] : [],
+    ),
+    expectedHeads: command.intents.flatMap((intent) =>
+      "suggestionID" in intent
+        ? [
+            {
+              suggestionID: intent.suggestionID,
+              revisionID: intent.expectedHead.revisionID,
+              version: intent.expectedHead.version,
+              ownerCutFingerprint: intent.expectedHead.ownerCutFingerprint,
+            },
+          ]
+        : [],
+    ),
+    alternativeTargets: command.intents.flatMap((intent) =>
+      intent.operation === "alternative" ? [structuredClone(intent.alternativeToRevision)] : [],
+    ),
+    nonImplications: [...advisoryPlanSuggestionNonImplications],
+  }
+}
+
+function validAdvisoryPlanSuggestionScope(
+  command: AdvisoryPlanSuggestion.CanonicalCommand,
+  scope: AdvisoryPlanSuggestionScope,
+) {
+  const targetedSuggestionIDs = command.intents.flatMap((intent) =>
+    "suggestionID" in intent ? [intent.suggestionID] : [],
+  )
+  const expectedHeads = command.intents.flatMap((intent) =>
+    "suggestionID" in intent
+      ? [
+          {
+            suggestionID: intent.suggestionID,
+            revisionID: intent.expectedHead.revisionID,
+            version: intent.expectedHead.version,
+            ownerCutFingerprint: intent.expectedHead.ownerCutFingerprint,
+          },
+        ]
+      : [],
+  )
+  const alternativeTargets = command.intents.flatMap((intent) =>
+    intent.operation === "alternative" ? [intent.alternativeToRevision] : [],
+  )
+  if (
+    scope.operationCount !== command.intents.length ||
+    scope.materialized.length !== command.intents.length ||
+    scope.causeType !== command.cause.type ||
+    !same(scope.targetedSuggestionIDs, targetedSuggestionIDs) ||
+    !same(scope.expectedHeads, expectedHeads) ||
+    !same(scope.alternativeTargets, alternativeTargets) ||
+    !same(scope.nonImplications, advisoryPlanSuggestionNonImplications) ||
+    new Set(scope.materialized.map((item) => item.effectID)).size !== 1
+  ) {
+    return false
+  }
+  return scope.materialized.every((item, index) => {
+    const intent = command.intents[index]
+    if (
+      !intent ||
+      item.operation !== intent.operation ||
+      item.operationOrdinal !== intent.operationOrdinal ||
+      !isRecord(item.materializedSnapshot) ||
+      !/^aps_[0-9A-Za-z]{26}$/.test(item.suggestionID) ||
+      !/^apr_[0-9A-Za-z]{26}$/.test(item.revisionID) ||
+      !/^ape_[0-9A-Za-z]{26}$/.test(item.effectID) ||
+      !Number.isSafeInteger(item.version) ||
+      item.version < 1 ||
+      !isRecord(item.authorAndCause) ||
+      item.authorAndCause.type !== command.cause.type
+    ) {
+      return false
+    }
+    if (
+      item.materializedSnapshot.learnerVisibleScope !== item.learnerVisibleScope ||
+      !same(item.materializedSnapshot.retrievalScope, item.retrievalScope) ||
+      item.materializedSnapshot.purpose !== item.purpose ||
+      item.materializedSnapshot.directorySummary !== item.directorySummary ||
+      item.materializedSnapshot.body !== item.body ||
+      item.materializedSnapshot.assumptionsAndUncertainty !== item.assumptionsAndUncertainty ||
+      !Array.isArray(item.materializedSnapshot.exactBasis) ||
+      !item.materializedSnapshot.exactBasis.every(
+        (binding, bindingIndex) =>
+          isRecord(binding) && isRecord(binding.ref) && same(binding.ref, item.exactBasisRefs[bindingIndex]),
+      ) ||
+      item.materializedSnapshot.exactBasis.length !== item.exactBasisRefs.length ||
+      !same(item.materializedSnapshot.exactBasis, item.exactBasisBindings) ||
+      ((item.operation === "create" || item.operation === "alternative" || item.operation === "restore") &&
+        item.disposition !== "active") ||
+      (item.operation === "retire" && item.disposition !== "retired") ||
+      (item.outcome === "no_change" && item.operation !== "revise")
+    ) {
+      return false
+    }
+    if (intent.operation === "create" || intent.operation === "alternative") {
+      if (item.createOrdinal !== intent.createOrdinal || item.version !== 1 || item.previousRevisionID !== undefined) {
+        return false
+      }
+    } else if (
+      item.suggestionID !== intent.suggestionID ||
+      item.previousRevisionID !== intent.expectedHead.revisionID ||
+      item.version !== intent.expectedHead.version + (item.outcome === "changed" ? 1 : 0) ||
+      item.createOrdinal !== undefined
+    ) {
+      return false
+    }
+    if (
+      (intent.operation === "alternative" && !same(item.alternativeToRevision, intent.alternativeToRevision)) ||
+      (intent.operation === "create" && item.alternativeToRevision !== undefined) ||
+      (intent.operation !== "create" &&
+        intent.operation !== "alternative" &&
+        item.alternativeToRevision !== undefined &&
+        (!/^aps_[0-9A-Za-z]{26}$/.test(item.alternativeToRevision.suggestionID) ||
+          !/^apr_[0-9A-Za-z]{26}$/.test(item.alternativeToRevision.revisionID) ||
+          !Number.isSafeInteger(item.alternativeToRevision.version) ||
+          item.alternativeToRevision.version < 1))
+    ) {
+      return false
+    }
+    if ("snapshot" in intent && intent.snapshot) {
+      const materializedAnchors =
+        isRecord(item.retrievalScope) && item.retrievalScope.type === "anchored" && Array.isArray(item.retrievalScope.anchors)
+          ? item.retrievalScope.anchors.flatMap((anchor) =>
+              isRecord(anchor) && isRecord(anchor.exactBound) && isRecord(anchor.exactBound.ref)
+                ? [{ stableOwnerKey: anchor.stableOwnerKey, exactBoundRef: anchor.exactBound.ref }]
+                : [],
+            )
+          : []
+      return (
+        item.learnerVisibleScope === intent.snapshot.learnerVisibleScope &&
+        item.purpose === intent.snapshot.purpose &&
+        item.directorySummary === intent.snapshot.directorySummary &&
+        item.body === intent.snapshot.body &&
+        item.assumptionsAndUncertainty === intent.snapshot.assumptionsAndUncertainty &&
+        same(item.exactBasisRefs, intent.snapshot.exactBasisRefs) &&
+        (intent.snapshot.retrievalScope.type === "learner_home_fallback"
+          ? same(item.retrievalScope, intent.snapshot.retrievalScope)
+          : same(materializedAnchors, intent.snapshot.retrievalScope.anchors))
+      )
+    }
+    return true
+  })
 }
 
 export function assignmentScope(
@@ -1471,6 +1694,57 @@ function projectProposal(
           "Exact basis for the whole judgment",
           `${basis.scope.basisRefCount} reference(s); ${JSON.stringify(basis.scope.basisRefs)}`,
         ),
+        fact("Does not imply", basis.scope.nonImplications.join(", ")),
+      ],
+    )
+  }
+  if (basis.kind === "advisory_plan_suggestion_capability") {
+    return proposalProjection(
+      basis,
+      approval,
+      AdvisoryPlanSuggestion.UPDATE_CAPABILITY,
+      "Store or revise advisory learning suggestions",
+      "This approval is bound to one exact, source-bearing, fallible advisory change set. It permits durable storage; it does not approve a schedule, certify learning, or claim that the learner followed the advice.",
+      [
+        fact("Issuance", basis.issuance),
+        fact("Cause", basis.scope.causeType),
+        fact("Operations", basis.scope.operationCount),
+        ...(basis.scope.expectedHeads.length > 0
+          ? [
+              fact(
+                "Expected heads",
+                basis.scope.expectedHeads
+                  .map((head) => `${head.suggestionID}/${head.revisionID} v${head.version}`)
+                  .join(", "),
+              ),
+            ]
+          : []),
+        ...basis.scope.materialized.flatMap((item) => [
+          fact(
+            `Suggestion action ${item.operationOrdinal + 1}`,
+            `${item.operation}; ${item.suggestionID}/${item.revisionID} v${item.version}; ${item.disposition}; ${item.outcome}${item.createOrdinal === undefined ? "" : `; create ordinal ${item.createOrdinal}`}`,
+          ),
+          ...(item.previousRevisionID ? [fact("Expected predecessor", item.previousRevisionID)] : []),
+          ...(item.alternativeToRevision
+            ? [
+                fact(
+                  "Exact alternative target",
+                  `${item.alternativeToRevision.suggestionID}/${item.alternativeToRevision.revisionID} v${item.alternativeToRevision.version}`,
+                ),
+              ]
+            : []),
+          fact("Learner-visible scope", item.learnerVisibleScope),
+          fact("Retrieval scope", JSON.stringify(item.retrievalScope)),
+          fact("Purpose", item.purpose),
+          fact("Directory summary", item.directorySummary),
+          fact("Advisory body", item.body),
+          ...(item.assumptionsAndUncertainty
+            ? [fact("Assumptions and uncertainty", item.assumptionsAndUncertainty)]
+            : []),
+          fact("Exact basis references", JSON.stringify(item.exactBasisRefs)),
+          fact("Exact basis bindings", JSON.stringify(item.exactBasisBindings)),
+          fact("Root author and cause", JSON.stringify(item.authorAndCause)),
+        ]),
         fact("Does not imply", basis.scope.nonImplications.join(", ")),
       ],
     )
@@ -2690,6 +2964,81 @@ function projectResult(basis: SemanticPresentationV1.ResultBasis): ResultProject
               fact(
                 "Epistemic status",
                 "Fallible, source-bearing whole-judgment memory; not mastery certification, per-clause proof, activity, progress, or a required Tutor move.",
+              ),
+            ]
+          : []),
+      ],
+    )
+  }
+  if (basis.kind === "advisory_plan_suggestion_result") {
+    const semanticTerminal = basis.disposition === "semantic_terminal_v1"
+    const candidate = basis.disposition === "candidate_v1"
+    const projected = settlement.outcome !== "error"
+    const semanticOutcomeValid =
+      !semanticTerminal ||
+      (basis.semanticOutcome === "same_effect"
+        ? settlement.outcome === "already_applied"
+        : basis.semanticOutcome === "same_no_change"
+          ? settlement.outcome === "no_change"
+          : basis.semanticOutcome === "semantic_conflict" &&
+            settlement.outcome === "error" &&
+            settlement.code === "semantic_conflict")
+    if (
+      semanticTerminal !== (basis.semanticOutcome !== undefined) ||
+      candidate !== (basis.issuance !== undefined) ||
+      candidate !== (basis.capabilityOutcome !== undefined) ||
+      (!candidate && basis.permissionRequestID !== undefined) ||
+      projected !== (basis.effect !== undefined) ||
+      !semanticOutcomeValid ||
+      (settlement.outcome === "applied" &&
+        (!basis.effect?.effectID ||
+          !basis.effect.receiptID ||
+          basis.effect.existingOutcome !== undefined ||
+          basis.effect.noChangeReason !== undefined ||
+          basis.effect.intentResults.length === 0)) ||
+      (settlement.outcome === "already_applied" &&
+        (basis.effect?.existingOutcome !== "applied" ||
+          !basis.effect.effectID ||
+          !basis.effect.receiptID ||
+          basis.effect.noChangeReason !== undefined ||
+          basis.effect.intentResults.length === 0)) ||
+      (settlement.outcome === "no_change" &&
+        (basis.effect?.existingOutcome !== "no_change" ||
+          !basis.effect.noChangeReason ||
+          basis.effect.effectID !== undefined ||
+          basis.effect.receiptID !== undefined ||
+          basis.effect.intentResults.length === 0))
+    ) {
+      return undefined
+    }
+    return resultProjection(
+      basis,
+      AdvisoryPlanSuggestion.UPDATE_CAPABILITY,
+      "Advisory learning suggestion settlement",
+      resultSummary("Advisory learning suggestion change set", outcome),
+      [
+        ...failure,
+        fact("Disposition", basis.disposition),
+        ...(basis.issuance ? [fact("Issuance", basis.issuance)] : []),
+        ...(basis.capabilityOutcome ? [fact("Capability", basis.capabilityOutcome)] : []),
+        ...(basis.permissionRequestID ? [fact("Permission request", basis.permissionRequestID)] : []),
+        ...(basis.effect
+          ? [
+              ...(basis.effect.existingOutcome
+                ? [fact("Existing semantic outcome", basis.effect.existingOutcome)]
+                : []),
+              ...(basis.effect.noChangeReason ? [fact("No-change reason", basis.effect.noChangeReason)] : []),
+              ...(basis.effect.effectID ? [fact("Effect", basis.effect.effectID)] : []),
+              ...(basis.effect.receiptID ? [fact("Receipt", basis.effect.receiptID)] : []),
+              ...basis.effect.intentResults.map((item) =>
+                fact(
+                  `Suggestion result ${item.operationOrdinal + 1}`,
+                  `${item.outcome}; ${item.operation}; ${item.suggestionID}/${item.revisionID} v${item.version}; ${item.disposition}${item.alternativeToRevision ? `; alternative to ${item.alternativeToRevision.suggestionID}/${item.alternativeToRevision.revisionID} v${item.alternativeToRevision.version}` : ""}`,
+                ),
+              ),
+              fact(
+                "Advisory status",
+                "Fallible, source-bearing Tutor advice; not a schedule, learner commitment, adherence record, progress measure, mastery proof, or automatically selected next move.",
               ),
             ]
           : []),

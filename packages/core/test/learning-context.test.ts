@@ -230,6 +230,7 @@ describe("LearningContext", () => {
       "future_attention",
       "assignment",
       "learner_state_judgment",
+      "advisory_plan_suggestion",
     ])
     expect(
       prepared.cut.sections.every(
@@ -497,7 +498,8 @@ function freezeGate19Cut(current: Cut) {
       (section) =>
         section.owner !== "future_attention" &&
         section.owner !== "assignment" &&
-        section.owner !== "learner_state_judgment",
+        section.owner !== "learner_state_judgment" &&
+        section.owner !== "advisory_plan_suggestion",
     ),
   } as const
   const entryCounts = Object.fromEntries(base.sections.map((section) => [section.owner, section.entries.length]))

@@ -5,6 +5,7 @@ import path from "node:path"
 import { sql } from "drizzle-orm"
 import { Cause, Effect, Exit, Layer, ManagedRuntime } from "effect"
 import { Artifact } from "@opencode-ai/core/artifact"
+import { AdvisoryPlanSuggestion } from "@opencode-ai/core/advisory-plan-suggestion"
 import { ContentRoot } from "@opencode-ai/core/content-root"
 import { Course } from "@opencode-ai/core/course"
 import { CourseSchema } from "@opencode-ai/core/course/schema"
@@ -25,6 +26,10 @@ import { TurnLifecycle } from "@opencode-ai/core/turn/turn"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
 import { Turn } from "@opencode-ai/schema/turn"
 import { admitModelWithLearningContext } from "./fixture/model-admission"
+import {
+  applyAdvisoryPlanSuggestionInvocation,
+  seedAdvisoryPlanSuggestionInvocation,
+} from "./fixture/advisory-plan-suggestion"
 
 const windowsTest = process.platform === "win32" ? test : test.skip
 
@@ -197,6 +202,166 @@ describe("LearnerResponseEvidence", () => {
       ).toThrow(LearnerResponseEvidence.InvalidCommandError)
     }
   })
+
+  windowsTest(
+    "projects exact response evidence deletion into advisory source availability",
+    async () => {
+      const fixture = await prepareFixture()
+      try {
+        const mapInput = artifactMapInput(fixture)
+        const map = await fixture.runtime.runPromise(fixture.maps.createMap(mapInput))
+        const selectorID = mapInput.proposal.outline[1]!.selectors[0]!.id
+        const course = await createCourseEndpoint(fixture)
+        const alignment = await fixture.runtime.runPromise(
+          fixture.maps.createAlignment(alignmentInput(map.id, selectorID, course.endpoint, mapInput.access)),
+        )
+        const base = Date.now() + 1_000
+        const sourceSessionID = SessionSchema.ID.create()
+        const conditionTurn = await admitLearnerTurn(fixture, {
+          sessionID: sourceSessionID,
+          createSession: true,
+          text: "Explain the semaphore safety condition.",
+          time: base,
+          limits: { model: 1, tool: 0 },
+        })
+        const conditionAssistantMessageID = await completeTeachingModel(fixture, conditionTurn, base + 1)
+        const responseTurn = await admitLearnerTurn(fixture, {
+          sessionID: sourceSessionID,
+          text: "The semaphore count bounds the number of concurrent entrants.",
+          time: base + 10,
+          limits: { model: 1, tool: 1 },
+        })
+        const evidenceInvocation = await prepareEvidenceInvocation(fixture, responseTurn, base + 11)
+        const targetProof = await fixture.runtime.runPromise(
+          fixture.database.db.transaction((tx) =>
+            MaterialMap.prepareEvidenceTargetProof(tx, {
+              alignmentID: alignment.id,
+              mapID: map.id,
+              selectorID,
+              course: course.endpoint,
+            }),
+          ),
+        )
+        const currentUse = await fixture.runtime.runPromise(
+          fixture.current.resolveSelector({
+            mapID: map.id,
+            selectorID,
+            access: mapInput.access,
+            budgets: materialBudgets(),
+          }),
+        )
+        const evidence = await commitEvidence(
+          fixture,
+          evidenceInvocation,
+          {
+            operation: "create",
+            relation: "supports",
+            exposure: "tutor_disclosure_before_learner_response",
+            conditionAssistantMessageID,
+            target: {
+              mapID: map.id,
+              selectorID,
+              courseID: course.endpoint.courseID,
+              viewID: course.endpoint.viewID,
+              revisionID: course.endpoint.revisionID,
+              itemID: course.endpoint.itemID,
+            },
+            alignmentID: alignment.id,
+          },
+          { targetProof, currentUse: currentUse.receipt },
+          base + 15,
+          1,
+        )
+        if (evidence.type !== "settled" || evidence.settlement.outcome !== "applied") {
+          throw new Error("Expected one exact response-evidence revision")
+        }
+        await finishEvidenceTurn(fixture, responseTurn, evidenceInvocation, base + 17)
+        const ref = {
+          type: "learner_response_evidence_revision" as const,
+          recordID: evidence.settlement.recordID,
+          revisionID: evidence.settlement.revisionID,
+          version: evidence.settlement.version,
+        }
+        const suggestion = await fixture.runtime.runPromise(
+          seedAdvisoryPlanSuggestionInvocation(
+            fixture.database.db,
+            "response_evidence_reference",
+            {
+              cause: {
+                type: "proactive_tutor_proposal",
+                rationale: "Retain a fallible teaching suggestion from one exact learner-response record.",
+              },
+              intents: [
+                {
+                  operation: "create",
+                  operationOrdinal: 0,
+                  createOrdinal: 0,
+                  snapshot: {
+                    learnerVisibleScope: "Semaphore transfer learning approach",
+                    retrievalScope: { type: "learner_home_fallback", reason: "deliberately_cross_cutting" },
+                    purpose: "Use exact response evidence only as a fallible basis for later teaching.",
+                    directorySummary: "Move from the stated bound to one unfamiliar interleaving.",
+                    body: "Ask the learner to apply the semaphore bound to one unfamiliar interleaving and explain the invariant.",
+                    exactBasisRefs: [ref],
+                    assumptionsAndUncertainty: "One response supports this advice but does not certify mastery.",
+                  },
+                },
+              ],
+            },
+            "Keep this response-informed teaching suggestion available.",
+            base + 30,
+          ),
+        )
+        const applied = await fixture.runtime.runPromise(
+          applyAdvisoryPlanSuggestionInvocation(fixture.database.db, suggestion, base + 32),
+        )
+        if (applied.type !== "settled" || applied.settlement.outcome !== "applied") {
+          throw new Error("Expected the response-evidence-backed suggestion")
+        }
+        const result = applied.settlement.intentResults[0]
+        if (!result || result.outcome !== "changed") throw new Error("Expected one advisory revision")
+        const before = await fixture.runtime.runPromise(
+          fixture.database.db.transaction((tx) =>
+            AdvisoryPlanSuggestion.readCurrent(tx, result.suggestionID, base + 40),
+          ),
+        )
+        expect(before).toMatchObject({ basisDependencies: [{ ref, state: "current" }] })
+
+        await fixture.runtime.runPromise(
+          fixture.database.db.transaction((tx) =>
+            TurnLifecycle.deleteSessionTree(tx, {
+              rootSessionID: sourceSessionID,
+              sessionIDs: [sourceSessionID],
+              timeDeleted: base + 50,
+            }),
+          ),
+        )
+        const after = await fixture.runtime.runPromise(
+          fixture.database.db.transaction((tx) =>
+            AdvisoryPlanSuggestion.readCurrent(tx, result.suggestionID, base + 60),
+          ),
+        )
+        expect(after).toMatchObject({
+          basisDependencies: [
+            {
+              ref,
+              state: "source_unavailable",
+              current: {
+                availability: {
+                  subject: { state: "source_unavailable", reason: "source_deleted" },
+                  condition: { state: "source_unavailable", reason: "source_deleted" },
+                },
+              },
+            },
+          ],
+        })
+        expect(after?.revision).toEqual(before?.revision)
+      } finally {
+        await closeFixture(fixture)
+      }
+    },
+    120_000,
+  )
 
   windowsTest("uses causal source order when timestamps tie and rejects same-response-Turn condition sources", async () => {
     const fixture = await prepareFixture()

@@ -1,4 +1,5 @@
 import { ArtifactSchema } from "@opencode-ai/core/artifact/schema"
+import { AdvisoryPlanSuggestion } from "@opencode-ai/core/advisory-plan-suggestion"
 import { Assignment } from "@opencode-ai/core/assignment"
 import { ContentRoot } from "@opencode-ai/core/content-root"
 import { Course } from "@opencode-ai/core/course"
@@ -1063,6 +1064,119 @@ export const UpdateLearnerStateJudgmentInput = Schema.Struct({
 
 export type UpdateLearnerStateJudgmentInput = LearnerStateJudgment.Command
 
+const AdvisoryText = (maximum: number) => Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(maximum))
+const AdvisoryExcerpt = Schema.Struct({
+  text: AdvisoryText(AdvisoryPlanSuggestion.MAX_EXCERPT_BYTES),
+  startByte: NonNegativeInt,
+  endByte: NonNegativeInt,
+})
+const AdvisoryCause = Schema.Union([
+  Schema.Struct({
+    type: Schema.Literal("responsive_tutor_proposal"),
+    excerpt: AdvisoryExcerpt,
+    rationale: AdvisoryText(AdvisoryPlanSuggestion.MAX_RATIONALE_BYTES),
+  }),
+  Schema.Struct({
+    type: Schema.Literal("proactive_tutor_proposal"),
+    rationale: AdvisoryText(AdvisoryPlanSuggestion.MAX_RATIONALE_BYTES),
+  }),
+  Schema.Struct({ type: Schema.Literal("learner_revision"), excerpt: AdvisoryExcerpt }),
+  Schema.Struct({
+    type: Schema.Literal("tutor_revision"),
+    rationale: AdvisoryText(AdvisoryPlanSuggestion.MAX_RATIONALE_BYTES),
+  }),
+])
+const AdvisoryLearnerStateRef = Schema.Struct({
+  type: Schema.Literal("learner_state_judgment_revision"),
+  judgmentID: LearnerStateJudgment.JudgmentID,
+  revisionID: LearnerStateJudgment.RevisionID,
+  version: PositiveInt,
+})
+const AdvisoryRetrievalBoundRef = Schema.Union([
+  LearnerStateCourseAnchor,
+  LearnerStateMaterialAnchor,
+  LearnerStateGoalAnchor,
+  LearnerStateAssignmentAnchor,
+  AdvisoryLearnerStateRef,
+])
+const AdvisorySuggestionRef = Schema.Struct({
+  type: Schema.Literal("advisory_plan_suggestion_revision"),
+  suggestionID: AdvisoryPlanSuggestion.SuggestionID,
+  revisionID: AdvisoryPlanSuggestion.RevisionID,
+  version: PositiveInt,
+})
+const AdvisoryExactBasisRef = Schema.Union([
+  AdvisoryRetrievalBoundRef,
+  Schema.Struct({
+    type: Schema.Literal("learner_response_evidence_revision"),
+    recordID: LearnerResponseEvidence.RecordID,
+    revisionID: LearnerResponseEvidence.RevisionID,
+    version: NonNegativeInt,
+  }),
+  Schema.Struct({ type: Schema.Literal("interaction"), locator: LearnerStateInteractionLocator }),
+  AdvisorySuggestionRef,
+])
+const AdvisoryStableOwnerKey = Schema.Union([
+  Schema.Struct({ type: Schema.Literal("course"), courseID: Course.CourseID }),
+  Schema.Struct({ type: Schema.Literal("course_view"), courseID: Course.CourseID, viewID: Course.ViewID }),
+  Schema.Struct({ type: Schema.Literal("material_selector"), mapID: MaterialMap.MapID, selectorID: MaterialMap.SelectorID }),
+  Schema.Struct({ type: Schema.Literal("goal"), goalID: LearnerGoal.GoalID }),
+  Schema.Struct({ type: Schema.Literal("assignment"), assignmentID: Assignment.AssignmentID }),
+  Schema.Struct({ type: Schema.Literal("learner_state_judgment"), judgmentID: LearnerStateJudgment.JudgmentID }),
+])
+const AdvisoryRetrievalScope = Schema.Union([
+  Schema.Struct({
+    type: Schema.Literal("anchored"),
+    anchors: Schema.Array(
+      Schema.Struct({ stableOwnerKey: AdvisoryStableOwnerKey, exactBoundRef: AdvisoryRetrievalBoundRef }),
+    ).check(Schema.isLengthBetween(1, AdvisoryPlanSuggestion.MAX_RETRIEVAL_ANCHORS)),
+  }),
+  Schema.Struct({
+    type: Schema.Literal("learner_home_fallback"),
+    reason: Schema.Literals(["no_stable_owner_anchor", "deliberately_cross_cutting"]),
+  }),
+])
+const AdvisorySnapshot = Schema.Struct({
+  learnerVisibleScope: AdvisoryText(AdvisoryPlanSuggestion.MAX_LEARNER_VISIBLE_SCOPE_BYTES),
+  retrievalScope: AdvisoryRetrievalScope,
+  purpose: AdvisoryText(AdvisoryPlanSuggestion.MAX_PURPOSE_BYTES),
+  directorySummary: AdvisoryText(AdvisoryPlanSuggestion.MAX_DIRECTORY_SUMMARY_BYTES),
+  body: AdvisoryText(AdvisoryPlanSuggestion.MAX_BODY_BYTES),
+  exactBasisRefs: Schema.Array(AdvisoryExactBasisRef).check(
+    Schema.isMaxLength(AdvisoryPlanSuggestion.MAX_BASIS_REFS),
+  ),
+  assumptionsAndUncertainty: Schema.optional(AdvisoryText(AdvisoryPlanSuggestion.MAX_ASSUMPTIONS_BYTES)),
+})
+const AdvisoryExpectedHead = Schema.Struct({
+  revisionID: AdvisoryPlanSuggestion.RevisionID,
+  version: PositiveInt,
+  ownerCutFingerprint: LearnerStateDigest,
+})
+const AdvisorySuggestionRevisionRef = Schema.Struct({
+  suggestionID: AdvisoryPlanSuggestion.SuggestionID,
+  revisionID: AdvisoryPlanSuggestion.RevisionID,
+  version: PositiveInt,
+})
+// Keep the provider envelope compact by describing the shared change-set row
+// once. AdvisoryPlanSuggestion.canonicalizeCommand below remains the authority
+// that closes the operation-specific required/forbidden field combinations.
+const AdvisoryIntent = Schema.Struct({
+  operation: Schema.Literals(["create", "alternative", "revise", "retire", "restore"]),
+  operationOrdinal: NonNegativeInt,
+  createOrdinal: Schema.optional(NonNegativeInt),
+  alternativeToRevision: Schema.optional(AdvisorySuggestionRevisionRef),
+  suggestionID: Schema.optional(AdvisoryPlanSuggestion.SuggestionID),
+  expectedHead: Schema.optional(AdvisoryExpectedHead),
+  snapshot: Schema.optional(AdvisorySnapshot),
+  rationale: Schema.optional(AdvisoryText(AdvisoryPlanSuggestion.MAX_RATIONALE_BYTES)),
+})
+export const UpdateAdvisoryPlanSuggestionInput = Schema.Struct({
+  cause: AdvisoryCause,
+  intents: Schema.Array(AdvisoryIntent).check(Schema.isLengthBetween(1, AdvisoryPlanSuggestion.MAX_INTENTS)),
+}).annotate({ parseOptions: { onExcessProperty: "error" } })
+
+export type UpdateAdvisoryPlanSuggestionInput = AdvisoryPlanSuggestion.Command
+
 const decode = Schema.decodeUnknownSync(AcceptCourseViewRevisionInput)
 const decodeRepresentation = Schema.decodeUnknownSync(RepresentationConvertInput)
 const decodeDefault = Schema.decodeUnknownSync(SetDefaultCoursePreferenceInput)
@@ -1078,6 +1192,7 @@ const decodeLearnerResponseEvidence = Schema.decodeUnknownSync(UpdateLearnerResp
 const decodeFutureAttention = Schema.decodeUnknownSync(UpdateFutureAttentionInput)
 const decodeAssignment = Schema.decodeUnknownSync(UpdateAssignmentInput)
 const decodeLearnerStateJudgment = Schema.decodeUnknownSync(UpdateLearnerStateJudgmentInput)
+const decodeAdvisoryPlanSuggestion = Schema.decodeUnknownSync(UpdateAdvisoryPlanSuggestionInput)
 
 export function normalize(input: unknown): AcceptCourseViewRevisionInput {
   const value = decode(input)
@@ -1203,6 +1318,12 @@ export function normalizeLearnerStateJudgment(input: unknown): UpdateLearnerStat
   return value as LearnerStateJudgment.Command
 }
 
+export function normalizeAdvisoryPlanSuggestion(input: unknown): UpdateAdvisoryPlanSuggestionInput {
+  const value = decodeAdvisoryPlanSuggestion(input)
+  AdvisoryPlanSuggestion.canonicalizeCommand(value as AdvisoryPlanSuggestion.Command)
+  return value as AdvisoryPlanSuggestion.Command
+}
+
 function normalizeBoundary(input: string) {
   const value = input.trim()
   const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?(Z|[+-]\d{2}:\d{2})$/.exec(value)
@@ -1227,6 +1348,9 @@ export function normalizeCommand(toolID: string, input: unknown) {
   if (toolID === LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY) return normalizeAssignment(input)
   if (toolID === LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY) {
     return normalizeLearnerStateJudgment(input)
+  }
+  if (toolID === LearningCommand.UPDATE_ADVISORY_PLAN_SUGGESTION_CAPABILITY) {
+    return normalizeAdvisoryPlanSuggestion(input)
   }
   throw new Error(`Unknown reserved learning command ${toolID}`)
 }

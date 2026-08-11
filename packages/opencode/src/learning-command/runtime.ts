@@ -1,4 +1,5 @@
 import { Artifact } from "@opencode-ai/core/artifact"
+import { AdvisoryPlanSuggestion } from "@opencode-ai/core/advisory-plan-suggestion"
 import { Assignment } from "@opencode-ai/core/assignment"
 import { ContentRoot } from "@opencode-ai/core/content-root"
 import { Course } from "@opencode-ai/core/course"
@@ -70,6 +71,7 @@ import {
   normalizeLearnerResponseEvidence,
   normalizeFutureAttention,
   normalizeAssignment,
+  normalizeAdvisoryPlanSuggestion,
   normalizeLearnerStateJudgment,
   normalizeSteering,
   retainedSteeringCommand,
@@ -84,6 +86,7 @@ import {
   type UpdateLearnerResponseEvidenceInput,
   type UpdateFutureAttentionInput,
   type UpdateAssignmentInput,
+  type UpdateAdvisoryPlanSuggestionInput,
   type UpdateLearnerStateJudgmentInput,
   type UpdateRetainedLearningSteeringInput,
 } from "./input"
@@ -135,6 +138,7 @@ export type PrimaryCapability =
   | typeof LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY
   | typeof LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY
   | typeof LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY
+  | typeof LearningCommand.UPDATE_ADVISORY_PLAN_SUGGESTION_CAPABILITY
 
 type Canonical =
   | Readonly<{
@@ -309,6 +313,21 @@ type LearnerStateJudgmentExecutionPreparation =
   | Readonly<{ type: "candidate"; candidate: LearnerStateJudgment.Candidate }>
   | Readonly<{ type: "settled"; exact: ExactResult }>
 
+type AdvisoryPlanSuggestionCanonical = Readonly<{
+  toolID: typeof LearningCommand.UPDATE_ADVISORY_PLAN_SUGGESTION_CAPABILITY
+  input: UpdateAdvisoryPlanSuggestionInput
+}>
+
+type AdvisoryPlanSuggestionActive = Readonly<{
+  canonical: AdvisoryPlanSuggestionCanonical
+  registration: Registration
+  deferred: Deferred.Deferred<ExactResult, unknown>
+}>
+
+type AdvisoryPlanSuggestionExecutionPreparation =
+  | Readonly<{ type: "candidate"; candidate: AdvisoryPlanSuggestion.Candidate }>
+  | Readonly<{ type: "settled"; exact: ExactResult }>
+
 export interface Interface {
   readonly prepare: (input: unknown, registration: Registration) => Effect.Effect<void, unknown>
   readonly execute: (input: unknown, context: ExecuteContext) => Effect.Effect<ExactResult, unknown>
@@ -349,6 +368,7 @@ const layer = Layer.effect(
     const futureAttentionInflight = new Map<SessionV1.PartID, FutureAttentionActive>()
     const assignmentInflight = new Map<SessionV1.PartID, AssignmentActive>()
     const learnerStateJudgmentInflight = new Map<SessionV1.PartID, LearnerStateJudgmentActive>()
+    const advisoryPlanSuggestionInflight = new Map<SessionV1.PartID, AdvisoryPlanSuggestionActive>()
 
     yield* recoverAdmitted(events)
 
@@ -377,6 +397,9 @@ const layer = Layer.effect(
       }
       if (toolID === LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY) {
         return yield* prepareLearnerStateJudgment(events, modelInput, registration)
+      }
+      if (toolID === LearningCommand.UPDATE_ADVISORY_PLAN_SUGGESTION_CAPABILITY) {
+        return yield* prepareAdvisoryPlanSuggestion(events, modelInput, registration)
       }
       const canonical = canonicalInput(toolID, modelInput)
       const transaction = events.transaction((tx) =>
@@ -491,6 +514,15 @@ const layer = Layer.effect(
           events,
           permission,
           learnerStateJudgmentInflight,
+          modelInput,
+          context,
+        )
+      }
+      if (toolID === LearningCommand.UPDATE_ADVISORY_PLAN_SUGGESTION_CAPABILITY) {
+        return yield* executeAdvisoryPlanSuggestion(
+          events,
+          permission,
+          advisoryPlanSuggestionInflight,
           modelInput,
           context,
         )
@@ -3792,6 +3824,525 @@ function loadCommittedLearnerStateJudgmentResult(
     .pipe(Effect.map((result) => result.result))
 }
 
+function prepareAdvisoryPlanSuggestion(
+  events: EventV2.Interface,
+  modelInput: unknown,
+  registration: Registration,
+) {
+  return events
+    .transaction((tx) =>
+      Effect.gen(function* () {
+        const canonical = {
+          toolID: LearningCommand.UPDATE_ADVISORY_PLAN_SUGGESTION_CAPABILITY,
+          input: normalizeAdvisoryPlanSuggestion(modelInput),
+        } satisfies AdvisoryPlanSuggestionCanonical
+        const existing = yield* readAdvisoryPlanSuggestionState(tx, registration)
+        if (existing) {
+          const state = yield* requireAdvisoryPlanSuggestionState(tx, canonical, registration)
+          if (state.status !== "admitted") {
+            yield* assertAdvisoryPlanSuggestionTerminalPart(tx, canonical, registration, state)
+          }
+          return noEvent(undefined)
+        }
+
+        const consumed = yield* LearningFrontier.read(tx)
+        yield* TurnLifecycle.consumeToolFrontier(tx, { partID: registration.partID, frontier: consumed })
+        const row = yield* readPartRow(tx, registration.partID)
+        if (!row) {
+          return yield* new LearningCommand.InvocationTranscriptUnavailableError({ partID: registration.partID })
+        }
+        const trusted = yield* TurnLifecycle.validateLearningCommandRegistration(tx, {
+          turnID: registration.turnID,
+          inputID: registration.inputID,
+          causalOccurrenceID: registration.causalOccurrenceID,
+          partID: registration.partID,
+          callID: registration.callID,
+          emissionOrdinal: registration.emissionOrdinal,
+          sessionID: registration.sessionID,
+          assistantMessageID: registration.assistantMessageID,
+          capabilityIdentity: canonical.toolID,
+        })
+        const timeAdmitted = Math.max(
+          row.time_created,
+          trusted.modelTimeAdmitted,
+          trusted.candidateTimeRegistered,
+          trusted.toolTimeAdmitted,
+        )
+        yield* assertAdvisoryPlanSuggestionAdmittedPart(tx, canonical, registration)
+        const reserved = yield* AdvisoryPlanSuggestion.reserve(tx, {
+          envelope: advisoryPlanSuggestionEnvelope(registration, timeAdmitted),
+          command: canonical.input,
+          settlement: yield* settlementMetadata(tx, registration.sessionID, timeAdmitted),
+        })
+        if (reserved.type === "admitted") return noEvent(undefined)
+        if (reserved.type === "replay") {
+          return yield* Effect.die("New advisory-plan suggestion admission unexpectedly replayed")
+        }
+        const state = yield* requireAdvisoryPlanSuggestionState(tx, canonical, registration)
+        const part = advisoryPlanSuggestionTerminalPart(canonical, registration, state)
+        return withPartEvent(undefined, part, requirePhysicalSettlement(state.settlement).settlementTime)
+      }).pipe(Effect.orDie),
+    )
+    .pipe(Effect.asVoid)
+}
+
+function executeAdvisoryPlanSuggestion(
+  events: EventV2.Interface,
+  permission: Permission.Interface,
+  inflight: Map<SessionV1.PartID, AdvisoryPlanSuggestionActive>,
+  modelInput: unknown,
+  context: ExecuteContext,
+) {
+  return Effect.gen(function* () {
+    const registration = requireRegistration(context)
+    const canonical = {
+      toolID: LearningCommand.UPDATE_ADVISORY_PLAN_SUGGESTION_CAPABILITY,
+      input: normalizeAdvisoryPlanSuggestion(modelInput),
+    } satisfies AdvisoryPlanSuggestionCanonical
+    const active = inflight.get(registration.partID)
+    if (active) {
+      if (!isDeepStrictEqual(active.registration, registration) || !isDeepStrictEqual(active.canonical, canonical)) {
+        return yield* invocationConflict(registration)
+      }
+      return yield* Deferred.await(active.deferred)
+    }
+
+    const deferred = Deferred.makeUnsafe<ExactResult, unknown>()
+    const token = { canonical, registration, deferred } satisfies AdvisoryPlanSuggestionActive
+    inflight.set(registration.partID, token)
+    return yield* Effect.uninterruptibleMask((restore) =>
+      Effect.gen(function* () {
+        const exit = yield* restore(
+          executeAdvisoryPlanSuggestionOnce(events, permission, canonical, registration, context),
+        ).pipe(Effect.exit)
+        if (Exit.isFailure(exit)) {
+          const reconciled = yield* loadCommittedAdvisoryPlanSuggestionResult(events, canonical, registration).pipe(
+            Effect.exit,
+          )
+          if (Exit.isSuccess(reconciled) && reconciled.value) {
+            yield* Deferred.succeed(deferred, reconciled.value).pipe(Effect.ignore)
+            if (inflight.get(registration.partID) === token) inflight.delete(registration.partID)
+            return reconciled.value
+          }
+          const cause = Exit.isFailure(reconciled) ? reconciled.cause : exit.cause
+          yield* Deferred.failCause(deferred, cause).pipe(Effect.ignore)
+          if (inflight.get(registration.partID) === token) inflight.delete(registration.partID)
+          return yield* Effect.failCause(cause)
+        }
+        yield* Deferred.succeed(deferred, exit.value).pipe(Effect.ignore)
+        if (inflight.get(registration.partID) === token) inflight.delete(registration.partID)
+        return exit.value
+      }),
+    )
+  })
+}
+
+function executeAdvisoryPlanSuggestionOnce(
+  events: EventV2.Interface,
+  permission: Permission.Interface,
+  canonical: AdvisoryPlanSuggestionCanonical,
+  registration: Registration,
+  context: ExecuteContext,
+) {
+  return Effect.gen(function* () {
+    const prepared = yield* events.transaction<
+      AdvisoryPlanSuggestionExecutionPreparation,
+      typeof SessionV1.Event.PartUpdated
+    >((tx) =>
+      Effect.gen(function* () {
+        const state = yield* requireAdvisoryPlanSuggestionState(tx, canonical, registration)
+        if (state.status !== "admitted") {
+          return noEvent({
+            type: "settled" as const,
+            exact: exactFromPart(yield* assertAdvisoryPlanSuggestionTerminalPart(tx, canonical, registration, state)),
+          })
+        }
+        if (state.disposition !== "candidate_v1" || !state.candidate) {
+          return yield* Effect.die("Admitted advisory-plan suggestion invocation is not a complete candidate")
+        }
+        return noEvent({ type: "candidate" as const, candidate: state.candidate })
+      }).pipe(Effect.orDie),
+    )
+    if (prepared.result.type === "settled") return prepared.result.exact
+
+    const authority = requirePermissionContext(context)
+    const candidate = prepared.result.candidate
+    const scope = SemanticPresentation.advisoryPlanSuggestionScope(candidate)
+    const presentation = LearningCommandPresentation.advisoryPlanSuggestionCapability(candidate, {
+      sessionID: registration.sessionID,
+      assistantMessageID: registration.assistantMessageID,
+      providerCallID: registration.callID,
+      partID: registration.partID,
+    })
+    const shownScope = {
+      patterns: [AdvisoryPlanSuggestion.PERMISSION_PATTERN],
+      agentAction: candidate.agentAction,
+      scope,
+      semanticPresentation: presentation,
+    }
+    const permissionOutcome = yield* LearningCommandPermission.ask(
+      permission,
+      {
+        sessionID: registration.sessionID,
+        permission: LearningCommand.UPDATE_ADVISORY_PLAN_SUGGESTION_CAPABILITY,
+        patterns: [AdvisoryPlanSuggestion.PERMISSION_PATTERN],
+        always: [AdvisoryPlanSuggestion.PERMISSION_PATTERN],
+        requirePrompt: false,
+        metadata: {
+          advisoryPlanSuggestionKind: "change_set",
+          commandFingerprint: candidate.commandFingerprint,
+          issuance: candidate.agentAction.kind,
+          scope,
+          ...SemanticPresentation.metadata(presentation),
+        },
+        tool: { messageID: registration.assistantMessageID, callID: registration.callID },
+        ruleset: authority.ruleset,
+        authority: authority.authority,
+        lifecycle: {
+          resolution: "request_exact",
+          selected: (selection) =>
+            persistAdvisoryPlanSuggestionSelection(events, registration, selection, shownScope),
+          replied: (input) => persistAdvisoryPlanSuggestionReply(events, registration, input),
+        },
+      },
+      context.abort,
+    )
+    if (permissionOutcome.type === "abort" || context.abort.aborted) {
+      return yield* recoverAdvisoryPlanSuggestion(events, canonical, registration)
+    }
+    return yield* completeAdvisoryPlanSuggestion(events, canonical, registration)
+  })
+}
+
+function persistAdvisoryPlanSuggestionSelection(
+  events: EventV2.Interface,
+  registration: Registration,
+  selection: Permission.Selection,
+  shownScope: Readonly<Record<string, unknown>>,
+) {
+  return events
+    .transaction((tx) =>
+      Effect.gen(function* () {
+        const metadata = yield* settlementMetadata(tx, registration.sessionID, Date.now())
+        if (selection.action === "ask") {
+          yield* AdvisoryPlanSuggestion.issueCapabilityPrompt(tx, {
+            partID: registration.partID,
+            requestID: selection.request.id,
+            policyBasis: { ...selection.basis },
+            shownScope,
+            time: metadata.time,
+            order: metadata.order,
+          })
+          return noEvent(undefined)
+        }
+        yield* AdvisoryPlanSuggestion.settlePolicy(tx, {
+          partID: registration.partID,
+          outcome: selection.action === "allow" ? "policy_allow" : "policy_deny",
+          policyBasis: { ...selection.basis },
+          time: metadata.time,
+          order: metadata.order,
+        })
+        return noEvent(undefined)
+      }).pipe(Effect.orDie),
+    )
+    .pipe(Effect.asVoid)
+}
+
+function persistAdvisoryPlanSuggestionReply(
+  events: EventV2.Interface,
+  registration: Registration,
+  input: Readonly<{ request: PermissionV1.Request; reply: PermissionV1.ReplyInput }>,
+) {
+  return events
+    .transaction((tx) =>
+      Effect.gen(function* () {
+        const metadata = yield* settlementMetadata(tx, registration.sessionID, Date.now())
+        yield* AdvisoryPlanSuggestion.settlePrompt(tx, {
+          partID: registration.partID,
+          requestID: input.request.id,
+          outcome:
+            input.reply.reply === "once" || input.reply.reply === "always"
+              ? "prompted_allow"
+              : input.reply.reply === "cancel"
+                ? "prompted_cancel"
+                : input.reply.message
+                  ? "prompted_correct"
+                  : "prompted_deny",
+          reply: { ...input.reply },
+          time: metadata.time,
+          order: metadata.order,
+        })
+        return noEvent(undefined)
+      }).pipe(Effect.orDie),
+    )
+    .pipe(Effect.asVoid)
+}
+
+function completeAdvisoryPlanSuggestion(
+  events: EventV2.Interface,
+  canonical: AdvisoryPlanSuggestionCanonical,
+  registration: Registration,
+) {
+  return events
+    .transaction((tx) =>
+      Effect.gen(function* () {
+        const state = yield* requireAdvisoryPlanSuggestionState(tx, canonical, registration)
+        if (state.status !== "admitted") {
+          return noEvent(
+            exactFromPart(yield* assertAdvisoryPlanSuggestionTerminalPart(tx, canonical, registration, state)),
+          )
+        }
+        const consumed = yield* LearningFrontier.read(tx)
+        yield* TurnLifecycle.consumeToolFrontier(tx, { partID: registration.partID, frontier: consumed })
+        const settled = yield* AdvisoryPlanSuggestion.settle(tx, {
+          partID: registration.partID,
+          settlement: yield* settlementMetadata(tx, registration.sessionID, state.timeAdmitted),
+        })
+        if (settled.settlement.outcome === "applied") {
+          yield* TurnLifecycle.recordToolResultingFrontier(tx, {
+            partID: registration.partID,
+            frontier: yield* LearningFrontier.read(tx),
+          })
+        }
+        const terminal = yield* requireAdvisoryPlanSuggestionState(tx, canonical, registration)
+        const part = advisoryPlanSuggestionTerminalPart(canonical, registration, terminal)
+        return withPartEvent(exactFromPart(part), part, requirePhysicalSettlement(terminal.settlement).settlementTime)
+      }).pipe(Effect.orDie),
+    )
+    .pipe(Effect.map((result) => result.result))
+}
+
+function recoverAdvisoryPlanSuggestion(
+  events: EventV2.Interface,
+  canonical: AdvisoryPlanSuggestionCanonical,
+  registration: Registration,
+) {
+  return events
+    .transaction((tx) =>
+      Effect.gen(function* () {
+        const state = yield* requireAdvisoryPlanSuggestionState(tx, canonical, registration)
+        if (state.status !== "admitted") {
+          return noEvent(
+            exactFromPart(yield* assertAdvisoryPlanSuggestionTerminalPart(tx, canonical, registration, state)),
+          )
+        }
+        yield* AdvisoryPlanSuggestion.recover(tx, {
+          partID: registration.partID,
+          settlement: yield* settlementMetadata(tx, registration.sessionID, state.timeAdmitted),
+        })
+        const terminal = yield* requireAdvisoryPlanSuggestionState(tx, canonical, registration)
+        const part = advisoryPlanSuggestionTerminalPart(canonical, registration, terminal)
+        return withPartEvent(exactFromPart(part), part, requirePhysicalSettlement(terminal.settlement).settlementTime)
+      }).pipe(Effect.orDie),
+    )
+    .pipe(Effect.map((result) => result.result))
+}
+
+function readAdvisoryPlanSuggestionState(tx: EventV2.Transaction, registration: Registration) {
+  return AdvisoryPlanSuggestion.readInvocationVersion(tx, {
+    partID: registration.partID,
+    assistantMessageID: registration.assistantMessageID,
+    providerCallID: registration.callID,
+  })
+}
+
+function requireAdvisoryPlanSuggestionState(
+  tx: EventV2.Transaction,
+  canonical: AdvisoryPlanSuggestionCanonical,
+  registration: Registration,
+) {
+  return Effect.gen(function* () {
+    const state = yield* readAdvisoryPlanSuggestionState(tx, registration)
+    if (!state) return yield* new LearningCommand.InvocationNotFoundError({ partID: registration.partID })
+    const storedCommand = state.disposition === "candidate_v1" ? state.candidate?.canonicalCommand : undefined
+    if (
+      storedCommand &&
+      !isDeepStrictEqual(storedCommand, AdvisoryPlanSuggestion.canonicalizeCommand(canonical.input))
+    ) {
+      return yield* invocationConflict(registration)
+    }
+    if (state.status === "admitted" && (state.disposition !== "candidate_v1" || !state.candidate)) {
+      return yield* Effect.die("Admitted advisory-plan suggestion invocation is not a complete candidate")
+    }
+    const physical = yield* LearningCommand.lookupPhysicalInvocation(tx, {
+      partID: registration.partID,
+      assistantMessageID: registration.assistantMessageID,
+      providerCallID: registration.callID,
+    })
+    if (!physical || !physical.turn_id || !physical.input_id) {
+      return yield* new LearningCommand.InvocationNotFoundError({ partID: registration.partID })
+    }
+    const envelope = advisoryPlanSuggestionEnvelope(registration, physical.time_admitted)
+    if (
+      physical.turn_id !== envelope.turnID ||
+      physical.input_id !== envelope.inputID ||
+      physical.occurrence_id !== envelope.occurrenceID ||
+      physical.session_id !== envelope.sessionID ||
+      physical.parent_user_message_id !== envelope.parentUserMessageID ||
+      physical.assistant_message_id !== envelope.assistantMessageID ||
+      physical.emission_ordinal !== envelope.emissionOrdinal ||
+      physical.capability_identity !== envelope.capabilityIdentity ||
+      physical.capability_version !== envelope.capabilityVersion ||
+      physical.authorization_basis !== envelope.authorizationBasis
+    ) {
+      return yield* invocationConflict(registration)
+    }
+    if (state.status === "admitted") {
+      yield* assertAdvisoryPlanSuggestionAdmittedPart(tx, canonical, registration)
+    }
+    return state
+  })
+}
+
+function advisoryPlanSuggestionEnvelope(
+  registration: Registration,
+  timeAdmitted: number,
+): LearningCommand.InvocationEnvelope & Readonly<{ authorizationBasis: "agent_action"; capabilityVersion: 1 }> {
+  return {
+    occurrenceID: registration.causalOccurrenceID!,
+    turnID: registration.turnID,
+    inputID: registration.inputID,
+    sessionID: registration.sessionID,
+    parentUserMessageID: registration.parentUserMessageID,
+    assistantMessageID: registration.assistantMessageID,
+    partID: registration.partID,
+    providerCallID: registration.callID,
+    emissionOrdinal: registration.emissionOrdinal,
+    capabilityIdentity: LearningCommand.UPDATE_ADVISORY_PLAN_SUGGESTION_CAPABILITY,
+    capabilityVersion: AdvisoryPlanSuggestion.UPDATE_VERSION,
+    authorizationBasis: "agent_action",
+    timeAdmitted,
+  }
+}
+
+function assertAdvisoryPlanSuggestionAdmittedPart(
+  tx: EventV2.Transaction,
+  canonical: AdvisoryPlanSuggestionCanonical,
+  registration: Registration,
+) {
+  return readPart(tx, registration.partID).pipe(
+    Effect.flatMap((part) =>
+      part.id === registration.partID &&
+      part.messageID === registration.assistantMessageID &&
+      part.sessionID === registration.sessionID &&
+      part.type === "tool" &&
+      part.tool === canonical.toolID &&
+      part.callID === registration.callID &&
+      part.state.status === "pending" &&
+      isDeepStrictEqual(part.state.input, canonical.input)
+        ? Effect.void
+        : invocationConflict(registration),
+    ),
+  )
+}
+
+function assertAdvisoryPlanSuggestionTerminalPart(
+  tx: EventV2.Transaction,
+  canonical: AdvisoryPlanSuggestionCanonical,
+  registration: Registration,
+  state: AdvisoryPlanSuggestion.InvocationVersion,
+) {
+  return Effect.gen(function* () {
+    const expected = advisoryPlanSuggestionTerminalPart(canonical, registration, state)
+    const part = yield* readPart(tx, registration.partID)
+    if (
+      !isDeepStrictEqual(invocationPart(part), invocationPart(expected)) ||
+      SemanticPresentation.readResult(part, true).type !== "valid"
+    ) {
+      return yield* Effect.die(
+        `Terminal advisory-plan suggestion Part ${registration.partID} diverged from its settlement`,
+      )
+    }
+    return part
+  })
+}
+
+function advisoryPlanSuggestionTerminalPart(
+  canonical: AdvisoryPlanSuggestionCanonical,
+  registration: Registration,
+  state: AdvisoryPlanSuggestion.InvocationVersion,
+) {
+  const settlement = requirePhysicalSettlement(state.settlement)
+  const presentation = LearningCommandPresentation.advisoryPlanSuggestionSettlementResult(settlement, state, {
+    sessionID: registration.sessionID,
+    assistantMessageID: registration.assistantMessageID,
+    providerCallID: registration.callID,
+    partID: registration.partID,
+  })
+  const projected = SemanticPresentation.projectResultBasis(presentation.basis)
+  if (!projected) throw new Error("Advisory-plan suggestion settlement has no valid semantic projection")
+  const exact = {
+    title: projected.title,
+    metadata: {
+      command: canonical.toolID,
+      commandVersion: AdvisoryPlanSuggestion.UPDATE_VERSION,
+      outcome: settlement.outcome,
+      ...(settlement.outcome === "error" ? { code: settlement.code } : {}),
+      durablySettled: projected.durablySettled,
+      truncated: false,
+      ...SemanticPresentation.metadata(presentation),
+    },
+    output: JSON.stringify({
+      settlement,
+      disposition: state.disposition,
+      nonImplications: [
+        "not_a_learner_commitment",
+        "not_activity_or_adherence_evidence",
+        "not_mastery_or_progress_certification",
+        "not_a_deterministic_schedule_or_priority",
+      ],
+      ...(state.disposition === "candidate_v1" && state.candidate
+        ? {
+            agentAction: state.candidate.agentAction,
+            ...(state.capabilityOutcome ? { capabilityOutcome: state.capabilityOutcome } : {}),
+            ...(state.permissionRequestID ? { permissionRequestID: state.permissionRequestID } : {}),
+          }
+        : {}),
+      ...(state.disposition === "semantic_terminal_v1" && state.semanticTerminal
+        ? { semanticTerminal: state.semanticTerminal }
+        : {}),
+    }),
+  }
+  const part = {
+    id: registration.partID,
+    messageID: registration.assistantMessageID,
+    sessionID: registration.sessionID,
+    type: "tool",
+    tool: canonical.toolID,
+    callID: registration.callID,
+    state: {
+      status: "completed",
+      input: canonical.input,
+      output: exact.output,
+      title: exact.title,
+      metadata: exact.metadata,
+      time: { start: state.timeAdmitted, end: settlement.settlementTime },
+    },
+  } satisfies SessionV1.ToolPart
+  if (SemanticPresentation.readResult(part, true).type !== "valid") {
+    throw new Error(`Constructed terminal advisory-plan suggestion Part ${registration.partID} is invalid`)
+  }
+  return part
+}
+
+function loadCommittedAdvisoryPlanSuggestionResult(
+  events: EventV2.Interface,
+  canonical: AdvisoryPlanSuggestionCanonical,
+  registration: Registration,
+) {
+  return events
+    .transaction((tx) =>
+      Effect.gen(function* () {
+        const state = yield* readAdvisoryPlanSuggestionState(tx, registration)
+        if (!state || state.status === "admitted") return noEvent(undefined)
+        return noEvent(
+          exactFromPart(yield* assertAdvisoryPlanSuggestionTerminalPart(tx, canonical, registration, state)),
+        )
+      }).pipe(Effect.orDie),
+    )
+    .pipe(Effect.map((result) => result.result))
+}
+
 function prepareDefaultCourse(events: EventV2.Interface, modelInput: unknown, registration: Registration) {
   return Effect.gen(function* () {
     const state = yield* readStoredDefaultCourseState(events, registration)
@@ -5949,6 +6500,9 @@ function interruptTransaction(tx: EventV2.Transaction, registration: Registratio
     if (physical.command_name === LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY) {
       return yield* interruptLearnerStateJudgmentTransaction(tx, registration)
     }
+    if (physical.command_name === LearningCommand.UPDATE_ADVISORY_PLAN_SUGGESTION_CAPABILITY) {
+      return yield* interruptAdvisoryPlanSuggestionTransaction(tx, registration)
+    }
     const row = yield* readPartRow(tx, registration.partID)
     if (!row) {
       return yield* new LearningCommand.InvocationTranscriptUnavailableError({ partID: registration.partID })
@@ -6187,6 +6741,35 @@ function interruptLearnerStateJudgmentTransaction(tx: EventV2.Transaction, regis
       return yield* Effect.die(`Recovered learner-state judgment invocation ${registration.partID} remained admitted`)
     }
     const completed = learnerStateJudgmentTerminalPart(canonical, registration, terminal)
+    return withPartEvent(true, completed, requirePhysicalSettlement(terminal.settlement).settlementTime)
+  })
+}
+
+function interruptAdvisoryPlanSuggestionTransaction(tx: EventV2.Transaction, registration: Registration) {
+  return Effect.gen(function* () {
+    const row = yield* readPartRow(tx, registration.partID)
+    if (!row) {
+      return yield* new LearningCommand.InvocationTranscriptUnavailableError({ partID: registration.partID })
+    }
+    const part = partFromRow(row)
+    const canonical = {
+      toolID: LearningCommand.UPDATE_ADVISORY_PLAN_SUGGESTION_CAPABILITY,
+      input: normalizeAdvisoryPlanSuggestion(part.state.input),
+    } satisfies AdvisoryPlanSuggestionCanonical
+    const state = yield* requireAdvisoryPlanSuggestionState(tx, canonical, registration)
+    if (state.status !== "admitted") {
+      yield* assertAdvisoryPlanSuggestionTerminalPart(tx, canonical, registration, state)
+      return noEvent(true)
+    }
+    yield* AdvisoryPlanSuggestion.recover(tx, {
+      partID: registration.partID,
+      settlement: yield* settlementMetadata(tx, registration.sessionID, state.timeAdmitted),
+    })
+    const terminal = yield* requireAdvisoryPlanSuggestionState(tx, canonical, registration)
+    if (terminal.status === "admitted") {
+      return yield* Effect.die(`Recovered advisory-plan suggestion invocation ${registration.partID} remained admitted`)
+    }
+    const completed = advisoryPlanSuggestionTerminalPart(canonical, registration, terminal)
     return withPartEvent(true, completed, requirePhysicalSettlement(terminal.settlement).settlementTime)
   })
 }
@@ -6788,7 +7371,8 @@ function canonicalInput(toolID: PrimaryCapability, input: unknown): Canonical {
     toolID === LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY ||
     toolID === LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY ||
     toolID === LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY ||
-    toolID === LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY
+    toolID === LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY ||
+    toolID === LearningCommand.UPDATE_ADVISORY_PLAN_SUGGESTION_CAPABILITY
   ) {
     throw new Error("This command uses its dedicated Agent-action admission path")
   }
@@ -6932,7 +7516,8 @@ function isPrimaryCapability(value: string): value is PrimaryCapability {
     value === LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY ||
     value === LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY ||
     value === LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY ||
-    value === LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY
+    value === LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY ||
+    value === LearningCommand.UPDATE_ADVISORY_PLAN_SUGGESTION_CAPABILITY
   )
 }
 
@@ -6963,6 +7548,9 @@ function capabilityVersion(toolID: PrimaryCapability) {
   }
   if (toolID === LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY) {
     return LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_VERSION
+  }
+  if (toolID === LearningCommand.UPDATE_ADVISORY_PLAN_SUGGESTION_CAPABILITY) {
+    return LearningCommand.UPDATE_ADVISORY_PLAN_SUGGESTION_VERSION
   }
   return LearningCommand.SET_COURSE_ROUTE_ANCHOR_VERSION
 }

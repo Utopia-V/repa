@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm"
 import { Effect, Schema } from "effect"
 import type { Turn } from "@opencode-ai/schema/turn"
 import { Assignment } from "./assignment"
+import { AdvisoryPlanSuggestion } from "./advisory-plan-suggestion"
 import { Course } from "./course"
 import type { Database } from "./database/database"
 import { FutureAttention } from "./future-attention"
@@ -30,6 +31,10 @@ import {
   GATE20A_LAZY_READ_CAPABILITY_IDS,
   GATE20A_POLICY_VERSION,
   GATE20A_RENDERER_VERSION,
+  GATE20B_CAPABILITY_CATALOG_VERSION,
+  GATE20B_LAZY_READ_CAPABILITY_IDS,
+  GATE20B_POLICY_VERSION,
+  GATE20B_RENDERER_VERSION,
   GATE19_CAPABILITY_CATALOG_VERSION,
   GATE19_LAZY_READ_CAPABILITY_IDS,
   GATE19_POLICY_VERSION,
@@ -41,6 +46,7 @@ import {
   LEGACY_RENDERER_VERSION,
   MAX_CANONICAL_BYTES,
   MAX_ASSIGNMENT_CONTEXT_ENTRIES,
+  MAX_ADVISORY_PLAN_SUGGESTION_CONTEXT_ENTRIES,
   MAX_CANDIDATES_PER_FAMILY,
   MAX_ENTRY_BYTES,
   MAX_INTERACTION_CANDIDATES,
@@ -63,6 +69,7 @@ import {
   type Entry,
   type AssignmentContextMode,
   type AssignmentContextOwnerCut,
+  type AdvisoryPlanSuggestionContextOwnerCut,
   type LearnerStateJudgmentContextOwnerCut,
   type JsonValue,
   type Operation,
@@ -87,7 +94,8 @@ const legacyOwners = ["course", "learner_navigation", "learner_goal", "material"
 const gate19Owners = [...legacyOwners, "learner_response_evidence"] as const
 const gate20Owners = [...gate19Owners, "future_attention"] as const
 const gate20AOwners = [...gate20Owners, "assignment"] as const
-const currentOwners = [...gate20AOwners, "learner_state_judgment"] as const
+const gate20BOwners = [...gate20AOwners, "learner_state_judgment"] as const
+const currentOwners = [...gate20BOwners, "advisory_plan_suggestion"] as const
 const sectionPolicy = {
   course: {
     scope: "eligible_courses_and_structurally_referenced_default",
@@ -126,9 +134,15 @@ const sectionPolicy = {
     scope: "active_heads_intersecting_context_anchors_or_learner_home_wide",
     selectionBasis: "identity_creation_then_id_not_priority",
   },
+  advisory_plan_suggestion: {
+    scope: "active_heads_matching_context_owner_keys_or_bounded_learner_home_fallback",
+    selectionBasis: "identity_creation_then_id_not_priority",
+  },
 } as const
 const withheldSelectionBasis = "automatic_context_capability_withheld" as const
 const learnerStateReadWithheldSelectionBasis = "learner_state_judgment_read_capability_withheld" as const
+const advisoryPlanSuggestionReadWithheldSelectionBasis =
+  "advisory_plan_suggestion_read_capability_withheld" as const
 
 export function unavailableCapabilityBasis(): CapabilityBasis {
   const providerToolSurface = bindProviderToolSurface({
@@ -339,6 +353,39 @@ function projectSections(tx: Transaction, input: PrepareInput) {
           ],
         })
       : undefined
+    const advisoryPlanSuggestionKeys: AdvisoryPlanSuggestion.StableOwnerKey[] = [
+      ...orderedCourses.flatMap((value) => {
+        if (value.status !== "available") return []
+        const locator = Course.learningContextLocator(value, lazy.has("course_query"))
+        return [
+          { type: "course" as const, courseID: locator.courseID },
+          ...(locator.workingViewID
+            ? [{ type: "course_view" as const, courseID: locator.courseID, viewID: locator.workingViewID }]
+            : []),
+        ]
+      }),
+      ...materials.entries.map((value) => ({
+        type: "material_selector" as const,
+        mapID: value.map.id,
+        selectorID: value.selector.id,
+      })),
+      ...goals.entries.map((goal) => ({ type: "goal" as const, goalID: goal.goalID })),
+      ...assignments.candidates.map(({ assignment }) => ({
+        type: "assignment" as const,
+        assignmentID: assignment.id,
+      })),
+      ...(learnerStateJudgments?.candidates ?? []).map((candidate) => ({
+        type: "learner_state_judgment" as const,
+        judgmentID: candidate.judgment.id,
+      })),
+    ]
+    const advisoryPlanSuggestions = lazy.has("advisory_plan_suggestion_read")
+      ? yield* AdvisoryPlanSuggestion.listEligibleForContext(tx, {
+          asOf: input.retainedSteering.cutAsOf,
+          limit: MAX_ADVISORY_PLAN_SUGGESTION_CONTEXT_ENTRIES,
+          eligibleKeys: advisoryPlanSuggestionKeys,
+        })
+      : undefined
     const courseEntries = orderedCourses.map((value) =>
       value.status === "unavailable"
         ? entry("course", {
@@ -509,6 +556,46 @@ function projectSections(tx: Transaction, input: PrepareInput) {
         LearnerStateJudgment.semanticValueFor(candidate),
       ),
     )
+    const advisoryPlanSuggestionEntries = (advisoryPlanSuggestions?.candidates ?? []).map((candidate) =>
+      advisoryPlanSuggestionEntry(
+        {
+          suggestionID: candidate.suggestion.id,
+          timeCreated: candidate.suggestion.timeCreated,
+          revisionID: candidate.suggestion.current.id,
+          version: candidate.suggestion.current.version,
+          disposition: candidate.suggestion.current.disposition,
+          operation: candidate.suggestion.current.operation,
+          operationOrdinal: candidate.suggestion.current.operationOrdinal,
+          timeCommitted: candidate.suggestion.current.timeCommitted,
+          frontierSequence: candidate.suggestion.current.frontierSequence,
+          authorClass: candidate.authorClass,
+          retrievalArm: candidate.retrievalArm,
+          anchorKinds: candidate.anchorKinds,
+          retrievalKeys:
+            candidate.suggestion.current.snapshot.retrievalScope.type === "anchored"
+              ? candidate.suggestion.current.snapshot.retrievalScope.anchors.map((anchor) => anchor.stableOwnerKey)
+              : [],
+          retrievalBindings:
+            candidate.suggestion.current.snapshot.retrievalScope.type === "anchored"
+              ? candidate.suggestion.current.snapshot.retrievalScope.anchors.map((anchor) => ({
+                  stableOwnerKey: anchor.stableOwnerKey,
+                  exactBoundRef: anchor.exactBound.ref,
+                  refFingerprint: anchor.exactBound.refFingerprint,
+                }))
+              : [],
+          basisBindings: candidate.suggestion.current.snapshot.exactBasis.map((binding) => ({
+            ref: binding.ref,
+            refFingerprint: binding.refFingerprint,
+          })),
+          alternativeToRevision: candidate.suggestion.alternativeToRevision ?? null,
+          alternativeTarget: candidate.projection.alternativeTarget ?? null,
+          currentRelation: candidate.projection.currentRelation,
+          lazyReadAvailable: true,
+        },
+        AdvisoryPlanSuggestion.semanticValueFor(candidate),
+        input.operation.assistantMessageID,
+      ),
+    )
     return [
       section(
         "course",
@@ -571,6 +658,7 @@ function projectSections(tx: Transaction, input: PrepareInput) {
       ),
       assignmentSection(assignments, assignmentEntries),
       learnerStateJudgmentSection(learnerStateJudgments, learnerStateJudgmentEntries),
+      advisoryPlanSuggestionSection(advisoryPlanSuggestions, advisoryPlanSuggestionEntries),
     ] satisfies Section[]
   })
 }
@@ -639,7 +727,7 @@ function entry(kind: Entry["kind"], locator: unknown, semantic?: unknown): Entry
 }
 
 function section(
-  owner: Exclude<Section["owner"], "assignment" | "learner_state_judgment">,
+  owner: Exclude<Section["owner"], "assignment" | "learner_state_judgment" | "advisory_plan_suggestion">,
   scope: string,
   selectionBasis: string,
   countAtCut: number,
@@ -668,6 +756,57 @@ function section(
           }
         : { type: "none" },
     entries,
+  }
+}
+
+function advisoryPlanSuggestionEntry(locator: unknown, semantic: unknown, assistantMessageID: MessageID): Entry {
+  const value = entry("advisory_plan_suggestion", locator, semantic)
+  if (value.semantic?.state !== "value") {
+    throw new CutCapacityError({
+      assistantMessageID,
+      boundary: "mandatory",
+      observedBytes: value.semantic?.canonicalBytes ?? MAX_ENTRY_BYTES + 1,
+      ceilingBytes: MAX_ENTRY_BYTES,
+    })
+  }
+  return value
+}
+
+function advisoryPlanSuggestionSection(
+  projection: AdvisoryPlanSuggestion.ContextProjection | undefined,
+  entries: readonly Entry[],
+): Extract<Section, { owner: "advisory_plan_suggestion" }> {
+  if (!projection) {
+    return {
+      owner: "advisory_plan_suggestion",
+      scope: sectionPolicy.advisory_plan_suggestion.scope,
+      selectionBasis: advisoryPlanSuggestionReadWithheldSelectionBasis,
+      coverage: "not_authorized",
+      countAtCut: "unknown",
+      omission: { type: "unknown", reason: "advisory_plan_suggestion_read_capability_withheld" },
+      entries: [],
+    }
+  }
+  return {
+    owner: "advisory_plan_suggestion",
+    scope: sectionPolicy.advisory_plan_suggestion.scope,
+    selectionBasis: sectionPolicy.advisory_plan_suggestion.selectionBasis,
+    coverage: projection.countAtCut === 0 ? "empty" : entries.length < projection.countAtCut ? "truncated" : "complete",
+    countAtCut: projection.countAtCut,
+    omission:
+      entries.length < projection.countAtCut
+        ? {
+            type: "exact",
+            omitted: projection.countAtCut - entries.length,
+            reasons: [{ reason: "candidate_limit", omitted: projection.countAtCut - entries.length }],
+          }
+        : { type: "none" },
+    entries,
+    advisoryPlanSuggestionOwnerCut: projection.ownerCut,
+    asOf: projection.asOf,
+    eligibleKeyCount: projection.eligibleKeyCount,
+    eligibleKeysFingerprint: projection.eligibleKeysFingerprint,
+    directoryCursor: projection.directoryCursor,
   }
 }
 
@@ -879,6 +1018,9 @@ type MutableSection = {
   learnerStateJudgmentOwnerCut?: LearnerStateJudgmentContextOwnerCut
   eligibleAnchorCount?: number
   eligibleAnchorsFingerprint?: string
+  advisoryPlanSuggestionOwnerCut?: AdvisoryPlanSuggestionContextOwnerCut
+  eligibleKeyCount?: number
+  eligibleKeysFingerprint?: string
   directoryCursor?: string
 }
 
@@ -889,6 +1031,7 @@ function fit(base: CutBase): Preparation {
     candidateCount: section.entries.length,
   }))
   while (true) {
+    removeUnreachableAdvisoryPlanSuggestions(sections)
     try {
       return finalize({
         ...base,
@@ -926,20 +1069,102 @@ function fit(base: CutBase): Preparation {
   }
 }
 
+function removeUnreachableAdvisoryPlanSuggestions(sections: MutableSection[]) {
+  const suggestion = sections.find((section) => section.owner === "advisory_plan_suggestion")
+  if (!suggestion || suggestion.coverage === "not_authorized") return
+  const available = new Set(
+    sections.flatMap((section) =>
+      section.entries.flatMap((item) => {
+        if (item.kind === "course") {
+          return [
+            ...(typeof item.locator.courseID === "string"
+              ? [canonicalFingerprint(toJsonValue({ type: "course", courseID: item.locator.courseID }))]
+              : []),
+            ...(typeof item.locator.courseID === "string" && typeof item.locator.workingViewID === "string"
+              ? [
+                  canonicalFingerprint(
+                    toJsonValue({
+                      type: "course_view",
+                      courseID: item.locator.courseID,
+                      viewID: item.locator.workingViewID,
+                    }),
+                  ),
+                ]
+              : []),
+          ]
+        }
+        if (item.kind === "goal" && typeof item.locator.goalID === "string") {
+          return [canonicalFingerprint(toJsonValue({ type: "goal", goalID: item.locator.goalID }))]
+        }
+        if (
+          item.kind === "material" &&
+          record(item.locator.map) &&
+          typeof item.locator.map.id === "string" &&
+          record(item.locator.selector) &&
+          typeof item.locator.selector.id === "string"
+        ) {
+          return [
+            canonicalFingerprint(
+              toJsonValue({
+                type: "material_selector",
+                mapID: item.locator.map.id,
+                selectorID: item.locator.selector.id,
+              }),
+            ),
+          ]
+        }
+        if (item.kind === "assignment" && typeof item.locator.assignmentID === "string") {
+          return [
+            canonicalFingerprint(toJsonValue({ type: "assignment", assignmentID: item.locator.assignmentID })),
+          ]
+        }
+        if (item.kind === "learner_state_judgment" && typeof item.locator.judgmentID === "string") {
+          return [
+            canonicalFingerprint(
+              toJsonValue({ type: "learner_state_judgment", judgmentID: item.locator.judgmentID }),
+            ),
+          ]
+        }
+        return []
+      }),
+    ),
+  )
+  const retained = suggestion.entries.filter((item) => {
+    if (item.kind !== "advisory_plan_suggestion") return false
+    if (item.locator.retrievalArm === "learner_home_fallback") return true
+    return Array.isArray(item.locator.retrievalKeys)
+      ? item.locator.retrievalKeys.some((key) => available.has(canonicalFingerprint(key)))
+      : false
+  })
+  if (retained.length === suggestion.entries.length) return
+  suggestion.entries = retained
+  if (typeof suggestion.countAtCut === "number") {
+    suggestion.coverage = suggestion.countAtCut === 0 ? "empty" : "truncated"
+    suggestion.omission = exactOmission(suggestion.countAtCut, suggestion.candidateCount, retained.length)
+  }
+}
+
 function removableEntry(sections: MutableSection[]) {
   const candidates = sections.flatMap((section, ownerOrder) =>
     section.entries.flatMap((_, index) => {
       if ((section.owner === "future_attention" || section.owner === "assignment") && section.countAtCut === 1) {
         return []
       }
-      if (section.entries.length <= (section.countAtCut === 0 ? 0 : 1) || index === 0) return []
+      if (
+        section.owner !== "advisory_plan_suggestion" &&
+        (section.entries.length <= (section.countAtCut === 0 ? 0 : 1) || index === 0)
+      )
+        return []
+      if (section.owner === "advisory_plan_suggestion" && section.entries.length === 0) return []
       return [
         {
           section,
           index,
           tier:
-            section.owner === "learner_state_judgment"
-              ? 6
+            section.owner === "advisory_plan_suggestion"
+              ? 7
+              : section.owner === "learner_state_judgment"
+                ? 6
               : section.owner === "assignment"
                 ? 5
               : section.owner === "future_attention"
@@ -978,7 +1203,12 @@ function exactOmission(
 
 function lastSemanticValue(sections: MutableSection[]) {
   for (const section of [...sections].reverse()) {
-    if (section.owner === "learner_response_evidence" || section.owner === "learner_state_judgment") continue
+    if (
+      section.owner === "learner_response_evidence" ||
+      section.owner === "learner_state_judgment" ||
+      section.owner === "advisory_plan_suggestion"
+    )
+      continue
     if (section.owner === "future_attention" && section.countAtCut === 1) continue
     if (section.owner === "assignment" && section.countAtCut === 1) continue
     for (let index = section.entries.length - 1; index >= 0; index--) {
@@ -1036,6 +1266,9 @@ function finalize(base: CutBase): Preparation {
 
 function renderValue(cut: Cut) {
   if (cut.policyVersion === POLICY_VERSION && cut.rendererVersion === RENDERER_VERSION) {
+    return renderGate21Value(cut)
+  }
+  if (cut.policyVersion === GATE20B_POLICY_VERSION && cut.rendererVersion === GATE20B_RENDERER_VERSION) {
     return renderGate20BValue(cut)
   }
   if (cut.policyVersion === GATE20A_POLICY_VERSION && cut.rendererVersion === GATE20A_RENDERER_VERSION) {
@@ -1045,6 +1278,32 @@ function renderValue(cut: Cut) {
     return renderGate20Value(cut)
   }
   return renderFrozenValue(cut)
+}
+
+function renderGate21Value(cut: Cut) {
+  const section = cut.sections.find((item) => item.owner === "advisory_plan_suggestion")!
+  const suggestion =
+    section.coverage === "not_authorized"
+      ? section.omission.type === "unknown" &&
+        section.omission.reason === "advisory_plan_suggestion_read_capability_withheld"
+        ? "advisoryPlanSuggestion: owner index withheld because its exact lazy-read capability is absent; identity and count are unknown. Advice is not a schedule, commitment, activity record, mastery claim, or selected plan."
+        : "advisoryPlanSuggestion: automatic Context withheld; identity and count are unknown. Advice is not a schedule, commitment, activity record, mastery claim, or selected plan."
+      : section.countAtCut === 0
+        ? undefined
+        : `advisoryPlanSuggestion: exactEligibleCount=${section.countAtCut}; omission=${canonicalJson(toJsonValue(section.omission))}. Entries contain exact authored summaries and named structural relations, not host paraphrases or a program verdict. Read the exact revision body lazily whenever detail can change the teaching move.`
+  const sections = `sections (canonical order is not priority): ${canonicalJson(toJsonValue(cut.sections))}`
+  return renderGate20BValue(cut).replace(
+    sections,
+    [
+      ...(suggestion ? [suggestion] : []),
+      ...(section.coverage === "complete" && section.countAtCut > 0
+        ? [
+            "Treat advisory suggestions as fuzzy, source-bearing, correctable Tutor advice. Near-term detail may be concrete while distant advice stays provisional. Time, silence, absence, Assignment completion, and elapsed suggestions imply neither activity nor that advice was followed; natural dialogue may revise or retire the exact head, and useful teaching may remain zero-write.",
+          ]
+        : []),
+      sections,
+    ].join("\n"),
+  )
 }
 
 function renderGate20BValue(cut: Cut) {
@@ -1255,9 +1514,11 @@ function validateCut(cut: Cut) {
           ? gate20Owners
           : cut.policyVersion === GATE20A_POLICY_VERSION && cut.rendererVersion === GATE20A_RENDERER_VERSION
             ? gate20AOwners
-            : cut.policyVersion === POLICY_VERSION && cut.rendererVersion === RENDERER_VERSION
-              ? currentOwners
-              : undefined
+            : cut.policyVersion === GATE20B_POLICY_VERSION && cut.rendererVersion === GATE20B_RENDERER_VERSION
+              ? gate20BOwners
+              : cut.policyVersion === POLICY_VERSION && cut.rendererVersion === RENDERER_VERSION
+                ? currentOwners
+                : undefined
   if (
     !record(cut) ||
     !keys(cut, [
@@ -1293,7 +1554,9 @@ function validateCut(cut: Cut) {
             ? GATE20_CAPABILITY_CATALOG_VERSION
             : cut.policyVersion === GATE20A_POLICY_VERSION
               ? GATE20A_CAPABILITY_CATALOG_VERSION
-              : CAPABILITY_CATALOG_VERSION,
+              : cut.policyVersion === GATE20B_POLICY_VERSION
+                ? GATE20B_CAPABILITY_CATALOG_VERSION
+                : CAPABILITY_CATALOG_VERSION,
     ) ||
     !Array.isArray(cut.sections) ||
     cut.sections.length !== expectedOwners.length ||
@@ -1358,6 +1621,7 @@ function capability(
     | typeof GATE19_CAPABILITY_CATALOG_VERSION
     | typeof GATE20_CAPABILITY_CATALOG_VERSION
     | typeof GATE20A_CAPABILITY_CATALOG_VERSION
+    | typeof GATE20B_CAPABILITY_CATALOG_VERSION
     | typeof CAPABILITY_CATALOG_VERSION,
 ): value is CapabilityBasis {
   const catalog =
@@ -1369,7 +1633,9 @@ function capability(
           ? GATE20_LAZY_READ_CAPABILITY_IDS
           : expectedCatalogVersion === GATE20A_CAPABILITY_CATALOG_VERSION
             ? GATE20A_LAZY_READ_CAPABILITY_IDS
-            : LAZY_READ_CAPABILITY_IDS
+            : expectedCatalogVersion === GATE20B_CAPABILITY_CATALOG_VERSION
+              ? GATE20B_LAZY_READ_CAPABILITY_IDS
+              : LAZY_READ_CAPABILITY_IDS
   if (
     !record(value) ||
     !keys(value, [
@@ -1524,6 +1790,8 @@ function sectionShape(value: unknown, owner: Section["owner"]): value is Section
   const learnerStateJudgmentAuthorized =
     record(value) && owner === "learner_state_judgment" && value.coverage !== "not_authorized"
   const learnerStateJudgmentPopulated = learnerStateJudgmentAuthorized && Number(value.countAtCut) > 0
+  const advisoryPlanSuggestionAuthorized =
+    record(value) && owner === "advisory_plan_suggestion" && value.coverage !== "not_authorized"
   return (
     record(value) &&
     keys(value, [
@@ -1535,7 +1803,7 @@ function sectionShape(value: unknown, owner: Section["owner"]): value is Section
       "omission",
       "entries",
       ...(assignmentAuthorized ? ["assignmentOwnerCut", "asOf", "mode"] : []),
-      ...(learnerStateJudgmentPopulated
+       ...(learnerStateJudgmentPopulated
         ? [
             "learnerStateJudgmentOwnerCut",
             "asOf",
@@ -1543,7 +1811,16 @@ function sectionShape(value: unknown, owner: Section["owner"]): value is Section
             "eligibleAnchorsFingerprint",
             "directoryCursor",
           ]
-        : []),
+         : []),
+       ...(advisoryPlanSuggestionAuthorized
+         ? [
+             "advisoryPlanSuggestionOwnerCut",
+             "asOf",
+             "eligibleKeyCount",
+             "eligibleKeysFingerprint",
+             "directoryCursor",
+           ]
+         : []),
     ]) &&
     value.owner === owner &&
     value.scope === sectionPolicy[owner].scope &&
@@ -1559,7 +1836,23 @@ function sectionShape(value: unknown, owner: Section["owner"]): value is Section
     sectionAlgebra(value as unknown as Section) &&
     value.entries.length <= sectionLimit(owner) &&
     (!assignmentAuthorized || assignmentSectionHeader(value)) &&
-    (!learnerStateJudgmentAuthorized || learnerStateJudgmentSectionHeader(value))
+    (!learnerStateJudgmentAuthorized || learnerStateJudgmentSectionHeader(value)) &&
+    (!advisoryPlanSuggestionAuthorized || advisoryPlanSuggestionSectionHeader(value))
+  )
+}
+
+function advisoryPlanSuggestionSectionHeader(value: Record<string, unknown>) {
+  return (
+    record(value.advisoryPlanSuggestionOwnerCut) &&
+    keys(value.advisoryPlanSuggestionOwnerCut, ["frontierSequence", "frontierTime", "headCount", "fingerprint"]) &&
+    integer(value.advisoryPlanSuggestionOwnerCut.frontierSequence) &&
+    integer(value.advisoryPlanSuggestionOwnerCut.frontierTime) &&
+    integer(value.advisoryPlanSuggestionOwnerCut.headCount) &&
+    digest(value.advisoryPlanSuggestionOwnerCut.fingerprint) &&
+    integer(value.asOf) &&
+    integer(value.eligibleKeyCount) &&
+    digest(value.eligibleKeysFingerprint) &&
+    nonempty(value.directoryCursor)
   )
 }
 
@@ -1608,6 +1901,10 @@ function sectionSelectionBasis(value: Record<string, unknown>, owner: Section["o
       record(value.omission) &&
       value.omission.reason === "learner_state_judgment_read_capability_withheld"
         ? learnerStateReadWithheldSelectionBasis
+        : owner === "advisory_plan_suggestion" &&
+            record(value.omission) &&
+            value.omission.reason === "advisory_plan_suggestion_read_capability_withheld"
+          ? advisoryPlanSuggestionReadWithheldSelectionBasis
         : withheldSelectionBasis)
     )
   }
@@ -1632,7 +1929,9 @@ function sectionSetSemantics(cut: Cut) {
     cut.sections.every(
       (section) =>
         section.coverage !== "not_authorized" ||
-        (cut.policyVersion === POLICY_VERSION && section.owner === "learner_state_judgment"),
+        ((cut.policyVersion === GATE20B_POLICY_VERSION || cut.policyVersion === POLICY_VERSION) &&
+          section.owner === "learner_state_judgment") ||
+        (cut.policyVersion === POLICY_VERSION && section.owner === "advisory_plan_suggestion"),
     ) &&
     (cut.policyVersion === LEGACY_POLICY_VERSION ||
       cut.policyVersion === GATE19_POLICY_VERSION ||
@@ -1641,7 +1940,142 @@ function sectionSetSemantics(cut: Cut) {
       cut.policyVersion === GATE19_POLICY_VERSION ||
       cut.policyVersion === GATE20_POLICY_VERSION ||
       assignmentSectionSemantics(cut)) &&
-    (cut.policyVersion !== POLICY_VERSION || learnerStateJudgmentSectionSemantics(cut))
+    ((cut.policyVersion !== GATE20B_POLICY_VERSION && cut.policyVersion !== POLICY_VERSION) ||
+      learnerStateJudgmentSectionSemantics(cut)) &&
+    (cut.policyVersion !== POLICY_VERSION || advisoryPlanSuggestionSectionSemantics(cut))
+  )
+}
+
+function advisoryPlanSuggestionSectionSemantics(cut: Cut) {
+  const section = cut.sections.find((item) => item.owner === "advisory_plan_suggestion")
+  if (!section) return false
+  const authorized = cut.capabilityBasis.effectiveLazyReadCapabilities.includes("advisory_plan_suggestion_read")
+  if (!authorized) {
+    return (
+      section.coverage === "not_authorized" &&
+      section.countAtCut === "unknown" &&
+      section.entries.length === 0 &&
+      section.omission.type === "unknown" &&
+      section.omission.reason === "advisory_plan_suggestion_read_capability_withheld"
+    )
+  }
+  if (
+    section.coverage === "not_authorized" ||
+    typeof section.countAtCut !== "number" ||
+    !section.advisoryPlanSuggestionOwnerCut ||
+    section.asOf === undefined ||
+    !section.directoryCursor ||
+    section.asOf !== cut.cutAsOf ||
+    section.advisoryPlanSuggestionOwnerCut.frontierTime > section.asOf ||
+    section.countAtCut > section.advisoryPlanSuggestionOwnerCut.headCount
+  ) {
+    return false
+  }
+  const directory = AdvisoryPlanSuggestion.inspectDirectoryCursor(section.directoryCursor)
+  if (
+    !directory ||
+    canonicalJson(toJsonValue(directory.ownerCut)) !==
+      canonicalJson(toJsonValue(section.advisoryPlanSuggestionOwnerCut)) ||
+    directory.asOf !== section.asOf ||
+    directory.eligibleKeyCount !== section.eligibleKeyCount ||
+    directory.eligibleKeysFingerprint !== section.eligibleKeysFingerprint
+  ) {
+    return false
+  }
+  if (section.countAtCut === 0) return section.coverage === "empty" && section.entries.length === 0
+  return (
+    section.entries.length <= Math.min(section.countAtCut, MAX_ADVISORY_PLAN_SUGGESTION_CONTEXT_ENTRIES) &&
+    section.entries.every(
+      (entry) =>
+        entry.kind === "advisory_plan_suggestion" &&
+        Number(entry.locator.frontierSequence) <= section.advisoryPlanSuggestionOwnerCut!.frontierSequence &&
+        Number(entry.locator.timeCommitted) <= section.asOf! &&
+        advisoryPlanSuggestionEntryRelations(entry, cut),
+    )
+  )
+}
+
+function advisoryPlanSuggestionEntryRelations(entry: Entry, cut: Cut) {
+  if (entry.kind !== "advisory_plan_suggestion" || entry.semantic?.state !== "value" || !record(entry.semantic.value)) {
+    return false
+  }
+  const semantic = entry.semantic.value
+  if (
+    semantic.suggestionID !== entry.locator.suggestionID ||
+    semantic.revisionID !== entry.locator.revisionID ||
+    semantic.version !== entry.locator.version ||
+    semantic.disposition !== entry.locator.disposition ||
+    semantic.authorClass !== entry.locator.authorClass ||
+    semantic.retrievalArm !== entry.locator.retrievalArm ||
+    semantic.currentRelation !== entry.locator.currentRelation ||
+    canonicalJson(toJsonValue(semantic.anchorKinds)) !== canonicalJson(toJsonValue(entry.locator.anchorKinds)) ||
+    canonicalJson(toJsonValue(semantic.alternativeTarget)) !== canonicalJson(toJsonValue(entry.locator.alternativeTarget))
+  ) {
+    return false
+  }
+  if (entry.locator.retrievalArm === "learner_home_fallback") return true
+  if (!Array.isArray(entry.locator.retrievalKeys) || entry.locator.retrievalKeys.length === 0) return false
+  const available = finalContextStableOwnerFingerprints(cut)
+  return entry.locator.retrievalKeys.some((key) => available.has(canonicalFingerprint(key)))
+}
+
+function finalContextStableOwnerFingerprints(cut: Cut) {
+  return new Set(
+    cut.sections.flatMap((section) =>
+      section.entries.flatMap((item) => {
+        if (item.kind === "course") {
+          return [
+            ...(typeof item.locator.courseID === "string"
+              ? [canonicalFingerprint(toJsonValue({ type: "course", courseID: item.locator.courseID }))]
+              : []),
+            ...(typeof item.locator.courseID === "string" && typeof item.locator.workingViewID === "string"
+              ? [
+                  canonicalFingerprint(
+                    toJsonValue({
+                      type: "course_view",
+                      courseID: item.locator.courseID,
+                      viewID: item.locator.workingViewID,
+                    }),
+                  ),
+                ]
+              : []),
+          ]
+        }
+        if (item.kind === "goal" && typeof item.locator.goalID === "string") {
+          return [canonicalFingerprint(toJsonValue({ type: "goal", goalID: item.locator.goalID }))]
+        }
+        if (
+          item.kind === "material" &&
+          record(item.locator.map) &&
+          typeof item.locator.map.id === "string" &&
+          record(item.locator.selector) &&
+          typeof item.locator.selector.id === "string"
+        ) {
+          return [
+            canonicalFingerprint(
+              toJsonValue({
+                type: "material_selector",
+                mapID: item.locator.map.id,
+                selectorID: item.locator.selector.id,
+              }),
+            ),
+          ]
+        }
+        if (item.kind === "assignment" && typeof item.locator.assignmentID === "string") {
+          return [
+            canonicalFingerprint(toJsonValue({ type: "assignment", assignmentID: item.locator.assignmentID })),
+          ]
+        }
+        if (item.kind === "learner_state_judgment" && typeof item.locator.judgmentID === "string") {
+          return [
+            canonicalFingerprint(
+              toJsonValue({ type: "learner_state_judgment", judgmentID: item.locator.judgmentID }),
+            ),
+          ]
+        }
+        return []
+      }),
+    ),
   )
 }
 
@@ -1795,6 +2229,9 @@ function capabilitySectionRelations(cut: Cut) {
       if (entry.kind === "learner_state_judgment") {
         return entry.locator.lazyReadAvailable === capabilities.has("learner_state_judgment_read")
       }
+      if (entry.kind === "advisory_plan_suggestion") {
+        return entry.locator.lazyReadAvailable === capabilities.has("advisory_plan_suggestion_read")
+      }
       return entry.locator.lazyReadAvailable === capabilities.has("learning_interaction_read")
     }),
   )
@@ -1839,6 +2276,7 @@ function sectionLimit(owner: Section["owner"]) {
   if (owner === "learner_navigation") return MAX_CANDIDATES_PER_FAMILY + 1
   if (owner === "assignment") return MAX_ASSIGNMENT_CONTEXT_ENTRIES
   if (owner === "learner_state_judgment") return MAX_LEARNER_STATE_JUDGMENT_CONTEXT_ENTRIES
+  if (owner === "advisory_plan_suggestion") return MAX_ADVISORY_PLAN_SUGGESTION_CONTEXT_ENTRIES
   return MAX_CANDIDATES_PER_FAMILY
 }
 
@@ -1857,6 +2295,7 @@ function entryShape(value: unknown): value is Entry {
       "future_attention",
       "assignment",
       "learner_state_judgment",
+      "advisory_plan_suggestion",
     ].includes(String(value.kind)) &&
     record(value.locator) &&
     json(value.locator) &&
@@ -1866,7 +2305,8 @@ function entryShape(value: unknown): value is Entry {
     learnerResponseEvidenceSemantic(value.kind as Entry["kind"], value.semantic) &&
     futureAttentionSemantic(value.kind as Entry["kind"], value.semantic) &&
     assignmentSemantic(value.kind as Entry["kind"], value.semantic) &&
-    learnerStateJudgmentSemantic(value.kind as Entry["kind"], value.semantic)
+    learnerStateJudgmentSemantic(value.kind as Entry["kind"], value.semantic) &&
+    advisoryPlanSuggestionSemantic(value.kind as Entry["kind"], value.semantic, value.locator)
   )
 }
 
@@ -1879,6 +2319,7 @@ function locatorShape(kind: Entry["kind"], value: Record<string, unknown>) {
   if (kind === "future_attention") return futureAttentionLocator(value)
   if (kind === "assignment") return assignmentLocator(value)
   if (kind === "learner_state_judgment") return learnerStateJudgmentLocator(value)
+  if (kind === "advisory_plan_suggestion") return advisoryPlanSuggestionLocator(value)
   return interactionLocator(value)
 }
 
@@ -1953,6 +2394,156 @@ function learnerStateJudgmentLocator(value: Record<string, unknown>) {
     ) &&
     value.wholeJudgmentBasis === true &&
     value.lazyReadAvailable === true
+  )
+}
+
+function advisoryPlanSuggestionLocator(value: Record<string, unknown>) {
+  if (
+    !keys(value, [
+      "suggestionID",
+      "timeCreated",
+      "revisionID",
+      "version",
+      "disposition",
+      "operation",
+      "operationOrdinal",
+      "timeCommitted",
+      "frontierSequence",
+      "authorClass",
+      "retrievalArm",
+      "anchorKinds",
+      "retrievalKeys",
+      "retrievalBindings",
+      "basisBindings",
+      "alternativeToRevision",
+      "alternativeTarget",
+      "currentRelation",
+      "lazyReadAvailable",
+    ]) ||
+    !Schema.is(AdvisoryPlanSuggestion.SuggestionID)(value.suggestionID) ||
+    !Schema.is(AdvisoryPlanSuggestion.RevisionID)(value.revisionID) ||
+    !integer(value.timeCreated) ||
+    !integer(value.version) ||
+    Number(value.version) < 1 ||
+    value.disposition !== "active" ||
+    !["create", "alternative", "revise", "retire", "restore"].includes(String(value.operation)) ||
+    !integer(value.operationOrdinal) ||
+    Number(value.operationOrdinal) < 0 ||
+    Number(value.operationOrdinal) >= AdvisoryPlanSuggestion.MAX_INTENTS ||
+    !integer(value.timeCommitted) ||
+    !integer(value.frontierSequence) ||
+    !["responsive_tutor_proposal", "proactive_tutor_proposal", "learner_revision", "tutor_revision"].includes(
+      String(value.authorClass),
+    ) ||
+    !["anchored", "learner_home_fallback"].includes(String(value.retrievalArm)) ||
+    !Array.isArray(value.anchorKinds) ||
+    value.anchorKinds.length > AdvisoryPlanSuggestion.MAX_RETRIEVAL_ANCHORS ||
+    new Set(value.anchorKinds).size !== value.anchorKinds.length ||
+    canonicalJson(toJsonValue(value.anchorKinds)) !== canonicalJson(toJsonValue([...value.anchorKinds].toSorted())) ||
+    !value.anchorKinds.every((kind) =>
+      ["course", "course_view", "goal", "assignment", "material_selector", "learner_state_judgment"].includes(
+        String(kind),
+      ),
+    ) ||
+    !Array.isArray(value.retrievalKeys) ||
+    value.retrievalKeys.length > AdvisoryPlanSuggestion.MAX_RETRIEVAL_ANCHORS ||
+    !value.retrievalKeys.every(advisoryPlanSuggestionStableOwnerKey) ||
+    new Set(value.retrievalKeys.map((key) => canonicalJson(toJsonValue(key)))).size !== value.retrievalKeys.length ||
+    !Array.isArray(value.retrievalBindings) ||
+    value.retrievalBindings.length !== value.retrievalKeys.length ||
+    !value.retrievalBindings.every(
+      (binding, ordinal) =>
+        record(binding) &&
+        keys(binding, ["stableOwnerKey", "exactBoundRef", "refFingerprint"]) &&
+        AdvisoryPlanSuggestion.isRetrievalAnchorIntent({
+          stableOwnerKey: binding.stableOwnerKey,
+          exactBoundRef: binding.exactBoundRef,
+        }) &&
+        /^[0-9a-f]{64}$/.test(String(binding.refFingerprint)) &&
+        binding.refFingerprint === canonicalFingerprint(toJsonValue(binding.exactBoundRef)) &&
+        canonicalJson(toJsonValue(binding.stableOwnerKey)) ===
+          canonicalJson(toJsonValue((value.retrievalKeys as unknown[])[ordinal])),
+    ) ||
+    !Array.isArray(value.basisBindings) ||
+    value.basisBindings.length > AdvisoryPlanSuggestion.MAX_BASIS_REFS ||
+    !value.basisBindings.every(
+      (binding) =>
+        record(binding) &&
+        keys(binding, ["ref", "refFingerprint"]) &&
+        AdvisoryPlanSuggestion.isExactBasisRef(binding.ref) &&
+        /^[0-9a-f]{64}$/.test(String(binding.refFingerprint)) &&
+        binding.refFingerprint === canonicalFingerprint(toJsonValue(binding.ref)),
+    ) ||
+    value.currentRelation !== "current" ||
+    value.lazyReadAvailable !== true
+  ) {
+    return false
+  }
+  const expectedKinds = [
+    ...new Set(value.retrievalKeys.map((key) => String((key as Record<string, unknown>).type))),
+  ].toSorted()
+  if (
+    (value.retrievalArm === "learner_home_fallback" &&
+      (value.retrievalKeys.length !== 0 || value.anchorKinds.length !== 0)) ||
+    (value.retrievalArm === "anchored" &&
+      (value.retrievalKeys.length === 0 ||
+        canonicalJson(toJsonValue(expectedKinds)) !== canonicalJson(toJsonValue(value.anchorKinds))))
+  ) {
+    return false
+  }
+  if (value.alternativeToRevision === null) return value.alternativeTarget === null
+  return (
+    advisoryPlanSuggestionRevisionRef(value.alternativeToRevision) &&
+    record(value.alternativeTarget) &&
+    record(value.alternativeTarget.target) &&
+    canonicalJson(toJsonValue(value.alternativeTarget.target)) === canonicalJson(toJsonValue(value.alternativeToRevision)) &&
+    ["same_head", "head_advanced", "source_unavailable"].includes(String(value.alternativeTarget.headRelation)) &&
+    ["active", "retired", "source_unavailable"].includes(String(value.alternativeTarget.lifecycle))
+  )
+}
+
+function advisoryPlanSuggestionRevisionRef(value: unknown) {
+  return (
+    record(value) &&
+    keys(value, ["suggestionID", "revisionID", "version"]) &&
+    Schema.is(AdvisoryPlanSuggestion.SuggestionID)(value.suggestionID) &&
+    Schema.is(AdvisoryPlanSuggestion.RevisionID)(value.revisionID) &&
+    integer(value.version) &&
+    Number(value.version) >= 1
+  )
+}
+
+function advisoryPlanSuggestionStableOwnerKey(value: unknown) {
+  if (!record(value) || typeof value.type !== "string") return false
+  if (value.type === "course") {
+    return keys(value, ["type", "courseID"]) && Schema.is(Course.CourseID)(value.courseID)
+  }
+  if (value.type === "course_view") {
+    return (
+      keys(value, ["type", "courseID", "viewID"]) &&
+      Schema.is(Course.CourseID)(value.courseID) &&
+      Schema.is(Course.ViewID)(value.viewID)
+    )
+  }
+  if (value.type === "goal") {
+    return keys(value, ["type", "goalID"]) && typeof value.goalID === "string" && value.goalID.length > 0
+  }
+  if (value.type === "assignment") {
+    return keys(value, ["type", "assignmentID"]) && Schema.is(Assignment.AssignmentID)(value.assignmentID)
+  }
+  if (value.type === "material_selector") {
+    return (
+      keys(value, ["type", "mapID", "selectorID"]) &&
+      typeof value.mapID === "string" &&
+      value.mapID.length > 0 &&
+      typeof value.selectorID === "string" &&
+      value.selectorID.length > 0
+    )
+  }
+  return (
+    value.type === "learner_state_judgment" &&
+    keys(value, ["type", "judgmentID"]) &&
+    Schema.is(LearnerStateJudgment.JudgmentID)(value.judgmentID)
   )
 }
 
@@ -2817,6 +3408,103 @@ function learnerStateJudgmentSemantic(kind: Entry["kind"], value: unknown) {
       "absence_or_age_implies_no_state_change",
       "directory_order_is_not_priority_or_tutor_move",
     ].every((item, index) => nonImplications[index] === item)
+  )
+}
+
+function advisoryPlanSuggestionSemantic(kind: Entry["kind"], value: unknown, locator: Record<string, unknown>) {
+  if (kind !== "advisory_plan_suggestion") return true
+  if (!record(value)) return false
+  if (value.state === "locator_only") return false
+  if (value.state !== "value" || !record(value.value)) return false
+  const semantic = value.value
+  return (
+    keys(semantic, [
+      "suggestionID",
+      "revisionID",
+      "version",
+      "disposition",
+      "purpose",
+      "learnerVisibleScope",
+      "directorySummary",
+      "authorClass",
+      "retrievalArm",
+      "anchorKinds",
+      "currentRelation",
+      "retrievalRelations",
+      "basisRelations",
+      "alternativeTarget",
+      "detail",
+      "nonImplications",
+    ]) &&
+    Schema.is(AdvisoryPlanSuggestion.SuggestionID)(semantic.suggestionID) &&
+    semantic.suggestionID === locator.suggestionID &&
+    Schema.is(AdvisoryPlanSuggestion.RevisionID)(semantic.revisionID) &&
+    semantic.revisionID === locator.revisionID &&
+    integer(semantic.version) &&
+    Number(semantic.version) > 0 &&
+    semantic.version === locator.version &&
+    semantic.disposition === "active" &&
+    semantic.disposition === locator.disposition &&
+    typeof semantic.purpose === "string" &&
+    utf8Bytes(semantic.purpose) <= AdvisoryPlanSuggestion.MAX_PURPOSE_BYTES &&
+    typeof semantic.learnerVisibleScope === "string" &&
+    utf8Bytes(semantic.learnerVisibleScope) <= AdvisoryPlanSuggestion.MAX_LEARNER_VISIBLE_SCOPE_BYTES &&
+    typeof semantic.directorySummary === "string" &&
+    utf8Bytes(semantic.directorySummary) <= AdvisoryPlanSuggestion.MAX_DIRECTORY_SUMMARY_BYTES &&
+    ["responsive_tutor_proposal", "proactive_tutor_proposal", "learner_revision", "tutor_revision"].includes(
+      String(semantic.authorClass),
+    ) &&
+    semantic.authorClass === locator.authorClass &&
+    ["anchored", "learner_home_fallback"].includes(String(semantic.retrievalArm)) &&
+    semantic.retrievalArm === locator.retrievalArm &&
+    Array.isArray(semantic.anchorKinds) &&
+    semantic.anchorKinds.length <= AdvisoryPlanSuggestion.MAX_RETRIEVAL_ANCHORS &&
+    canonicalJson(toJsonValue(semantic.anchorKinds)) === canonicalJson(toJsonValue(locator.anchorKinds)) &&
+    semantic.currentRelation === "current" &&
+    semantic.currentRelation === locator.currentRelation &&
+    Array.isArray(semantic.retrievalRelations) &&
+    Array.isArray(locator.retrievalBindings) &&
+    semantic.retrievalRelations.length === locator.retrievalBindings.length &&
+    semantic.retrievalRelations.every((relation, ordinal) => advisoryPlanSuggestionRelation(relation, ordinal)) &&
+    Array.isArray(semantic.basisRelations) &&
+    Array.isArray(locator.basisBindings) &&
+    semantic.basisRelations.length === locator.basisBindings.length &&
+    semantic.basisRelations.every((relation, ordinal) => advisoryPlanSuggestionRelation(relation, ordinal)) &&
+    canonicalJson(toJsonValue(semantic.alternativeTarget)) === canonicalJson(toJsonValue(locator.alternativeTarget)) &&
+    semantic.detail === "body_basis_and_history_require_exact_lazy_read" &&
+    Array.isArray(semantic.nonImplications) &&
+    [
+      "advice_not_schedule_or_commitment",
+      "not_activity_adherence_progress_or_mastery",
+      "clock_silence_and_absence_imply_no_following",
+      "directory_order_is_not_priority_or_selected_plan",
+    ].every((item, index) => (semantic.nonImplications as unknown[])[index] === item)
+  )
+}
+
+function advisoryPlanSuggestionRelation(value: unknown, ordinal: number) {
+  if (!record(value)) return false
+  const optional = [
+    ...(value.currentRevision === undefined ? [] : ["currentRevision"]),
+    ...(value.targetRelationAtCut === undefined ? [] : ["targetRelationAtCut"]),
+    ...(value.dueRelationAtCut === undefined ? [] : ["dueRelationAtCut"]),
+    ...(value.expiryRelationAtCut === undefined ? [] : ["expiryRelationAtCut"]),
+  ]
+  return (
+    keys(value, ["ordinal", "state", ...optional]) &&
+    value.ordinal === ordinal &&
+    ["current", "changed", "source_unavailable"].includes(String(value.state)) &&
+    (value.currentRevision === undefined ||
+      (record(value.currentRevision) &&
+        keys(value.currentRevision, ["revisionID", "version"]) &&
+        nonempty(value.currentRevision.revisionID) &&
+        integer(value.currentRevision.version) &&
+        Number(value.currentRevision.version) >= 0)) &&
+    (value.targetRelationAtCut === undefined ||
+      ["before", "reached", "after", "on", "unknown"].includes(String(value.targetRelationAtCut))) &&
+    (value.dueRelationAtCut === undefined || (record(value.dueRelationAtCut) && json(value.dueRelationAtCut))) &&
+    (value.expiryRelationAtCut === undefined ||
+      (record(value.expiryRelationAtCut) && json(value.expiryRelationAtCut)))
   )
 }
 

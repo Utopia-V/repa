@@ -1073,6 +1073,63 @@ const LearnerStateJudgmentCapabilityProposal = Schema.Struct({
   scope: LearnerStateJudgmentScope,
 })
 
+const AdvisoryPlanSuggestionRevisionRef = Schema.Struct({
+  suggestionID: StringValue,
+  revisionID: StringValue,
+  version: PositiveVersion,
+})
+const AdvisoryPlanSuggestionExpectedHead = Schema.Struct({
+  suggestionID: StringValue,
+  revisionID: StringValue,
+  version: PositiveVersion,
+  ownerCutFingerprint: StringValue,
+})
+const AdvisoryPlanSuggestionMaterialized = Schema.Struct({
+  outcome: Schema.Literals(["changed", "no_change"]),
+  suggestionID: StringValue,
+  revisionID: StringValue,
+  effectID: StringValue,
+  previousRevisionID: optional(StringValue),
+  version: PositiveVersion,
+  operation: Schema.Literals(["create", "alternative", "revise", "retire", "restore"]),
+  operationOrdinal: PositiveVersion,
+  createOrdinal: optional(PositiveVersion),
+  disposition: Schema.Literals(["active", "retired"]),
+  alternativeToRevision: optional(AdvisoryPlanSuggestionRevisionRef),
+  materializedSnapshot: Schema.Unknown,
+  learnerVisibleScope: StringValue,
+  retrievalScope: Schema.Unknown,
+  purpose: StringValue,
+  directorySummary: StringValue,
+  body: StringValue,
+  exactBasisRefs: Schema.Array(Schema.Unknown),
+  exactBasisBindings: Schema.Array(Schema.Unknown),
+  assumptionsAndUncertainty: optional(StringValue),
+  authorAndCause: Schema.Unknown,
+})
+const AdvisoryPlanSuggestionScope = Schema.Struct({
+  command: Schema.Unknown,
+  materialized: Schema.Array(AdvisoryPlanSuggestionMaterialized),
+  operationCount: PositiveVersion,
+  causeType: Schema.Literals([
+    "responsive_tutor_proposal",
+    "proactive_tutor_proposal",
+    "learner_revision",
+    "tutor_revision",
+  ]),
+  targetedSuggestionIDs: Schema.Array(StringValue),
+  expectedHeads: Schema.Array(AdvisoryPlanSuggestionExpectedHead),
+  alternativeTargets: Schema.Array(AdvisoryPlanSuggestionRevisionRef),
+  nonImplications: Schema.Array(StringValue),
+})
+const AdvisoryPlanSuggestionCapabilityProposal = Schema.Struct({
+  kind: Schema.Literal("advisory_plan_suggestion_capability"),
+  ...ProposalBinding,
+  commandFingerprint: StringValue,
+  issuance: Schema.Literal("root"),
+  scope: AdvisoryPlanSuggestionScope,
+})
+
 export const ProposalBasis = Schema.Union([
   AcceptCourseProposal,
   RepresentationProposal,
@@ -1090,6 +1147,7 @@ export const ProposalBasis = Schema.Union([
   FutureAttentionCapabilityProposal,
   AssignmentCapabilityProposal,
   LearnerStateJudgmentCapabilityProposal,
+  AdvisoryPlanSuggestionCapabilityProposal,
 ]).annotate({
   discriminator: "kind",
   identifier: "SemanticProposalBasisV1",
@@ -1610,6 +1668,45 @@ const LearnerStateJudgmentResult = Schema.Struct({
   effect: optional(LearnerStateJudgmentEffect),
 })
 
+const AdvisoryPlanSuggestionIntentResult = Schema.Struct({
+  outcome: Schema.Literals(["changed", "no_change"]),
+  suggestionID: StringValue,
+  revisionID: StringValue,
+  version: PositiveVersion,
+  operation: Schema.Literals(["create", "alternative", "revise", "retire", "restore"]),
+  operationOrdinal: PositiveVersion,
+  disposition: Schema.Literals(["active", "retired"]),
+  alternativeToRevision: optional(AdvisoryPlanSuggestionRevisionRef),
+})
+const AdvisoryPlanSuggestionEffect = Schema.Struct({
+  existingOutcome: optional(Schema.Literals(["applied", "no_change"])),
+  noChangeReason: optional(Schema.Literals(["materialized_no_change", "same_no_change"])),
+  effectID: optional(StringValue),
+  receiptID: optional(StringValue),
+  intentResults: Schema.Array(AdvisoryPlanSuggestionIntentResult),
+})
+const AdvisoryPlanSuggestionResult = Schema.Struct({
+  kind: Schema.Literal("advisory_plan_suggestion_result"),
+  ...ResultCommon,
+  disposition: Schema.Literals(["candidate_v1", "semantic_terminal_v1", "physical_no_effect"]),
+  semanticOutcome: optional(Schema.Literals(["same_effect", "same_no_change", "semantic_conflict"])),
+  issuance: optional(Schema.Literal("root")),
+  capabilityOutcome: optional(
+    Schema.Literals([
+      "not_evaluated",
+      "policy_allow",
+      "policy_deny",
+      "prompted_abort",
+      "prompted_allow",
+      "prompted_deny",
+      "prompted_correct",
+      "prompted_cancel",
+    ]),
+  ),
+  permissionRequestID: optional(StringValue),
+  effect: optional(AdvisoryPlanSuggestionEffect),
+})
+
 const ContentWriteResult = Schema.Struct({
   kind: Schema.Literal("content_write_result"),
   ...ResultCommon,
@@ -1642,6 +1739,7 @@ export const ResultBasis = Schema.Union([
   FutureAttentionResult,
   AssignmentResult,
   LearnerStateJudgmentResult,
+  AdvisoryPlanSuggestionResult,
   ContentWriteResult,
 ]).annotate({
   discriminator: "kind",

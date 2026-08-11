@@ -1,5 +1,6 @@
 import { Course } from "@opencode-ai/core/course"
 import { ContentRoot } from "@opencode-ai/core/content-root"
+import { AdvisoryPlanSuggestion } from "@opencode-ai/core/advisory-plan-suggestion"
 import { admitModelWithLearningContext } from "@test/fixture/model-admission"
 import {
   CourseSelectionAcceptanceCommitSealTable,
@@ -23,6 +24,12 @@ import {
   LearnerStateJudgmentEffectTable,
   LearnerStateJudgmentRevisionTable,
 } from "@opencode-ai/core/learner-state-judgment/sql"
+import {
+  AdvisoryPlanSuggestionCapabilityIssueTable,
+  AdvisoryPlanSuggestionCapabilitySettlementTable,
+  AdvisoryPlanSuggestionEffectTable,
+  AdvisoryPlanSuggestionRevisionTable,
+} from "@opencode-ai/core/advisory-plan-suggestion/sql"
 import { LearningCommand } from "@opencode-ai/core/learning-command"
 import { LearnerNavigation } from "@opencode-ai/core/learner-navigation"
 import {
@@ -89,6 +96,7 @@ import { Session } from "@/session/session"
 import { recoverStartup } from "@/session/turn-recovery"
 import { AssignmentReadTool } from "@/tool/assignment-read"
 import { LearnerStateJudgmentReadTool } from "@/tool/learner-state-judgment-read"
+import { AdvisoryPlanSuggestionReadTool } from "@/tool/advisory-plan-suggestion-read"
 import { Truncate } from "@/tool/truncate"
 import { expect, test } from "bun:test"
 import { eq, sql } from "drizzle-orm"
@@ -1395,6 +1403,390 @@ it.effect("runs learner-state judgment allow, prompt, denial, and physical repla
     expect(yield* db.select().from(LearnerStateJudgmentRevisionTable).all()).toHaveLength(2)
     expect(yield* db.select().from(LearnerStateJudgmentEffectTable).all()).toHaveLength(2)
     expect(permissionRequests).toHaveLength(3)
+  }),
+)
+
+it.effect("runs advisory suggestions through exact allow, prompt, denial, replay, and lazy-read carriers", () =>
+  Effect.gen(function* () {
+    permissionRequests.length = 0
+    const db = (yield* Database.Service).db
+    const runtime = yield* LearningCommandRuntime.Service
+
+    const source = "Keep examples concrete first, then let me try one guided continuation before any timed work."
+    const input = advisoryPlanSuggestionCreateInput(source, "Examples first, then one guided continuation")
+    const allowed = yield* seedInteraction(
+      db,
+      "advisory-plan-root-allow",
+      input,
+      LearningCommand.UPDATE_ADVISORY_PLAN_SUGGESTION_CAPABILITY,
+      { text: source, timeZone: "UTC" },
+    )
+    yield* runtime.prepareCommand(
+      LearningCommand.UPDATE_ADVISORY_PLAN_SUGGESTION_CAPABILITY,
+      input,
+      allowed.registration,
+    )
+    const result = yield* runtime.executeCommand(
+      LearningCommand.UPDATE_ADVISORY_PLAN_SUGGESTION_CAPABILITY,
+      input,
+      context(
+        allowed.registration,
+        "allow",
+        LearningCommand.UPDATE_ADVISORY_PLAN_SUGGESTION_CAPABILITY,
+        [],
+        AdvisoryPlanSuggestion.PERMISSION_PATTERN,
+      ),
+    )
+    expect(permissionRequests).toHaveLength(1)
+    const request = permissionRequests[0]!
+    expect(
+      SemanticPresentation.readProposal({ ...request, id: request.id ?? PermissionV1.ID.ascending() }, true),
+    ).toMatchObject({
+      type: "valid",
+      value: {
+        capability: LearningCommand.UPDATE_ADVISORY_PLAN_SUGGESTION_CAPABILITY,
+        approval: "policy",
+        facts: expect.arrayContaining([
+          { label: "Suggestion action 1", value: expect.stringContaining("create") },
+          { label: "Advisory body", value: expect.stringContaining("Examples first") },
+        ]),
+      },
+    })
+    expect(result.metadata).toMatchObject({ outcome: "applied", durablySettled: true })
+    const output = JSON.parse(result.output)
+    expect(output).toMatchObject({
+      disposition: "candidate_v1",
+      capabilityOutcome: "policy_allow",
+      settlement: {
+        outcome: "applied",
+        advisoryPlanSuggestionKind: "change_set",
+        intentResults: [{ outcome: "changed", operation: "create", operationOrdinal: 0, version: 1 }],
+      },
+      nonImplications: [
+        "not_a_learner_commitment",
+        "not_activity_or_adherence_evidence",
+        "not_mastery_or_progress_certification",
+        "not_a_deterministic_schedule_or_priority",
+      ],
+    })
+    expect(yield* exactPartResult(db, allowed.registration.partID)).toEqual(result)
+    expect(yield* db.select().from(AdvisoryPlanSuggestionEffectTable).all()).toHaveLength(1)
+    expect(yield* db.select().from(AdvisoryPlanSuggestionRevisionTable).all()).toHaveLength(1)
+
+    const replay = yield* runtime.executeCommand(
+      LearningCommand.UPDATE_ADVISORY_PLAN_SUGGESTION_CAPABILITY,
+      input,
+      context(
+        allowed.registration,
+        "deny",
+        LearningCommand.UPDATE_ADVISORY_PLAN_SUGGESTION_CAPABILITY,
+        [],
+        AdvisoryPlanSuggestion.PERMISSION_PATTERN,
+      ),
+    )
+    expect(replay).toEqual(result)
+    expect(permissionRequests).toHaveLength(1)
+
+    const promptedSource = "For the next sessions, start with a visual example before formal notation."
+    const promptedInput = advisoryPlanSuggestionCreateInput(promptedSource, "Visual example before notation")
+    const prompted = yield* seedInteraction(
+      db,
+      "advisory-plan-prompt-allow",
+      promptedInput,
+      LearningCommand.UPDATE_ADVISORY_PLAN_SUGGESTION_CAPABILITY,
+      { text: promptedSource, timeZone: "UTC" },
+    )
+    yield* runtime.prepareCommand(
+      LearningCommand.UPDATE_ADVISORY_PLAN_SUGGESTION_CAPABILITY,
+      promptedInput,
+      prompted.registration,
+    )
+    const promptedResult = yield* runtime.executeCommand(
+      LearningCommand.UPDATE_ADVISORY_PLAN_SUGGESTION_CAPABILITY,
+      promptedInput,
+      context(
+        prompted.registration,
+        "ask",
+        LearningCommand.UPDATE_ADVISORY_PLAN_SUGGESTION_CAPABILITY,
+        [],
+        AdvisoryPlanSuggestion.PERMISSION_PATTERN,
+      ),
+    )
+    expect(JSON.parse(promptedResult.output)).toMatchObject({
+      capabilityOutcome: "prompted_allow",
+      settlement: { outcome: "applied", advisoryPlanSuggestionKind: "change_set" },
+    })
+
+    const deniedSource = "Keep a permanent schedule for every topic, but do not store that advice."
+    const deniedInput = advisoryPlanSuggestionCreateInput(deniedSource, "A deliberately rejected rigid schedule")
+    const denied = yield* seedInteraction(
+      db,
+      "advisory-plan-policy-deny",
+      deniedInput,
+      LearningCommand.UPDATE_ADVISORY_PLAN_SUGGESTION_CAPABILITY,
+      { text: deniedSource, timeZone: "UTC" },
+    )
+    yield* runtime.prepareCommand(
+      LearningCommand.UPDATE_ADVISORY_PLAN_SUGGESTION_CAPABILITY,
+      deniedInput,
+      denied.registration,
+    )
+    const deniedResult = yield* runtime.executeCommand(
+      LearningCommand.UPDATE_ADVISORY_PLAN_SUGGESTION_CAPABILITY,
+      deniedInput,
+      context(
+        denied.registration,
+        "deny",
+        LearningCommand.UPDATE_ADVISORY_PLAN_SUGGESTION_CAPABILITY,
+        [],
+        AdvisoryPlanSuggestion.PERMISSION_PATTERN,
+      ),
+    )
+    expect(deniedResult.metadata).toMatchObject({
+      outcome: "error",
+      code: "permission_rejected",
+      durablySettled: true,
+    })
+    expect(JSON.parse(deniedResult.output)).toMatchObject({
+      capabilityOutcome: "policy_deny",
+      settlement: { outcome: "error", code: "permission_rejected" },
+    })
+    expect(yield* db.select().from(AdvisoryPlanSuggestionRevisionTable).all()).toHaveLength(2)
+    expect(yield* db.select().from(AdvisoryPlanSuggestionEffectTable).all()).toHaveLength(2)
+
+    const firstIntent = output.settlement.intentResults[0] as {
+      suggestionID: AdvisoryPlanSuggestion.SuggestionID
+      revisionID: AdvisoryPlanSuggestion.RevisionID
+    }
+    const toolInfo = yield* AdvisoryPlanSuggestionReadTool.pipe(
+      Effect.provideService(
+        AdvisoryPlanSuggestion.ReadService,
+        AdvisoryPlanSuggestion.ReadService.of({
+          read: (query, options) => db.transaction((tx) => AdvisoryPlanSuggestion.read(tx, query, options)),
+        }),
+      ),
+      Effect.provideService(
+        Truncate.Service,
+        Truncate.Service.of({
+          cleanup: () => Effect.void,
+          write: () => Effect.succeed("unused"),
+          output: (text) => Effect.succeed({ content: text, truncated: false }),
+          limits: () => Effect.succeed({ maxLines: Truncate.MAX_LINES, maxBytes: Truncate.MAX_BYTES }),
+        }),
+      ),
+      Effect.provideService(
+        Agent.Service,
+        Agent.Service.of({
+          get: () => Effect.succeed(undefined),
+          list: () => Effect.succeed([]),
+          identifiers: () => Effect.succeed([]),
+          defaultInfo: () => Effect.die("Advisory read test does not request a default Agent"),
+          defaultAgent: () => Effect.die("Advisory read test does not request a default Agent"),
+          generate: () => Effect.die("Advisory read test does not generate an Agent"),
+        }),
+      ),
+    )
+    const query = yield* toolInfo.init()
+    const read = JSON.parse(
+      (yield* query.execute(
+        {
+          action: "revision",
+          suggestionID: firstIntent.suggestionID,
+          revisionID: firstIntent.revisionID,
+        },
+        {
+          sessionID: allowed.sessionID,
+          messageID: allowed.registration.assistantMessageID,
+          agent: "advisory-plan-read-test",
+          abort: new AbortController().signal,
+          messages: [],
+          metadata: () => Effect.void,
+          ask: () => Effect.void,
+        },
+      )).output,
+    )
+    expect(read.page.items[0]).toMatchObject({
+      id: firstIntent.revisionID,
+      snapshot: { body: expect.stringContaining("Examples first") },
+    })
+  }),
+)
+
+it.effect("settles a live advisory-suggestion permission abort without creating advice", () =>
+  Effect.gen(function* () {
+    permissionRequests.length = 0
+    permissionWaits.length = 0
+    const db = (yield* Database.Service).db
+    const runtime = yield* LearningCommandRuntime.Service
+    const source = "Ask before retaining an examples-first suggestion, and stop if I interrupt."
+    const input = advisoryPlanSuggestionCreateInput(source, "Examples first, subject to learner correction")
+    const interaction = yield* seedInteraction(
+      db,
+      "advisory-plan-live-permission-abort",
+      input,
+      LearningCommand.UPDATE_ADVISORY_PLAN_SUGGESTION_CAPABILITY,
+      { text: source, timeZone: "UTC" },
+    )
+    yield* runtime.prepareCommand(
+      LearningCommand.UPDATE_ADVISORY_PLAN_SUGGESTION_CAPABILITY,
+      input,
+      interaction.registration,
+    )
+
+    const entered = yield* Deferred.make<void>()
+    const release = yield* Deferred.make<void>()
+    permissionWaits.push({ entered, release })
+    const controller = new AbortController()
+    const execution = yield* runtime
+      .executeCommand(LearningCommand.UPDATE_ADVISORY_PLAN_SUGGESTION_CAPABILITY, input, {
+        ...context(
+          interaction.registration,
+          "ask",
+          LearningCommand.UPDATE_ADVISORY_PLAN_SUGGESTION_CAPABILITY,
+          [],
+          AdvisoryPlanSuggestion.PERMISSION_PATTERN,
+        ),
+        abort: controller.signal,
+      })
+      .pipe(Effect.forkChild)
+    yield* Deferred.await(entered)
+    const issued = yield* db
+      .select()
+      .from(AdvisoryPlanSuggestionCapabilityIssueTable)
+      .where(eq(AdvisoryPlanSuggestionCapabilityIssueTable.invocation_part_id, interaction.registration.partID))
+      .get()
+    expect(issued?.permission_request_id).toBeString()
+    expect(yield* db.select().from(AdvisoryPlanSuggestionCapabilitySettlementTable).all()).toEqual([])
+    expect(yield* db.select().from(AdvisoryPlanSuggestionEffectTable).all()).toEqual([])
+
+    controller.abort()
+    const result = yield* Fiber.join(execution)
+    yield* Deferred.succeed(release, undefined).pipe(Effect.ignore)
+    expect(result.metadata).toMatchObject({ outcome: "error", code: "interrupted", durablySettled: true })
+    expect(JSON.parse(result.output)).toMatchObject({
+      disposition: "candidate_v1",
+      capabilityOutcome: "prompted_abort",
+      permissionRequestID: issued!.permission_request_id,
+      settlement: { outcome: "error", code: "interrupted" },
+    })
+    expect(yield* exactPartResult(db, interaction.registration.partID)).toEqual(result)
+    expect(yield* db.select().from(AdvisoryPlanSuggestionRevisionTable).all()).toEqual([])
+    expect(yield* db.select().from(AdvisoryPlanSuggestionEffectTable).all()).toEqual([])
+    expect(permissionRequests).toHaveLength(1)
+  }),
+)
+
+it.effect("rejects delegated advisory mutation before candidate, permission, or effect", () =>
+  Effect.gen(function* () {
+    permissionRequests.length = 0
+    const db = (yield* Database.Service).db
+    const runtime = yield* LearningCommandRuntime.Service
+    const source = "A delegated child must not persist this cross-Session learning advice."
+    const input = advisoryPlanSuggestionCreateInput(source, "Delegated advice that must remain uncommitted")
+    const delegated = yield* seedDelegatedLearningCommandInteraction(
+      db,
+      "advisory-plan-delegated-root-only",
+      input,
+      {
+        version: 2,
+        parent: [],
+        inherited: [],
+        profile: [],
+        explicit: [
+          {
+            permission: LearningCommand.UPDATE_ADVISORY_PLAN_SUGGESTION_CAPABILITY,
+            pattern: AdvisoryPlanSuggestion.PERMISSION_PATTERN,
+            action: "allow",
+          },
+        ],
+      },
+      LearningCommand.UPDATE_ADVISORY_PLAN_SUGGESTION_CAPABILITY,
+      { parentText: source },
+    )
+    const rejected = yield* runtime
+      .prepareCommand(
+        LearningCommand.UPDATE_ADVISORY_PLAN_SUGGESTION_CAPABILITY,
+        input,
+        delegated.registration,
+      )
+      .pipe(Effect.exit)
+    expect(Exit.isFailure(rejected)).toBe(true)
+    if (Exit.isFailure(rejected)) {
+      expect(Cause.squash(rejected.cause)).toMatchObject({
+        _tag: "AdvisoryPlanSuggestion.IntegrityError",
+        detail: "Advisory-suggestion mutation is restricted to the ordinary interactive root Agent",
+      })
+    }
+    expect(
+      yield* db.get(sql`
+        SELECT
+          (SELECT count(*) FROM learning_command_invocation
+            WHERE part_id = ${delegated.registration.partID}) AS invocations,
+          (SELECT count(*) FROM advisory_plan_suggestion_disposition
+            WHERE invocation_part_id = ${delegated.registration.partID}) AS dispositions,
+          (SELECT count(*) FROM advisory_plan_suggestion_effect) AS effects
+      `),
+    ).toEqual({ invocations: 0, dispositions: 0, effects: 0 })
+    expect(permissionRequests).toHaveLength(0)
+  }),
+)
+
+it.effect("interrupts and startup-recovers advisory candidates without blind mutation", () =>
+  Effect.gen(function* () {
+    permissionRequests.length = 0
+    const db = (yield* Database.Service).db
+    const runtime = yield* LearningCommandRuntime.Service
+    const events = yield* EventV2Bridge.Service
+
+    const interruptedSource = "Prepare this revisable advice, then stop before committing it."
+    const interruptedInput = advisoryPlanSuggestionCreateInput(
+      interruptedSource,
+      "This interrupted advice must not commit",
+    )
+    const interrupted = yield* seedInteraction(
+      db,
+      "advisory-plan-direct-interrupt",
+      interruptedInput,
+      LearningCommand.UPDATE_ADVISORY_PLAN_SUGGESTION_CAPABILITY,
+      { text: interruptedSource, timeZone: "UTC" },
+    )
+    yield* runtime.prepareCommand(
+      LearningCommand.UPDATE_ADVISORY_PLAN_SUGGESTION_CAPABILITY,
+      interruptedInput,
+      interrupted.registration,
+    )
+    expect(yield* runtime.interrupt(interrupted.registration)).toBe(true)
+    expect(JSON.parse((yield* exactPartResult(db, interrupted.registration.partID)).output)).toMatchObject({
+      settlement: { outcome: "error", code: "interrupted" },
+    })
+
+    const recoveredSource = "Leave this exact advisory candidate admitted across startup recovery."
+    const recoveredInput = advisoryPlanSuggestionCreateInput(
+      recoveredSource,
+      "Recovery must not invent this advice",
+    )
+    const recovered = yield* seedInteraction(
+      db,
+      "advisory-plan-startup-recovery",
+      recoveredInput,
+      LearningCommand.UPDATE_ADVISORY_PLAN_SUGGESTION_CAPABILITY,
+      { text: recoveredSource, timeZone: "UTC" },
+    )
+    yield* runtime.prepareCommand(
+      LearningCommand.UPDATE_ADVISORY_PLAN_SUGGESTION_CAPABILITY,
+      recoveredInput,
+      recovered.registration,
+    )
+    yield* LearningCommandRuntime.recoverAdmitted(events)
+    const recoveredResult = yield* exactPartResult(db, recovered.registration.partID)
+    expect(JSON.parse(recoveredResult.output)).toMatchObject({
+      settlement: { outcome: "error", code: "interrupted" },
+    })
+    yield* LearningCommandRuntime.recoverAdmitted(events)
+    expect(yield* exactPartResult(db, recovered.registration.partID)).toEqual(recoveredResult)
+    expect(yield* db.select().from(AdvisoryPlanSuggestionRevisionTable).all()).toEqual([])
+    expect(yield* db.select().from(AdvisoryPlanSuggestionEffectTable).all()).toEqual([])
+    expect(permissionRequests).toHaveLength(0)
   }),
 )
 
@@ -11313,6 +11705,32 @@ function learnerStateCreateInput(source: string, judgmentBody: string) {
       uncertaintyAndLimits: "Fallible and open to learner correction.",
       basisScope: "whole_judgment" as const,
     },
+  }
+}
+
+function advisoryPlanSuggestionCreateInput(source: string, label: string) {
+  return {
+    cause: {
+      type: "responsive_tutor_proposal" as const,
+      excerpt: { text: source, startByte: 0, endByte: new TextEncoder().encode(source).byteLength },
+      rationale: "Preserve useful, revisable advice for later teaching.",
+    },
+    intents: [
+      {
+        operation: "create" as const,
+        operationOrdinal: 0,
+        createOrdinal: 0,
+        snapshot: {
+          learnerVisibleScope: "Learning approach for the next few sessions",
+          retrievalScope: { type: "learner_home_fallback" as const, reason: "no_stable_owner_anchor" as const },
+          purpose: "Help later teaching continue without turning advice into a rigid schedule.",
+          directorySummary: `Current advice: ${label}.`,
+          body: `${label}; keep the next move concrete and leave later steps provisional.`,
+          exactBasisRefs: [],
+          assumptionsAndUncertainty: "Fallible Tutor advice; revise naturally when it stops helping.",
+        },
+      },
+    ],
   }
 }
 
