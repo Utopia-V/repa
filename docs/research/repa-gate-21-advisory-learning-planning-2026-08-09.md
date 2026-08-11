@@ -1,24 +1,23 @@
 # Repa Gate 21: advisory learning-plan suggestions
 
-Status: **Contract/theory accepted.** Whole-Gate review run
+Status: **Contract/theory and implementation/evidence accepted; implementation
+published on the Gate feature branch.** Whole-Gate review run
 `G21-WG-20260810-019fe065-01`, retained reviewer
 `019fe9c2-c8b6-7913-a988-ab7c955ffd36`, accepted exact semantic snapshot
 SHA-256 `9CA7DB485C3726752570868A574423F515BD3CC5F536B6285DD4A7A8D69D567C`
 after closing `G21-CR-001..004`, with no replacement finding, owner blocker, or
 material contract unknown. This record supersedes the unreviewed
 [2026-08-08 deterministic Planning candidate](repa-gate-21-cross-day-planning-authority-2026-08-08.md).
-The accepted layer authorizes the already requested Gate 21 implementation.
-The retained reviewer's first implementation/evidence pass returned `Revise`
-for `G21-IE-001..005` without reopening this semantic contract. Its first
-repair closure closed `G21-IE-001`, `002`, `004`, and `005`, while leaving
-`G21-IE-003` open because two legal exact-reference relations were absent from
-the pre-write compact-capacity envelope. The exact second-repair
+The retained reviewer closed `G21-IE-001..005` across two repair closures and
+accepted the exact
 [implementation/evidence candidate](repa-gate-21-advisory-learning-planning-implementation-evidence-2026-08-11.md)
-is ready for second repair closure at 46 files / 5,254 canonical manifest
-bytes / SHA-256
+at 46 files / 5,254 canonical manifest bytes / SHA-256
 `668FBC647AD9C7448F7942E177496A668568FE021CE98AF665C32EE73A598D78`.
-It is not implementation/evidence acceptance, integration, commit, release, or
-Gate 21A authority.
+The behavior-equivalent commit-tree package projection is
+`4C15DCA06EA0E821748DEC3A6788720A9CAC32F858E11D18B0BA9492D4CFA043`
+at implementation commit `1e0f1fcaa928b91284d223e677aa22e62058f264`, published
+on `origin/codex/gate-20a-assignment-authority`. This does not merge `main`,
+release the product, qualify a credentialed provider, or authorize Gate 21A.
 
 Date: 2026-08-09
 
@@ -949,11 +948,9 @@ The fresh reviewer should try to reject this candidate by asking:
 
 ## Current boundary
 
-The retained reviewer accepted the exact repaired semantic snapshot after
-closing `G21-CR-001..004`. Gate 20B is independently accepted and supplies only
-its exact producer handoff; it does not pre-accept Gate 21 implementation.
-Implementation/evidence is now authorized and in progress under the original
-Whole-Gate request, but it must return to the same reviewer and receive a
-separate `Accept` before integration. Integration, commit, push, release,
+The retained reviewer accepted the exact repaired semantic snapshot and the
+implementation/evidence layer after closing `G21-CR-001..004` and
+`G21-IE-001..005`. Gate 20B remains an independently accepted producer. Gate 21
+is published on its feature branch, but mainline merge, release,
 credentialed-provider qualification, Gate 21A, and later Gates remain
 separately governed.

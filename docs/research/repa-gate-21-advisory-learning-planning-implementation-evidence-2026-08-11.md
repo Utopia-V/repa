@@ -1,12 +1,11 @@
-# Gate 21 advisory learning-plan suggestions implementation/evidence candidate
+# Gate 21 advisory learning-plan suggestions implementation/evidence
 
-Status: **exact second-repair implementation/evidence candidate ready for
-retained independent closure review; not accepted or integrated.** Whole-Gate
-review run
-`G21-WG-20260810-019fe065-01` already accepted the contract/theory layer. The
-same retained top-level reviewer, `019fe9c2-c8b6-7913-a988-ab7c955ffd36`, owns
-the implementation/evidence verdict. Executor tests and this record are
-candidate evidence, not acceptance authority.
+Status: **contract/theory and implementation/evidence accepted; implementation
+published on the Gate feature branch.** Whole-Gate review run
+`G21-WG-20260810-019fe065-01` closed `G21-CR-001..004` and
+`G21-IE-001..005`. Retained top-level reviewer
+`019fe9c2-c8b6-7913-a988-ab7c955ffd36` is retired after this Gate and must not
+be reused.
 
 Date: 2026-08-11
 
@@ -16,27 +15,36 @@ Date: 2026-08-11
   `docs/research/repa-gate-21-advisory-learning-planning-2026-08-09.md`;
 - accepted semantic SHA-256:
   `9CA7DB485C3726752570868A574423F515BD3CC5F536B6285DD4A7A8D69D567C`;
-- current contract-file SHA-256 after status/review-history-only edits:
+- review-bound raw contract-file SHA-256 before closure-status edits:
   `ECCC7B74D13766186EBCE4581FF742B5288247E212017E3F54A91F77287695CB`;
+- review-bound evidence-record SHA-256 before this closure-status edit:
+  `05C2F480CBF840A2DFDFA62F21050380058D13B21B17414F97A6AC69F423B8A5`;
 - whole-Gate review run: `G21-WG-20260810-019fe065-01`;
 - retained independent reviewer task:
   `019fe9c2-c8b6-7913-a988-ab7c955ffd36`;
 - derivation branch: `codex/gate-20a-assignment-authority`;
-- derivation `HEAD` and upstream branch tip:
-  `a5acb1a1752eb9297d4c06b13db2cd18e0f9ff3f`;
+- implementation commit and published upstream branch tip:
+  `1e0f1fcaa928b91284d223e677aa22e62058f264`;
 - `main` and `origin/main`:
   `c100b431fe174d1993b2baa89a7d1b133300b579`;
-- exact package production/test candidate: **46 files / 5,254 canonical
+- exact reviewer-accepted working-tree package candidate: **46 files / 5,254 canonical
   manifest bytes**, SHA-256
   **`668FBC647AD9C7448F7942E177496A668568FE021CE98AF665C32EE73A598D78`**.
+- committed 46-file package projection: **5,254 canonical manifest bytes**,
+  SHA-256
+  **`4C15DCA06EA0E821748DEC3A6788720A9CAC32F858E11D18B0BA9492D4CFA043`**.
 
-The package manifest is the ordinal path-sorted union of every modified and
+The review manifest is the ordinal path-sorted union of every modified and
 untracked file below `packages/`. Each line is
 `<repository-relative path><TAB><lowercase SHA-256 of exact file bytes><LF>`;
 the UTF-8 manifest is then SHA-256 hashed. Documentation is deliberately
-outside this package binding. The working tree is unstaged and uncommitted;
-the executor has not changed a Git ref or remote, released an artifact, used a
-credentialed provider, or written an external durable system.
+outside this package binding. Before commit, staged diff checking found one
+extra blank line at EOF in the formerly untracked re-export file
+`advisory-plan-suggestion/constraint-schema.ts`; removing that behavior-free
+line and Git's existing clean-filter normalization account for the commit-tree
+identity above. No production meaning or test oracle changed. The implementation
+commit is published on `origin/codex/gate-20a-assignment-authority`; `main` and
+`origin/main` remain unchanged.
 
 ## Implementation/evidence review and repairs
 
@@ -77,13 +85,16 @@ still omitted the `currentRevision` emitted for legal learner-state and
 prior-advisory exact refs. A write could therefore pass the admission check and
 later make mandatory Context construction exceed 2,048 bytes.
 
-The second repair adds those two owner-specific current-revision arms to the
+The second repair added those two owner-specific current-revision arms to the
 same pre-write relation envelope. Real learner-state and prior-advisory source
 revisions now each drive an admitted maximum suggestion through fresh Context;
 the complete conservative envelope is exactly 2,048 bytes, and its first extra
 summary byte is rejected atomically with `capacity_exceeded`, no owner write,
-and no frontier movement. This is executor closure evidence only until the
-retained reviewer closes `G21-IE-003` and accepts the layer.
+and no frontier movement. On second repair closure, the reviewer reproduced the
+two real-owner tests, measured 2,048 bytes at the admitted boundary and 2,037
+bytes in the fresh current projection, closed `G21-IE-003`, and returned final
+implementation/evidence `Accept` with no replacement finding, contract reopen,
+owner blocker, or material acceptance-changing unknown.
 
 ## Implemented claim
 
@@ -417,8 +428,7 @@ judge whether open-language advice is good. It reuses the mature Agent,
 LearningContext, typed tool, permission, settlement, replay, recovery, and
 carrier mechanisms because those already own the computational boundary.
 
-The retained reviewer must independently bind this exact package candidate,
-inspect the accepted contract and evidence, and either accept the
-implementation/evidence layer or return actionable findings. Until an
-implementation/evidence `Accept`, Gate 21 is not integrated, committed,
-published, released, or eligible to start Gate 21A.
+Both Gate 21 review layers are accepted and the exact implementation is
+published on its feature branch. This establishes no mainline merge, release,
+credentialed-provider qualification, pedagogical-optimality claim, model-
+reliability claim, Gate 21A authority, or later-Gate authority.

@@ -3694,8 +3694,8 @@ spelling `--max-concurrency 1`; Bun 1.3.14 therefore used its default concurrenc
 and produced 25 same-cause exclusive-database busy failures. Changing only the
 spelling to `--max-concurrency=1` produced the 30/423 pass. The earlier runtime
 aggregate teardown segfault and absence of credentialed-provider qualification
-remain disclosed, non-acceptance evidence. This repair candidate is awaiting
-the retained reviewer's first repair closure; it is not pre-accepted,
+remain disclosed, non-acceptance evidence. At that point, this repair candidate
+awaited the retained reviewer's first repair closure and was not pre-accepted,
 integrated, committed, pushed, released, or Gate 21A authority.
 
 The retained first-repair closure then closed `G21-IE-001`, `G21-IE-002`,
@@ -3707,7 +3707,7 @@ make later mandatory Context construction exceed 2,048 bytes. Contract/theory
 remained accepted; no replacement finding, owner blocker, contract reopen, or
 maintainer product choice appeared.
 
-The executor's second repair adds those two owner-specific current-revision
+The executor's second repair added those two owner-specific current-revision
 arms to the same conservative capacity envelope. Real learner-state and
 prior-advisory revision fixtures each admit the complete 2,048-byte envelope,
 remain complete in fresh Context, and reject the first extra summary byte with
@@ -3716,9 +3716,46 @@ Advisory plus learner-state files pass **30/30 with 234 assertions** under
 `--max-concurrency=1`. The second-repair candidate contains **46 package paths /
 5,254 canonical manifest bytes** at SHA-256
 `668FBC647AD9C7448F7942E177496A668568FE021CE98AF665C32EE73A598D78`.
-This remains executor evidence pending the same reviewer's second repair
-closure; it is not implementation acceptance, integration, commit, push,
-release, credentialed-provider qualification, or Gate 21A authority.
+At that point, this remained executor evidence pending the same reviewer's
+second repair closure and was not implementation acceptance, integration,
+commit, push, release, credentialed-provider qualification, or Gate 21A
+authority.
+
+### 2026-08-11 Gate 21 whole-Gate acceptance and feature-branch publication
+
+The retained reviewer reproduced the two real-owner boundary tests (**2/2,
+8 assertions**), independently replayed the compact-byte counterexample, and
+closed `G21-IE-003`. At a 488-byte authored summary the conservative admission
+envelope is exactly 2,048 bytes and the fresh current projection is 2,037
+bytes; the 489th byte rejects before owner mutation. `G21-IE-001`, `002`,
+`004`, and `005` remained closed. The reviewer returned final
+implementation/evidence **Accept** with no replacement finding, contract
+reopen, owner blocker, maintainer product choice, or material
+acceptance-changing unknown.
+
+Both Gate 21 review layers are accepted under
+`G21-WG-20260810-019fe065-01`. The accepted semantic snapshot is SHA-256
+`9CA7DB485C3726752570868A574423F515BD3CC5F536B6285DD4A7A8D69D567C`;
+the exact reviewer-bound 46-file / 5,254-byte working-tree package manifest is
+SHA-256
+`668FBC647AD9C7448F7942E177496A668568FE021CE98AF665C32EE73A598D78`.
+The review-bound evidence, raw contract, README, and ledger hashes were
+`05C2F480...F423B8A5`, `ECCC7B74...87695CB`,
+`33BB7731...5C202C7`, and `DDE2D917...67FCB9D` respectively. Reviewer task
+`019fe9c2-c8b6-7913-a988-ab7c955ffd36` is retired and must not be reused.
+
+Before committing, staged diff checking exposed one extra EOF blank line in
+the previously untracked re-export file, which ordinary working-tree
+`git diff --check` had not inspected. Removing that behavior-free line and
+Git's existing clean-filter normalization produced the committed 46-file /
+5,254-byte package manifest SHA-256
+`4C15DCA06EA0E821748DEC3A6788720A9CAC32F858E11D18B0BA9492D4CFA043`.
+Implementation commit `1e0f1fcaa928b91284d223e677aa22e62058f264` is published
+on `origin/codex/gate-20a-assignment-authority`. No mainline merge, release,
+credentialed-provider qualification, pedagogical-optimality or model-
+reliability claim, Gate 21A work, or later-Gate authority follows. The known
+Bun 1.3.14 Windows aggregate runtime teardown segfault remains a later
+release-qualification unknown, not a Gate 21 semantic failure.
 
 ## Historical evidence locators
 
