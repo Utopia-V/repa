@@ -1,6 +1,7 @@
 # Gate 21A: Tutor move selection and flow continuity
 
-Status: **contract/theory accepted; implementation/evidence in progress**
+Status: **contract/theory and implementation/evidence accepted; local
+integration pending**
 
 Date: 2026-08-12
 
@@ -741,9 +742,11 @@ previously omitted renderer-version migration boundary. `G21A-CR-001..003` are
 closed, so this contract authorizes only the scoped implementation boundary
 above.
 
-Semantic provider qualification remains incomplete because the pre-contract
-experiment stopped at the provider-before-transport Context capacity defect.
-Implementation first restores composition reachability and v23-to-v24
-compatibility, then reruns the paired semantic qualification on a fresh pinned
-evidence lineage. No implementation/evidence acceptance, integration, release,
-Gate 22, or Gate 23 claim follows from contract acceptance.
+The accepted implementation restored composition reachability and v23-to-v24
+compatibility, then completed the paired semantic qualification and retained
+failure/re-entry evidence on a pinned lineage. The same top-level reviewer
+closed `G21A-IR-001..008` and accepted implementation/evidence without reopening
+this contract. Implementation commit
+`d43109fc3dd67301327f9a5aa7379b0abc98e079` is fixed on the feature branch;
+local integration remains pending. No release, push, Gate 22, or Gate 23 claim
+follows.

@@ -1,7 +1,6 @@
 # Gate 21A Tutor move selection and flow continuity implementation/evidence
 
-Status: **implementation/evidence candidate awaiting independent review; not
-integrated**
+Status: **implementation/evidence accepted; local integration pending**
 
 Date: 2026-08-12
 
@@ -34,10 +33,22 @@ Date: 2026-08-12
 - pinned model-catalog SHA-256:
   `A5D5DF2DBF443EDC56AF460FFC3F95D761EED7DD450720ADB4B5F20D34E91FA1`;
   and
-- exact current production/test package candidate: **17 files / 1,920
+- exact reviewer-accepted production/test package candidate: **17 files / 1,920
   canonical manifest
   bytes**, SHA-256
-  **`9BA0B2ED3014830DCF09139D99BC1678073A97DC9CB67B0E0969324A63DA6C24`**.
+  **`9BA0B2ED3014830DCF09139D99BC1678073A97DC9CB67B0E0969324A63DA6C24`**;
+- reviewer-accepted pre-verdict evidence-record SHA-256:
+  `2ED029BD0F62D3CA843559E5306110EFCD65A9A09FF0129351E74C28E770B457`;
+- accepted `final-12` recovery-manifest SHA-256:
+  `5A67792554CE264BA335FE1E89BB7D8DCF0E5C59926D4882967F44D74C6320B5`;
+- accepted 127-row ordinal namespace-manifest SHA-256:
+  `100F6B2DB0B2D3862B151E68E1E43E37DEAD6C56D13CA956C359A7D652FE67D5`;
+- accepted 5,726-file ordinal checkout fingerprint:
+  `D44DEB05D7789AD5F64D1B7E2B34BDF29630BF6DCF4EEAFCB698FF3BAD1A6013`;
+- implementation commit:
+  `d43109fc3dd67301327f9a5aa7379b0abc98e079`; and
+- behavior-equivalent 17-file commit-tree manifest SHA-256:
+  `5E077A4A4E00FAD1F7D014398CED5BAD19CC7F78748AD48CBA486E7B70E6FA01`.
 
 The package manifest is retained byte-exactly as
 `C:\repa-g21a-qualification-20260812-final-12\implementation-package.manifest.txt`.
@@ -50,13 +61,18 @@ runner, contract, production implementation files, runtime, starting database,
 request/result/terminal evidence, and produced artifacts before and after each
 phase.
 
-This record is a review candidate, not an acceptance claim. There is no Gate
-21A implementation commit or integration commit yet. The package manifest,
-recovered evidence namespace, and current checkout must remain unchanged while
-the retained independent reviewer evaluates this layer. Each phase
-additionally binds an exhaustive 5,726-path working-tree manifest, Git status,
-index projection, and staged/unstaged binary-diff digests. All five execution
-phases use candidate fingerprint
+The retained whole-Gate reviewer accepted the exact pre-verdict record and
+`final-12` namespace above with no acceptance-changing finding open. The
+post-verdict status edits record that result; they do not alter the accepted
+implementation or evidence package. Git's existing clean filter normalized
+only CRLF to LF in `packages/core/src/learning-context/schema.ts` and
+`packages/core/test/assignment.test.ts` when creating the implementation
+commit. Direct byte comparison found no other difference and produced the
+commit-tree manifest above. Local `main` integration remains a separate step.
+
+Each phase additionally binds an exhaustive 5,726-path working-tree manifest,
+Git status, index projection, and staged/unstaged binary-diff digests. All five
+execution phases use candidate fingerprint
 `A8867C0FA620C712A57DFCE66CBAC1227DF6540B3F65FB3AAD077ABCB22DA659`
 before and after execution. The frozen collision fixture and this evidence/status
 prose are declared post-run derivations and are bound separately in the final
@@ -185,8 +201,16 @@ executor preserved `final-11` and materialized `final-12` from the same exact
 105 execution-evidence files plus incident record and current candidate. Its
 two seals are regenerated with a typed `.NET StringComparer.Ordinal` over
 forward-slash relative paths, UTF-8 rows, tabs, and LF, and are independently
-recomputed by a second implementation. `G21A-IR-008` remains open until the
-same reviewer accepts that mechanical correction.
+recomputed by a second implementation.
+
+On the third closure pass the same reviewer independently reimplemented that
+declared comparator and serialization. It reproduced the exact 127-row / 50,196,614-byte
+namespace at SHA-256 `100F6B2D...67D5`, the 5,726-file / 112,774,175-byte
+checkout at `D44DEB05...6013`, all 105 execution-evidence copies, all 21
+candidate files, every required absent sidecar, and the intentional
+process-loss WAL. It closed `G21A-IR-008`, found no replacement finding, and
+returned implementation/evidence **Accept**. Contract/theory remained accepted,
+so Gate 21A as a whole is accepted with no material blocker or unknown.
 
 ## Fully populated collision and frozen replay
 
@@ -483,7 +507,7 @@ capacity.
 
 ## Nonclaims and review routing
 
-This candidate does not establish a Tutor-move table, durable current-purpose
+This accepted boundary does not establish a Tutor-move table, durable current-purpose
 record, global Agenda, priority score, task scheduler, allocation solver,
 activity/adherence ledger, mastery computation, hidden selector, second Agent,
 background daemon, Gate 22 inspection UI, Gate 23 product-loop integration,
@@ -491,9 +515,10 @@ release readiness, or educational efficacy. It does not claim the observed
 model is reliable for every wording or that the chosen move is globally
 optimal.
 
-The retained whole-Gate reviewer has closed `G21A-IR-001..004`,
-`G21A-IR-006`, and `G21A-IR-007`; the original `G21A-IR-005` runner defect
-remains repaired. It must now evaluate only `G21A-IR-008` against the exact
-`final-12` ordinal-correct recovery namespace. Only an `Accept` with no
-acceptance-changing finding open permits the separately authorized local
-integration into `main`.
+The retained whole-Gate reviewer closed `G21A-IR-001..004`, `G21A-IR-006`,
+`G21A-IR-007`, and `G21A-IR-008`; the original `G21A-IR-005` runner defect
+remains repaired and its residual evidence impact was replaced by the closed
+`IR-007`. It returned **Accept** with no new finding, material unknown, or
+maintainer-owned blocker. The separately authorized local integration into
+`main` is pending; release, push, Gate 22, and Gate 23 remain outside this
+verdict.

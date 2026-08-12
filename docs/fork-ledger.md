@@ -3973,16 +3973,45 @@ materialized `C:\repa-g21a-qualification-20260812-final-12` from the same exact
 105 execution-evidence files, incident record, 17 implementation/test files,
 and updated documentation. Its namespace and current-checkout rows use
 forward-slash relative paths, tab separators, LF, UTF-8, and an explicitly
-typed `.NET StringComparer.Ordinal`; a second independent implementation must
-reproduce both before resubmission. `G21A-IR-008` and the
-implementation/evidence layer remain open until the same reviewer accepts this
-ordinal-correct recovery.
+typed `.NET StringComparer.Ordinal`; a second independent implementation
+reproduced both before resubmission.
+
+### 2026-08-13 Gate 21A whole-Gate acceptance and feature-branch commit
+
+On the third implementation closure pass, the same top-level reviewer
+independently reimplemented the declared ordinal algorithm. It reproduced the
+127-row / 50,196,614-byte namespace at SHA-256
+`100F6B2DB0B2D3862B151E68E1E43E37DEAD6C56D13CA956C359A7D652FE67D5`,
+the 5,726-file / 112,774,175-byte checkout at
+`D44DEB05D7789AD5F64D1B7E2B34BDF29630BF6DCF4EEAFCB698FF3BAD1A6013`,
+all execution-evidence and candidate copies, every absent sidecar, and the
+intentional process-loss WAL. It closed `G21A-IR-008` without a replacement
+finding. `G21A-IR-001..004`, `G21A-IR-006`, and `G21A-IR-007` remain closed;
+the original `G21A-IR-005` runner/sealing defect remains repaired and its
+residual impact was replaced by closed `IR-007`.
+
+The reviewer returned implementation/evidence **Accept** with no material
+unknown or maintainer-owned blocker. Contract/theory remained accepted, so
+Gate 21A as a whole is accepted. The exact pre-verdict evidence record is
+SHA-256 `2ED029BD...B457`; the accepted 17-file working-tree package manifest is
+`9BA0B2ED...6C24`. Git's existing clean filter changed only CRLF to LF in
+`packages/core/src/learning-context/schema.ts` and
+`packages/core/test/assignment.test.ts`; direct byte comparison found no other
+difference. The behavior-equivalent commit-tree package manifest is
+`5E077A4A...6FA01`, and implementation commit
+`d43109fc3dd67301327f9a5aa7379b0abc98e079` fixes the production, migration,
+tests, qualification runner, evidence record, and contract on
+`codex/gate-21a-tutor-flow`.
+
+This post-verdict documentation successor records acceptance without changing
+the reviewed runtime or evidence. Local `main` integration remains pending. No
+push, release, credentialed-provider recapture, Gate 22, or Gate 23 action
+follows.
 
 The current [implementation/evidence record](research/repa-gate-21a-tutor-move-selection-flow-continuity-implementation-evidence-2026-08-12.md)
-binds the exact artifacts and focused executable results. It is **not yet
-accepted or integrated**. The retained whole-Gate reviewer must review this
-implementation/evidence layer and close every acceptance-changing finding
-before the separately authorized local merge to `main`.
+binds the exact artifacts and focused executable results. Both review layers
+are accepted; the separately authorized local merge to `main` is the only
+remaining Gate 21A integration step.
 
 ## Historical evidence locators
 
