@@ -1,6 +1,6 @@
 # Gate 21A Tutor move selection and flow continuity implementation/evidence
 
-Status: **implementation/evidence accepted; local integration pending**
+Status: **implementation/evidence accepted and integrated locally**
 
 Date: 2026-08-12
 
@@ -68,7 +68,9 @@ implementation or evidence package. Git's existing clean filter normalized
 only CRLF to LF in `packages/core/src/learning-context/schema.ts` and
 `packages/core/test/assignment.test.ts` when creating the implementation
 commit. Direct byte comparison found no other difference and produced the
-commit-tree manifest above. Local `main` integration remains a separate step.
+commit-tree manifest above. Local `main` includes the implementation through
+whole-Gate acceptance commit
+`984f046fa6686681ba10604bab199a5b97aa7ff1`; `origin/main` remains unchanged.
 
 Each phase additionally binds an exhaustive 5,726-path working-tree manifest,
 Git status, index projection, and staged/unstaged binary-diff digests. All five
@@ -519,6 +521,6 @@ The retained whole-Gate reviewer closed `G21A-IR-001..004`, `G21A-IR-006`,
 `G21A-IR-007`, and `G21A-IR-008`; the original `G21A-IR-005` runner defect
 remains repaired and its residual evidence impact was replaced by the closed
 `IR-007`. It returned **Accept** with no new finding, material unknown, or
-maintainer-owned blocker. The separately authorized local integration into
-`main` is pending; release, push, Gate 22, and Gate 23 remain outside this
-verdict.
+maintainer-owned blocker. Local `main` was then fast-forwarded through
+whole-Gate acceptance commit `984f046fa`; release, push, Gate 22, and Gate 23
+remain outside this verdict and integration.

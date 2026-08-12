@@ -4004,14 +4004,26 @@ tests, qualification runner, evidence record, and contract on
 `codex/gate-21a-tutor-flow`.
 
 This post-verdict documentation successor records acceptance without changing
-the reviewed runtime or evidence. Local `main` integration remains pending. No
-push, release, credentialed-provider recapture, Gate 22, or Gate 23 action
-follows.
+the reviewed runtime or evidence.
+
+### 2026-08-13 Gate 21A local mainline integration
+
+Local `main` was fast-forwarded from Gate 21 publication baseline
+`97212bcb8786c63e2c2c2a01d553f7707474ea29` through implementation commit
+`d43109fc3dd67301327f9a5aa7379b0abc98e079` and whole-Gate acceptance commit
+`984f046fa6686681ba10604bab199a5b97aa7ff1`. The fast-forward introduced no
+merge resolution or candidate drift. This docs-only successor records that
+local integration identity without altering the reviewer-accepted production,
+migration, tests, qualification artifacts, or evidence disposition.
+
+`origin/main` remains at the pre-Gate baseline. The feature branch remains as
+exact provenance; no push, branch cleanup, release, credentialed-provider
+recapture, Gate 22, or Gate 23 action occurred.
 
 The current [implementation/evidence record](research/repa-gate-21a-tutor-move-selection-flow-continuity-implementation-evidence-2026-08-12.md)
 binds the exact artifacts and focused executable results. Both review layers
-are accepted; the separately authorized local merge to `main` is the only
-remaining Gate 21A integration step.
+are accepted, and the accepted implementation is integrated into local `main`
+through commit `984f046fa`.
 
 ## Historical evidence locators
 
