@@ -3001,9 +3001,12 @@ describe.serial("Assignment", () => {
           },
         ],
       })
-      expect(prepared.renderedBlock).toContain("assignment: sole_candidate_pressure")
-      expect(prepared.renderedBlock).toContain("not the current/default task, a priority, a plan, a commitment, activity")
-      expect(prepared.renderedBlock).toContain("Time, silence, absence, and elapsed due periods imply no activity")
+      expect(prepared.renderedBlock).toContain(
+        "Assignment is learning-help pressure, not task administration/default/priority/plan/commitment/progress/result.",
+      )
+      expect(prepared.renderedBlock).toContain(
+        "Time/silence/absence/elapsed due or advice/Assignment completion prove no activity/breach/service/adherence/learning/completion/lifecycle change.",
+      )
       expect(
         LearningContext.decodeStored(
           prepared.canonicalCut,
@@ -3112,7 +3115,6 @@ describe.serial("Assignment", () => {
       })
       expect(section.entries).toHaveLength(1)
       expect(section.entries[0]!.locator.assignmentID).toBe(created[0]!.assignmentID)
-      expect(prepared.renderedBlock).toContain("assignment: multiple_candidate_pressure; exactOpenCount=2")
       expect(prepared.cut.budget.canonicalBytes).toBeLessThanOrEqual(LearningContext.hardLimits.canonicalBytes)
       expect(prepared.cut.budget.renderedBytes).toBeLessThanOrEqual(LearningContext.hardLimits.renderedBytes)
     }),
@@ -3427,9 +3429,9 @@ describe.serial("Assignment", () => {
       expect(section.omission.reasons.reduce((total, reason) => total + reason.omitted, 0)).toBe(
         section.omission.omitted,
       )
-      expect(prepared.renderedBlock).toContain("assignment: multiple_candidate_pressure; exactOpenCount=9")
-      expect(prepared.renderedBlock).toContain("Candidate order is deterministic audit/pagination order, never priority")
-      expect(prepared.renderedBlock).toContain("No retained row is a program-selected winner")
+      expect(prepared.renderedBlock).toContain(
+        "separate omission-honest owners compose and audit order never wins.",
+      )
       expect(
         LearningContext.decodeStored(
           prepared.canonicalCut,

@@ -35,6 +35,7 @@ import {
   GATE20B_LAZY_READ_CAPABILITY_IDS,
   GATE20B_POLICY_VERSION,
   GATE20B_RENDERER_VERSION,
+  GATE21_RENDERER_VERSION,
   GATE19_CAPABILITY_CATALOG_VERSION,
   GATE19_LAZY_READ_CAPABILITY_IDS,
   GATE19_POLICY_VERSION,
@@ -141,8 +142,7 @@ const sectionPolicy = {
 } as const
 const withheldSelectionBasis = "automatic_context_capability_withheld" as const
 const learnerStateReadWithheldSelectionBasis = "learner_state_judgment_read_capability_withheld" as const
-const advisoryPlanSuggestionReadWithheldSelectionBasis =
-  "advisory_plan_suggestion_read_capability_withheld" as const
+const advisoryPlanSuggestionReadWithheldSelectionBasis = "advisory_plan_suggestion_read_capability_withheld" as const
 
 export function unavailableCapabilityBasis(): CapabilityBasis {
   const providerToolSurface = bindProviderToolSurface({
@@ -1114,15 +1114,11 @@ function removeUnreachableAdvisoryPlanSuggestions(sections: MutableSection[]) {
           ]
         }
         if (item.kind === "assignment" && typeof item.locator.assignmentID === "string") {
-          return [
-            canonicalFingerprint(toJsonValue({ type: "assignment", assignmentID: item.locator.assignmentID })),
-          ]
+          return [canonicalFingerprint(toJsonValue({ type: "assignment", assignmentID: item.locator.assignmentID }))]
         }
         if (item.kind === "learner_state_judgment" && typeof item.locator.judgmentID === "string") {
           return [
-            canonicalFingerprint(
-              toJsonValue({ type: "learner_state_judgment", judgmentID: item.locator.judgmentID }),
-            ),
+            canonicalFingerprint(toJsonValue({ type: "learner_state_judgment", judgmentID: item.locator.judgmentID })),
           ]
         }
         return []
@@ -1165,15 +1161,15 @@ function removableEntry(sections: MutableSection[]) {
               ? 7
               : section.owner === "learner_state_judgment"
                 ? 6
-              : section.owner === "assignment"
-                ? 5
-              : section.owner === "future_attention"
-                ? 4
-                  : section.owner === "learner_response_evidence"
-                    ? 3
-                    : section.owner === "learner_navigation"
-                      ? 1
-                      : 2,
+                : section.owner === "assignment"
+                  ? 5
+                  : section.owner === "future_attention"
+                    ? 4
+                    : section.owner === "learner_response_evidence"
+                      ? 3
+                      : section.owner === "learner_navigation"
+                        ? 1
+                        : 2,
           ownerOrder,
         },
       ]
@@ -1266,6 +1262,9 @@ function finalize(base: CutBase): Preparation {
 
 function renderValue(cut: Cut) {
   if (cut.policyVersion === POLICY_VERSION && cut.rendererVersion === RENDERER_VERSION) {
+    return renderGate21AValue(cut)
+  }
+  if (cut.policyVersion === POLICY_VERSION && cut.rendererVersion === GATE21_RENDERER_VERSION) {
     return renderGate21Value(cut)
   }
   if (cut.policyVersion === GATE20B_POLICY_VERSION && cut.rendererVersion === GATE20B_RENDERER_VERSION) {
@@ -1278,6 +1277,158 @@ function renderValue(cut: Cut) {
     return renderGate20Value(cut)
   }
   return renderFrozenValue(cut)
+}
+
+function renderGate21AValue(cut: Cut) {
+  const surface = cut.capabilityBasis.effectiveProviderToolSurfaceBinding
+  const sections = packModelSections(cut.sections)
+  const futureAttentionSection = cut.sections.find((item) => item.owner === "future_attention")!
+  const futureAttention =
+    futureAttentionSection.coverage === "not_authorized"
+      ? "FutureAttention: contribution withheld by the effective capability basis; identity and count are unknown."
+      : futureAttentionSection.countAtCut === 0
+        ? "FutureAttention: none eligible at this immutable cut."
+        : futureAttentionSection.coverage === "complete" && futureAttentionSection.countAtCut === 1
+          ? "FutureAttention: conditional default. An exact current learner request may override an overlapping present action; otherwise realize the sole complete concern naturally. Override alone neither serves nor mutates it."
+          : `FutureAttention: multiple unresolved; exactEligibleCount=${futureAttentionSection.countAtCut}; omission=${canonicalJson(toJsonValue(futureAttentionSection.omission))}. Candidate order is deterministic audit order, never priority. Honor the exact current learner request; otherwise make a transparent reversible local choice or ask a concise learner-visible clarification when the difference matters.`
+  return [
+    "[Repa learning context — protected]",
+    `schemaVersion: ${cut.schemaVersion}; policyVersion: ${cut.policyVersion}; rendererVersion: ${cut.rendererVersion}`,
+    `cutFingerprint: ${cut.fingerprint}`,
+    `cutAsOf: ${cut.cutAsOf}; throughSharedFrontier: ${canonicalJson(toJsonValue(cut.throughSharedFrontier))}`,
+    `retainedSteering: ${canonicalJson(toJsonValue(cut.retainedSteering))}`,
+    `capabilityBasis: ${canonicalJson(
+      toJsonValue({
+        catalog: cut.capabilityBasis.catalogVersion,
+        policy: cut.capabilityBasis.policyFingerprint,
+        automatic: cut.capabilityBasis.effectiveAutomaticContext,
+        lazy: cut.capabilityBasis.effectiveLazyReadCapabilities,
+        providerToolSurface: {
+          definitions: surface.definitionCount,
+          canonicalBytes: surface.combinedCanonicalBytes,
+          combinedFingerprint: surface.combinedFingerprint,
+          fingerprint: surface.fingerprint,
+          toolChoiceCanonicalBytes: surface.toolChoice.canonicalBytes,
+          toolChoiceFingerprint: surface.toolChoice.fingerprint,
+        },
+      }),
+    )}`,
+    'sectionsV7 codec: {K,S,V}; row=[owner,coverage,count,O,E,M]. O=["none"]|["unknown",reason]|["exact",omitted,[[reason,omitted]...]]; E=[kind,J(locator),J(semantic)|null]; lazy entryIndex is zero-based within that row\'s E. J object=[0,key,value,...] (numeric n=>K[n], string=>literal), array=[1,...], exact V[n]=[2,n], 32-byte hex=[3,base64url]. M=null, Assignment=[frontierSeq,frontierTime,headCount,asOf,mode], or learner-state/advice=[frontierSeq,frontierTime,headCount,asOf,eligibleCount,eligibleFingerprint,directoryCursor]. null=absent; row order=audit, never priority.',
+    `sectionsV7: ${canonicalJson(sections)}`,
+    `Composition: bounded observation, neither learning truth nor selected move. The exact current request controls what it specifies; retained steering controls non-overlapping behavior and yields locally only to a clearly more specific overlapping request; separate omission-honest owners compose and audit order never wins. ${futureAttention} Assignment is learning-help pressure, not task administration/default/priority/plan/commitment/progress/result. Learner-state is fallible source-bearing whole-judgment adaptation memory, not score/mastery/per-clause proof; natural correction revises the current head; useful teaching may zero-write. Advice is fuzzy source-bearing correctable suggestion, not schedule/adherence; entries are exact authored summaries/named relations; near term may be concrete, distant provisional; dialogue may revise/retire; useful teaching may zero-write. Time/silence/absence/elapsed due or advice/Assignment completion prove no activity/breach/service/adherence/learning/completion/lifecycle change. Exact-read authorized owner detail when it could change the move; locator/missing/stale/omitted/withheld proves neither value nor authorization. If safe, make a transparent reversible move; ask one concise learner-visible clarification only for material learner-owned/unsafe ambiguity. Never expose internal IDs/lifecycle labels/Context/precedence/control machinery or make the learner manage owner state.`,
+    "[/Repa learning context]",
+  ].join("\n")
+}
+
+function packModelSections(sections: readonly Section[]): JsonValue {
+  const keyCounts = new Map<string, number>()
+  const valueCounts = new Map<string, number>()
+  const collect = (value: JsonValue): void => {
+    if (typeof value === "string") {
+      valueCounts.set(value, (valueCounts.get(value) ?? 0) + 1)
+      return
+    }
+    if (value === null || typeof value !== "object") return
+    if (Array.isArray(value)) {
+      value.forEach(collect)
+      return
+    }
+    Object.entries(value).forEach(([key, item]) => {
+      keyCounts.set(key, (keyCounts.get(key) ?? 0) + 1)
+      collect(item)
+    })
+  }
+  sections.forEach((section) =>
+    section.entries.forEach((entry) => {
+      collect(entry.locator)
+      if (entry.semantic !== undefined) collect(entry.semantic)
+    }),
+  )
+  const keys = [...keyCounts]
+    .filter(([, count]) => count >= 2)
+    .map(([key]) => key)
+    .toSorted()
+  const values = [...valueCounts]
+    .filter(([value, count]) => value.length >= 20 && count >= 2)
+    .map(([value]) => value)
+    .toSorted()
+  const keyIndex = new Map(keys.map((key, index) => [key, index]))
+  const valueIndex = new Map(values.map((value, index) => [value, index]))
+  const packJson = (value: JsonValue): JsonValue => {
+    if (typeof value === "string") {
+      const index = valueIndex.get(value)
+      if (index !== undefined) return [2, index]
+      return /^[0-9a-f]{64}$/.test(value) ? [3, Buffer.from(value, "hex").toString("base64url")] : value
+    }
+    if (value === null || typeof value !== "object") return value
+    if (Array.isArray(value)) return [1, ...value.map(packJson)]
+    const object = value as { readonly [key: string]: JsonValue }
+    return [
+      0,
+      ...Object.keys(object)
+        .toSorted()
+        .flatMap((key) => [keyIndex.get(key) ?? key, packJson(object[key]!)]),
+    ]
+  }
+  const rows = sections.map((section): JsonValue => {
+    const omission: JsonValue =
+      section.omission.type === "none"
+        ? ["none"]
+        : section.omission.type === "unknown"
+          ? ["unknown", section.omission.reason]
+          : ["exact", section.omission.omitted, section.omission.reasons.map((item) => [item.reason, item.omitted])]
+    const entries = section.entries.map(
+      (entry): JsonValue => [
+        entry.kind,
+        packJson(entry.locator),
+        entry.semantic === undefined ? null : packJson(entry.semantic),
+      ],
+    )
+    const metadata: JsonValue =
+      section.owner === "assignment" && "assignmentOwnerCut" in section
+        ? [
+            section.assignmentOwnerCut.frontierSequence,
+            section.assignmentOwnerCut.frontierTime,
+            section.assignmentOwnerCut.headCount,
+            section.asOf,
+            section.mode,
+          ]
+        : section.owner === "learner_state_judgment" &&
+            section.coverage !== "not_authorized" &&
+            (section.learnerStateJudgmentOwnerCut !== undefined ||
+              section.asOf !== undefined ||
+              section.eligibleAnchorCount !== undefined ||
+              section.eligibleAnchorsFingerprint !== undefined ||
+              section.directoryCursor !== undefined)
+          ? [
+              section.learnerStateJudgmentOwnerCut?.frontierSequence ?? null,
+              section.learnerStateJudgmentOwnerCut?.frontierTime ?? null,
+              section.learnerStateJudgmentOwnerCut?.headCount ?? null,
+              section.asOf ?? null,
+              section.eligibleAnchorCount ?? null,
+              section.eligibleAnchorsFingerprint ?? null,
+              section.directoryCursor ?? null,
+            ]
+          : section.owner === "advisory_plan_suggestion" &&
+              section.coverage !== "not_authorized" &&
+              (section.advisoryPlanSuggestionOwnerCut !== undefined ||
+                section.asOf !== undefined ||
+                section.eligibleKeyCount !== undefined ||
+                section.eligibleKeysFingerprint !== undefined ||
+                section.directoryCursor !== undefined)
+            ? [
+                section.advisoryPlanSuggestionOwnerCut?.frontierSequence ?? null,
+                section.advisoryPlanSuggestionOwnerCut?.frontierTime ?? null,
+                section.advisoryPlanSuggestionOwnerCut?.headCount ?? null,
+                section.asOf ?? null,
+                section.eligibleKeyCount ?? null,
+                section.eligibleKeysFingerprint ?? null,
+                section.directoryCursor ?? null,
+              ]
+            : null
+    return [section.owner, section.coverage, section.countAtCut, omission, entries, metadata]
+  })
+  return { K: keys, V: values, S: rows }
 }
 
 function renderGate21Value(cut: Cut) {
@@ -1516,7 +1667,8 @@ function validateCut(cut: Cut) {
             ? gate20AOwners
             : cut.policyVersion === GATE20B_POLICY_VERSION && cut.rendererVersion === GATE20B_RENDERER_VERSION
               ? gate20BOwners
-              : cut.policyVersion === POLICY_VERSION && cut.rendererVersion === RENDERER_VERSION
+              : cut.policyVersion === POLICY_VERSION &&
+                  (cut.rendererVersion === GATE21_RENDERER_VERSION || cut.rendererVersion === RENDERER_VERSION)
                 ? currentOwners
                 : undefined
   if (
@@ -1803,7 +1955,7 @@ function sectionShape(value: unknown, owner: Section["owner"]): value is Section
       "omission",
       "entries",
       ...(assignmentAuthorized ? ["assignmentOwnerCut", "asOf", "mode"] : []),
-       ...(learnerStateJudgmentPopulated
+      ...(learnerStateJudgmentPopulated
         ? [
             "learnerStateJudgmentOwnerCut",
             "asOf",
@@ -1811,16 +1963,10 @@ function sectionShape(value: unknown, owner: Section["owner"]): value is Section
             "eligibleAnchorsFingerprint",
             "directoryCursor",
           ]
-         : []),
-       ...(advisoryPlanSuggestionAuthorized
-         ? [
-             "advisoryPlanSuggestionOwnerCut",
-             "asOf",
-             "eligibleKeyCount",
-             "eligibleKeysFingerprint",
-             "directoryCursor",
-           ]
-         : []),
+        : []),
+      ...(advisoryPlanSuggestionAuthorized
+        ? ["advisoryPlanSuggestionOwnerCut", "asOf", "eligibleKeyCount", "eligibleKeysFingerprint", "directoryCursor"]
+        : []),
     ]) &&
     value.owner === owner &&
     value.scope === sectionPolicy[owner].scope &&
@@ -1905,7 +2051,7 @@ function sectionSelectionBasis(value: Record<string, unknown>, owner: Section["o
             record(value.omission) &&
             value.omission.reason === "advisory_plan_suggestion_read_capability_withheld"
           ? advisoryPlanSuggestionReadWithheldSelectionBasis
-        : withheldSelectionBasis)
+          : withheldSelectionBasis)
     )
   }
   if (owner === "material" && value.coverage === "not_applicable") {
@@ -2009,7 +2155,8 @@ function advisoryPlanSuggestionEntryRelations(entry: Entry, cut: Cut) {
     semantic.retrievalArm !== entry.locator.retrievalArm ||
     semantic.currentRelation !== entry.locator.currentRelation ||
     canonicalJson(toJsonValue(semantic.anchorKinds)) !== canonicalJson(toJsonValue(entry.locator.anchorKinds)) ||
-    canonicalJson(toJsonValue(semantic.alternativeTarget)) !== canonicalJson(toJsonValue(entry.locator.alternativeTarget))
+    canonicalJson(toJsonValue(semantic.alternativeTarget)) !==
+      canonicalJson(toJsonValue(entry.locator.alternativeTarget))
   ) {
     return false
   }
@@ -2062,15 +2209,11 @@ function finalContextStableOwnerFingerprints(cut: Cut) {
           ]
         }
         if (item.kind === "assignment" && typeof item.locator.assignmentID === "string") {
-          return [
-            canonicalFingerprint(toJsonValue({ type: "assignment", assignmentID: item.locator.assignmentID })),
-          ]
+          return [canonicalFingerprint(toJsonValue({ type: "assignment", assignmentID: item.locator.assignmentID }))]
         }
         if (item.kind === "learner_state_judgment" && typeof item.locator.judgmentID === "string") {
           return [
-            canonicalFingerprint(
-              toJsonValue({ type: "learner_state_judgment", judgmentID: item.locator.judgmentID }),
-            ),
+            canonicalFingerprint(toJsonValue({ type: "learner_state_judgment", judgmentID: item.locator.judgmentID })),
           ]
         }
         return []
@@ -2094,11 +2237,7 @@ function learnerStateJudgmentSectionSemantics(cut: Cut) {
   }
   if (section.coverage === "not_authorized" || typeof section.countAtCut !== "number") return false
   if (section.countAtCut === 0) {
-    return (
-      learnerStateJudgmentSectionHeader(section) &&
-      section.coverage === "empty" &&
-      section.entries.length === 0
-    )
+    return learnerStateJudgmentSectionHeader(section) && section.coverage === "empty" && section.entries.length === 0
   }
   const ownerCut = section.learnerStateJudgmentOwnerCut
   const asOf = section.asOf
@@ -2115,8 +2254,7 @@ function learnerStateJudgmentSectionSemantics(cut: Cut) {
   const directory = LearnerStateJudgment.inspectDirectoryCursor(directoryCursor)
   if (
     !directory ||
-    canonicalJson(toJsonValue(directory.ownerCut)) !==
-      canonicalJson(toJsonValue(ownerCut)) ||
+    canonicalJson(toJsonValue(directory.ownerCut)) !== canonicalJson(toJsonValue(ownerCut)) ||
     directory.asOf !== asOf ||
     directory.eligibleAnchorCount !== section.eligibleAnchorCount ||
     directory.eligibleAnchorsFingerprint !== section.eligibleAnchorsFingerprint
@@ -2496,7 +2634,8 @@ function advisoryPlanSuggestionLocator(value: Record<string, unknown>) {
     advisoryPlanSuggestionRevisionRef(value.alternativeToRevision) &&
     record(value.alternativeTarget) &&
     record(value.alternativeTarget.target) &&
-    canonicalJson(toJsonValue(value.alternativeTarget.target)) === canonicalJson(toJsonValue(value.alternativeToRevision)) &&
+    canonicalJson(toJsonValue(value.alternativeTarget.target)) ===
+      canonicalJson(toJsonValue(value.alternativeToRevision)) &&
     ["same_head", "head_advanced", "source_unavailable"].includes(String(value.alternativeTarget.headRelation)) &&
     ["active", "retired", "source_unavailable"].includes(String(value.alternativeTarget.lifecycle))
   )
@@ -3503,8 +3642,7 @@ function advisoryPlanSuggestionRelation(value: unknown, ordinal: number) {
     (value.targetRelationAtCut === undefined ||
       ["before", "reached", "after", "on", "unknown"].includes(String(value.targetRelationAtCut))) &&
     (value.dueRelationAtCut === undefined || (record(value.dueRelationAtCut) && json(value.dueRelationAtCut))) &&
-    (value.expiryRelationAtCut === undefined ||
-      (record(value.expiryRelationAtCut) && json(value.expiryRelationAtCut)))
+    (value.expiryRelationAtCut === undefined || (record(value.expiryRelationAtCut) && json(value.expiryRelationAtCut)))
   )
 }
 

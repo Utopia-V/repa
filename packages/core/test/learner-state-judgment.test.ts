@@ -958,7 +958,10 @@ describe.serial("LearnerStateJudgment", () => {
         entries: [],
       })
       expect(prepared.renderedBlock).toContain(
-        "learnerStateJudgment: owner index withheld because its exact lazy-read capability is absent; identity and count are unknown.",
+        '["learner_state_judgment","not_authorized","unknown",["unknown","learner_state_judgment_read_capability_withheld"],[],null]',
+      )
+      expect(prepared.renderedBlock).toContain(
+        "locator/missing/stale/omitted/withheld proves neither value nor authorization",
       )
       expect(prepared.renderedBlock).not.toContain("Withheld learner-state detail")
     }),
@@ -1347,127 +1350,127 @@ describe.serial("LearnerStateJudgment", () => {
     }),
   )
 
-  it.effect("bounds a current learner-state basis before advisory commit and keeps the admitted maximum Context-readable", () =>
-    Effect.gen(function* () {
-      const db = (yield* Database.Service).db
-      const time = Date.parse("2038-01-09T09:00:00Z")
-      const sourceText = "I can explain the semaphore invariant, but applying it is still uncertain."
-      const sourceInvocation = yield* seedAgentInvocation(
-        db,
-        "advisory_capacity_source",
-        createCommand(sourceText, snapshot("Definition understood; application remains uncertain")),
-        sourceText,
-        time,
-      )
-      const source = yield* applyInvocation(db, sourceInvocation, time + 2)
-      if (source.type !== "settled" || !isAppliedLearnerStateSettlement(source.settlement)) {
-        return yield* Effect.die("Expected the learner-state basis to apply")
-      }
-      const basisRef = {
-        type: "learner_state_judgment_revision" as const,
-        judgmentID: source.settlement.judgmentID,
-        revisionID: source.settlement.revisionID,
-        version: source.settlement.version,
-      }
-      const boundarySnapshot: AdvisoryPlanSuggestion.SemanticSnapshotIntent = {
-        learnerVisibleScope: "s".repeat(AdvisoryPlanSuggestion.MAX_LEARNER_VISIBLE_SCOPE_BYTES),
-        retrievalScope: { type: "learner_home_fallback", reason: "no_stable_owner_anchor" },
-        purpose: "p".repeat(AdvisoryPlanSuggestion.MAX_PURPOSE_BYTES),
-        directorySummary: "d".repeat(488),
-        body: "b".repeat(AdvisoryPlanSuggestion.MAX_BODY_BYTES),
-        exactBasisRefs: [basisRef],
-        assumptionsAndUncertainty: "u".repeat(AdvisoryPlanSuggestion.MAX_ASSUMPTIONS_BYTES),
-      }
-      const advisoryText = "Use this exact learner-state judgment to keep the next advice appropriately tentative."
-      const boundaryInvocation = yield* seedAdvisoryPlanSuggestionInvocation(
-        db,
-        "learner_state_capacity_boundary",
-        {
-          cause: {
-            type: "responsive_tutor_proposal",
-            excerpt: excerpt(advisoryText),
-            rationale: "Exercise the complete learner-state compact relation envelope.",
-          },
-          intents: [
-            { operation: "create", operationOrdinal: 0, createOrdinal: 0, snapshot: boundarySnapshot },
-          ],
-        },
-        advisoryText,
-        time + 10,
-      )
-      const boundary = yield* applyAdvisoryPlanSuggestionInvocation(db, boundaryInvocation, time + 12)
-      if (
-        boundary.type !== "settled" ||
-        boundary.settlement.outcome !== "applied" ||
-        !("advisoryPlanSuggestionKind" in boundary.settlement) ||
-        boundary.settlement.advisoryPlanSuggestionKind !== "change_set"
-      ) {
-        return yield* Effect.die("Expected the learner-state compact boundary to apply")
-      }
-      const boundaryResult = boundary.settlement.intentResults[0]
-      if (!boundaryResult || boundaryResult.outcome !== "changed") {
-        return yield* Effect.die("Expected one advisory boundary revision")
-      }
-      const context = yield* prepareLearningContext(db, boundaryInvocation, time + 20)
-      const entry = context.cut.sections
-        .find((section) => section.owner === "advisory_plan_suggestion")
-        ?.entries.find((candidate) => candidate.locator.suggestionID === boundaryResult.suggestionID)
-      if (entry?.semantic?.state !== "value") {
-        return yield* Effect.die("Expected a complete current learner-state compact value")
-      }
-      expect(entry.semantic.value).toMatchObject({
-        basisRelations: [
+  it.effect(
+    "bounds a current learner-state basis before advisory commit and keeps the admitted maximum Context-readable",
+    () =>
+      Effect.gen(function* () {
+        const db = (yield* Database.Service).db
+        const time = Date.parse("2038-01-09T09:00:00Z")
+        const sourceText = "I can explain the semaphore invariant, but applying it is still uncertain."
+        const sourceInvocation = yield* seedAgentInvocation(
+          db,
+          "advisory_capacity_source",
+          createCommand(sourceText, snapshot("Definition understood; application remains uncertain")),
+          sourceText,
+          time,
+        )
+        const source = yield* applyInvocation(db, sourceInvocation, time + 2)
+        if (source.type !== "settled" || !isAppliedLearnerStateSettlement(source.settlement)) {
+          return yield* Effect.die("Expected the learner-state basis to apply")
+        }
+        const basisRef = {
+          type: "learner_state_judgment_revision" as const,
+          judgmentID: source.settlement.judgmentID,
+          revisionID: source.settlement.revisionID,
+          version: source.settlement.version,
+        }
+        const boundarySnapshot: AdvisoryPlanSuggestion.SemanticSnapshotIntent = {
+          learnerVisibleScope: "s".repeat(AdvisoryPlanSuggestion.MAX_LEARNER_VISIBLE_SCOPE_BYTES),
+          retrievalScope: { type: "learner_home_fallback", reason: "no_stable_owner_anchor" },
+          purpose: "p".repeat(AdvisoryPlanSuggestion.MAX_PURPOSE_BYTES),
+          directorySummary: "d".repeat(488),
+          body: "b".repeat(AdvisoryPlanSuggestion.MAX_BODY_BYTES),
+          exactBasisRefs: [basisRef],
+          assumptionsAndUncertainty: "u".repeat(AdvisoryPlanSuggestion.MAX_ASSUMPTIONS_BYTES),
+        }
+        const advisoryText = "Use this exact learner-state judgment to keep the next advice appropriately tentative."
+        const boundaryInvocation = yield* seedAdvisoryPlanSuggestionInvocation(
+          db,
+          "learner_state_capacity_boundary",
           {
-            ordinal: 0,
-            state: "current",
-            currentRevision: { revisionID: source.settlement.revisionID, version: source.settlement.version },
+            cause: {
+              type: "responsive_tutor_proposal",
+              excerpt: excerpt(advisoryText),
+              rationale: "Exercise the complete learner-state compact relation envelope.",
+            },
+            intents: [{ operation: "create", operationOrdinal: 0, createOrdinal: 0, snapshot: boundarySnapshot }],
           },
-        ],
-      })
-      expect(new TextEncoder().encode(JSON.stringify(entry.semantic.value)).byteLength).toBeLessThanOrEqual(
-        AdvisoryPlanSuggestion.MAX_SEMANTIC_VALUE_BYTES,
-      )
-
-      const overInvocation = yield* seedAdvisoryPlanSuggestionInvocation(
-        db,
-        "learner_state_capacity_over",
-        {
-          cause: {
-            type: "responsive_tutor_proposal",
-            excerpt: excerpt(advisoryText),
-            rationale: "Reject the first byte beyond the complete compact relation envelope.",
-          },
-          intents: [
+          advisoryText,
+          time + 10,
+        )
+        const boundary = yield* applyAdvisoryPlanSuggestionInvocation(db, boundaryInvocation, time + 12)
+        if (
+          boundary.type !== "settled" ||
+          boundary.settlement.outcome !== "applied" ||
+          !("advisoryPlanSuggestionKind" in boundary.settlement) ||
+          boundary.settlement.advisoryPlanSuggestionKind !== "change_set"
+        ) {
+          return yield* Effect.die("Expected the learner-state compact boundary to apply")
+        }
+        const boundaryResult = boundary.settlement.intentResults[0]
+        if (!boundaryResult || boundaryResult.outcome !== "changed") {
+          return yield* Effect.die("Expected one advisory boundary revision")
+        }
+        const context = yield* prepareLearningContext(db, boundaryInvocation, time + 20)
+        const entry = context.cut.sections
+          .find((section) => section.owner === "advisory_plan_suggestion")
+          ?.entries.find((candidate) => candidate.locator.suggestionID === boundaryResult.suggestionID)
+        if (entry?.semantic?.state !== "value") {
+          return yield* Effect.die("Expected a complete current learner-state compact value")
+        }
+        expect(entry.semantic.value).toMatchObject({
+          basisRelations: [
             {
-              operation: "create",
-              operationOrdinal: 0,
-              createOrdinal: 0,
-              snapshot: { ...boundarySnapshot, directorySummary: `${boundarySnapshot.directorySummary}x` },
+              ordinal: 0,
+              state: "current",
+              currentRevision: { revisionID: source.settlement.revisionID, version: source.settlement.version },
             },
           ],
-        },
-        advisoryText,
-        time + 30,
-      )
-      const before = {
-        effects: (yield* db.select().from(AdvisoryPlanSuggestionEffectTable).all()).length,
-        suggestions: (yield* db.select().from(AdvisoryPlanSuggestionTable).all()).length,
-        revisions: (yield* db.select().from(AdvisoryPlanSuggestionRevisionTable).all()).length,
-        noChangeSeals: (yield* db.select().from(AdvisoryPlanSuggestionNoChangeSealTable).all()).length,
-        frontier: yield* db.transaction((tx) => LearningFrontier.read(tx)),
-      }
-      expect(yield* applyAdvisoryPlanSuggestionInvocation(db, overInvocation, time + 32)).toMatchObject({
-        type: "settled",
-        settlement: { outcome: "error", code: "capacity_exceeded" },
-      })
-      expect({
-        effects: (yield* db.select().from(AdvisoryPlanSuggestionEffectTable).all()).length,
-        suggestions: (yield* db.select().from(AdvisoryPlanSuggestionTable).all()).length,
-        revisions: (yield* db.select().from(AdvisoryPlanSuggestionRevisionTable).all()).length,
-        noChangeSeals: (yield* db.select().from(AdvisoryPlanSuggestionNoChangeSealTable).all()).length,
-        frontier: yield* db.transaction((tx) => LearningFrontier.read(tx)),
-      }).toEqual(before)
-    }),
+        })
+        expect(new TextEncoder().encode(JSON.stringify(entry.semantic.value)).byteLength).toBeLessThanOrEqual(
+          AdvisoryPlanSuggestion.MAX_SEMANTIC_VALUE_BYTES,
+        )
+
+        const overInvocation = yield* seedAdvisoryPlanSuggestionInvocation(
+          db,
+          "learner_state_capacity_over",
+          {
+            cause: {
+              type: "responsive_tutor_proposal",
+              excerpt: excerpt(advisoryText),
+              rationale: "Reject the first byte beyond the complete compact relation envelope.",
+            },
+            intents: [
+              {
+                operation: "create",
+                operationOrdinal: 0,
+                createOrdinal: 0,
+                snapshot: { ...boundarySnapshot, directorySummary: `${boundarySnapshot.directorySummary}x` },
+              },
+            ],
+          },
+          advisoryText,
+          time + 30,
+        )
+        const before = {
+          effects: (yield* db.select().from(AdvisoryPlanSuggestionEffectTable).all()).length,
+          suggestions: (yield* db.select().from(AdvisoryPlanSuggestionTable).all()).length,
+          revisions: (yield* db.select().from(AdvisoryPlanSuggestionRevisionTable).all()).length,
+          noChangeSeals: (yield* db.select().from(AdvisoryPlanSuggestionNoChangeSealTable).all()).length,
+          frontier: yield* db.transaction((tx) => LearningFrontier.read(tx)),
+        }
+        expect(yield* applyAdvisoryPlanSuggestionInvocation(db, overInvocation, time + 32)).toMatchObject({
+          type: "settled",
+          settlement: { outcome: "error", code: "capacity_exceeded" },
+        })
+        expect({
+          effects: (yield* db.select().from(AdvisoryPlanSuggestionEffectTable).all()).length,
+          suggestions: (yield* db.select().from(AdvisoryPlanSuggestionTable).all()).length,
+          revisions: (yield* db.select().from(AdvisoryPlanSuggestionRevisionTable).all()).length,
+          noChangeSeals: (yield* db.select().from(AdvisoryPlanSuggestionNoChangeSealTable).all()).length,
+          frontier: yield* db.transaction((tx) => LearningFrontier.read(tx)),
+        }).toEqual(before)
+      }),
   )
 })
 

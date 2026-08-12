@@ -3792,6 +3792,198 @@ governed by its explicitly invoked opening grill, required fresh contract review
 and later implementation/evidence review; publication alone supplies none of
 those merits.
 
+### 2026-08-12 Gate 21A contract/theory acceptance
+
+Gate 21A opened from `origin/main` baseline
+`97212bcb8786c63e2c2c2a01d553f7707474ea29` on branch
+`codex/gate-21a-tutor-flow`. Its pre-contract qualification reached a real
+pre-provider capacity defect in the frozen Gate 21 renderer: a legal synthetic
+saturated cross-owner Context could not fit the existing 16,384-byte rendered
+bound. The retained run did not contain Material or learner-response-evidence
+rows and did not complete the semantic provider matrix; the contract preserves
+those limitations rather than promoting the diagnostic into every-family
+qualification evidence.
+
+Fresh top-level reviewer task `019ff1c6-97c5-7441-bb96-77d863f3a4d5`
+reviewed the contract under run `repa-g21a-contract-1f881e-20260812`. The first
+pass returned **Revise** for `G21A-CR-001..003`: exact diagnostic lineage,
+truthful synthetic-fixture scope, and the missing physical database migration
+for a new renderer generation. The repaired semantic candidate withdrew
+unretained byte claims, bound retained artifacts and distinct Turns, required
+immutable phase manifests and a later representative collision, and froze new
+tuple `(schema=1, policy=6, renderer=7, capabilityCatalog=6)` plus a v23-to-v24
+byte-copy migration.
+
+One closure attempt failed before review because the repaired untracked bytes
+had not reached the reviewer's actual checkout. That transport failure closed
+no finding and supplied no verdict. After the exact candidate was materialized
+there, both checkouts bound SHA-256
+`307F9D4F5E566FCC97CF2A251B406E9677E0A23C791B2813199C5D200BA0787F`,
+runner SHA-256
+`C809261613BF42F09DEDAABBD19FAE34C758C5EA415972CD910AF5D6D0D2B9D4`,
+and the same clean tracked baseline.
+
+The same reviewer then independently recomputed all ten retained-artifact
+hashes, reproduced the decisive SQLite/source facts, closed
+`G21A-CR-001..003`, and returned contract/theory **Accept** with no replacement
+finding, owner blocker, or material contract uncertainty. This verdict makes
+the exact semantic candidate implementation authority only for its scoped
+renderer, migration, ordinary-Agent qualification, and failure-continuity
+boundary. No implementation/evidence acceptance, integration, commit, push,
+release, Gate 22, or Gate 23 claim follows.
+
+### 2026-08-12 Gate 21A implementation/evidence candidate and first repair
+
+The top-level executor implemented the accepted boundary without a Tutor-move
+owner, selector, scheduler, hard-limit increase, or second runtime. Current
+cuts use tuple `(schema=1, policy=6, renderer=7, capabilityCatalog=6)` and a
+lossless compact model projection while canonical truth remains unchanged.
+Migration `20260811180409_gate21a_learning_context_renderer_v7` advances the
+physical database from v23 to v24, verbatim-copies all eight historical cut
+columns, admits only the existing `(1,1)..(6,6)` pairs plus `(6,7)`, and keeps
+the shared 32,768/16,384-byte limits.
+
+The retained reviewer's first implementation/evidence pass returned **Revise**
+without reopening contract/theory. `G21A-IR-001..006` found: unconditional sole
+FutureAttention prose in every renderer-7 cut; loss of the clearly-more-specific
+overlap rule plus a fixture-specific scaffold restriction promoted globally;
+SQLite `CHECK` acceptance of missing/JSON-null tuple members; incomplete
+pre-phase working-tree binding; final manifests sealed before the retained
+consolidated DB/log disposition; and prose-only deterministic failure/re-entry
+claims. No maintainer decision or product-boundary change was required.
+
+The executor repaired those findings by deriving FutureAttention wording from
+withheld/zero/sole/multiple truth, restoring unchanged policy-6 overlap meaning,
+removing the global scaffold restriction, making the SQL tuple predicate false
+on NULL, and adding the missing regression cases on fresh and migrated
+databases. The phase runner now seals the exhaustive candidate before work,
+proves it unchanged afterward, disposes runtime state, checkpoints and closes
+SQLite, and binds the consolidated DB, absent WAL/SHM, actual application log,
+and structured runner events. A separate immutable deterministic package binds
+source/test/fixture bytes, commands, raw logs, JUnit/exit results, the durable
+running DB+WAL, startup zero-dispatch recovery, and one later same-Session
+provider call. These remain executor closure claims until the same reviewer
+returns `Accept`.
+
+The repaired production/test package candidate is 17 files / 1,920 canonical
+manifest bytes at SHA-256
+`9BA0B2ED3014830DCF09139D99BC1678073A97DC9CB67B0E0969324A63DA6C24`.
+Its final qualification runner is
+`017EF80F45ECD8F63D2A675851A20E9609CCCCD9492A5372263675E1E39C45E1`.
+The isolated evidence root
+`C:\repa-g21a-qualification-20260812-final-10` binds an empty-DB typed setup,
+a provider-blocked collision, and credentialed released-v1 clear, ambiguous,
+and corrected phases to exhaustive pre-phase candidate fingerprint
+`A8867C0FA620C712A57DFCE66CBAC1227DF6540B3F65FB3AAD077ABCB22DA659`.
+Every behavior phase starts from exact DB SHA-256
+`BB5FC8B0E45E6CF746211EC8128A4E74979EB7885D1ADCEC9EFF594296507D71`.
+
+The fully populated collision retains all ten owners, including Material and
+source-deleted learner-response evidence, at 23,393 canonical / 16,179 rendered
+bytes. It keeps sole FutureAttention and Assignment complete, exact
+learner-state/advisory cursors, and one of eight advisory entries with seven
+exact `gate18_byte_budget` omissions. The intentionally blocked provider Turn
+fails before a completed Assistant and changes no learning-owner table. A
+mechanically frozen copy replays and re-renders byte-identically.
+
+The final semantic matrix records one clear substantive diagnostic, one A/B
+referent clarification for two live proofs, a zero-tool reversible default,
+one exact advisory-detail-conditioned prompt, and a typed learner-state
+correction that changes the same later control request from diagnosis to
+repair/completion. The old cut remains byte-exact and the fresh cut fingerprint
+changes. All captures redact credential/account headers and pass a recursive
+provider-body secret scan.
+
+The failure-continuity audit adds one test-only crash seed and no production
+recovery mechanism. A child process commits a supported current-v7 running
+model operation to a production file database and is killed without disposal.
+A fresh production `SessionPrompt` graph reopens the exact file and, before any
+new work or provider request, recovers the old Turn as
+`interrupted / startup_recovery`, interrupts its model operation, aborts its
+incomplete Assistant, emits no replacement model/tool admission, and leaves
+the provider counter at zero. A distinct later Turn in that same Session then
+completes normally and raises the provider count exactly to one. Focused
+cancellation, ancestor-interruption, committed-effect/provider-failure,
+startup-recovery, and exact-replay cases also pass in the separately sealed
+deterministic package.
+
+Five early attempted final roots remain as disclosed failed semantic
+diagnostics. They caught one real compound ability question, one generic
+state-insensitive ability question, two too-narrow action-classifier cases, and
+one compound two-quantity proof prompt. The review-rejected `final-06`, later
+transport/credential/workspace/teardown probes, and `final-09` (superseded when
+a focused composition test exposed one stale renderer-6 FutureAttention string
+oracle) are explicitly excluded from the repaired closure evidence. The five
+`final-10` phase manifests and its separately sealed deterministic and focused
+verification packages are the only executed final lineage; the following
+review-recovery record governs their current physical packaging.
+
+### 2026-08-13 Gate 21A first implementation closure and review-mutation recovery
+
+The same whole-Gate reviewer examined exact evidence-record SHA-256
+`5EC12150975DA135CDD3C19CE595094742B0AE8429CF08B7D9DCC32791203C4C`,
+17-file implementation-package SHA-256
+`9BA0B2ED3014830DCF09139D99BC1678073A97DC9CB67B0E0969324A63DA6C24`,
+and first closure review-package SHA-256
+`1EB1E66161ADDC5F7C332AF5628F1EA7AA591B988988F261854F47FA4CEE8131`.
+It closed `G21A-IR-001..004` and `G21A-IR-006`, confirmed that the original
+`G21A-IR-005` runner/sealing defect was repaired, and found no remaining
+renderer, migration, replay, recovery, selection-provenance, causal-behavior,
+contract, or maintainer-owned product blocker.
+
+The reviewer returned an execution failure rather than an acceptance verdict
+because one of its subagents opened `collision.db`, `clear.db`, `ambiguous.db`,
+and `corrected.db` through Bun SQLite with a read-only configuration. SQLite
+created four zero-byte WAL files and four 32,768-byte SHM files after sealing,
+contradicting the final manifests' absent-sidecar disposition. The reviewer
+replaced the residual acceptance impact of `G21A-IR-005` with executor-owned
+evidence-integrity finding `G21A-IR-007`; it did not reopen contract/theory or
+falsify the already inspected runtime and semantic evidence.
+
+The executor preserved `final-10` and all eight sidecars as the unaltered
+incident source. Ordinary binary file hashing, without SQLite or another
+database API, reproduced the four sealed main-DB hashes exactly. No provider
+recapture was performed because no previously bound artifact byte changed.
+Clean recovery root `C:\repa-g21a-qualification-20260812-final-11` was then
+materialized from an explicit allowlist: the five phase artifact families and
+selected application logs, exact deterministic and focused-verification
+packages, 17 candidate source files under a separate namespace, and current
+documentation. It excludes every review-created phase sidecar while retaining
+the process-loss test's intentional running-DB WAL as evidence. Its incident
+and recovery manifests bind the source mutation, copied bytes, complete clean
+namespace, and required absent/present sidecar states.
+
+On the second implementation closure pass, the reviewer reproduced all 130
+`final-11` files, matched every one of the 127 namespace rows, matched all 105
+copied execution-evidence files to `final-10`, matched all 21 candidate files
+to the released checkout, confirmed every required phase sidecar absent and the
+intentional process-loss WAL present, and closed `G21A-IR-007`. It found no
+runtime, migration, recovery, or earlier-repair regression.
+
+That pass returned **Revise** for one new mechanical evidence defect,
+`G21A-IR-008`: `final-11` described its namespace and whole-checkout seals as
+ordinal, but both were generated through ambient PowerShell ordering. A true
+`.NET StringComparer.Ordinal` reserialization put `candidate/docs/README.md`
+before `candidate/docs/fork-ledger.md` and produced different hashes. No file
+was omitted and no executable evidence was falsified, but the delivered
+algorithm could not independently reproduce its stated seal.
+
+The executor preserved comparer-invalid `final-11` as rejected provenance and
+materialized `C:\repa-g21a-qualification-20260812-final-12` from the same exact
+105 execution-evidence files, incident record, 17 implementation/test files,
+and updated documentation. Its namespace and current-checkout rows use
+forward-slash relative paths, tab separators, LF, UTF-8, and an explicitly
+typed `.NET StringComparer.Ordinal`; a second independent implementation must
+reproduce both before resubmission. `G21A-IR-008` and the
+implementation/evidence layer remain open until the same reviewer accepts this
+ordinal-correct recovery.
+
+The current [implementation/evidence record](research/repa-gate-21a-tutor-move-selection-flow-continuity-implementation-evidence-2026-08-12.md)
+binds the exact artifacts and focused executable results. It is **not yet
+accepted or integrated**. The retained whole-Gate reviewer must review this
+implementation/evidence layer and close every acceptance-changing finding
+before the separately authorized local merge to `main`.
+
 ## Historical evidence locators
 
 ### Pre-fork source audit

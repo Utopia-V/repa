@@ -44,6 +44,7 @@ import futureAttentionMigration from "@opencode-ai/core/database/migration/repa/
 import assignmentAuthorityMigration from "@opencode-ai/core/database/migration/repa/20260808141417_gate20a_assignment_authority"
 import learnerStateJudgmentMigration from "@opencode-ai/core/database/migration/repa/20260809150754_gate20b_learner_state_judgment"
 import advisoryLearningPlanningMigration from "@opencode-ai/core/database/migration/repa/20260810080004_gate21_advisory_learning_planning"
+import gate21ALearningContextRendererV7Migration from "@opencode-ai/core/database/migration/repa/20260811180409_gate21a_learning_context_renderer_v7"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { EventV2 } from "@opencode-ai/core/event"
@@ -79,6 +80,7 @@ import databaseV13Schema from "./fixture/database-v13-schema"
 import { prepareFrozenGate20LearningContextCut } from "./fixture/frozen-v20-learning-context"
 import { prepareFrozenGate20ALearningContextCut } from "./fixture/frozen-v21-learning-context"
 import { prepareFrozenGate20BLearningContextCut } from "./fixture/frozen-v22-learning-context"
+import { prepareFrozenV23LearningContextCut } from "./fixture/frozen-v23-learning-context"
 
 setDefaultTimeout(30_000)
 
@@ -266,6 +268,7 @@ const databaseV19Migrations = [...databaseV18Migrations, learnerResponseEvidence
 const databaseV20Migrations = [...databaseV19Migrations, futureAttentionMigration] as const
 const databaseV21Migrations = [...databaseV20Migrations, assignmentAuthorityMigration] as const
 const databaseV22Migrations = [...databaseV21Migrations, learnerStateJudgmentMigration] as const
+const databaseV23Migrations = [...databaseV22Migrations, advisoryLearningPlanningMigration] as const
 
 function schemaManifestDigest(db: TestDatabase) {
   return db
@@ -565,6 +568,16 @@ function initializeDatabaseV22(db: TestDatabase) {
     yield* DatabaseMigration.apply(db, {
       path: "frozen-gate20b.db",
       migrations: databaseV22Migrations,
+    })
+  })
+}
+
+function initializeDatabaseV23(db: TestDatabase) {
+  return Effect.gen(function* () {
+    yield* initializeDatabaseV11(db)
+    yield* DatabaseMigration.apply(db, {
+      path: "frozen-gate21.db",
+      migrations: databaseV23Migrations,
     })
   })
 }
@@ -1737,7 +1750,7 @@ function renderLegacyLearningContext(cut: LearningContext.Cut) {
   ].join("\n")
 }
 
-function seedFrozenLearningContextCut(db: TestDatabase, generation: 2 | 3 | 4 | 5 = 2) {
+function seedFrozenLearningContextCut(db: TestDatabase, generation: 1 | 2 | 3 | 4 | 5 | 6 = 2) {
   return Effect.gen(function* () {
     const sessionID = SessionSchema.ID.create()
     const turnID = Turn.ID.create()
@@ -1831,36 +1844,38 @@ function seedFrozenLearningContextCut(db: TestDatabase, generation: 2 | 3 | 4 | 
     `)
     if (!operation) return yield* Effect.die(`Expected frozen learning-context v${generation} model operation`)
     const frozenInput = {
-            sessionID,
-            turnID,
-            inputID,
-            occurrenceID: occurrence.id,
-            assistantMessageID,
-            ordinal: operation.ordinal,
-            cutAsOf: operation.timeAdmitted,
-            throughSharedFrontier: { sequence: operation.observedSequence, time: operation.observedTime },
-            retainedSteeringFingerprint: operation.retainedFingerprint,
-          }
+      sessionID,
+      turnID,
+      inputID,
+      occurrenceID: occurrence.id,
+      assistantMessageID,
+      ordinal: operation.ordinal,
+      cutAsOf: operation.timeAdmitted,
+      throughSharedFrontier: { sequence: operation.observedSequence, time: operation.observedTime },
+      retainedSteeringFingerprint: operation.retainedFingerprint,
+    }
     const legacy =
-      generation === 5
-        ? (prepareFrozenGate20BLearningContextCut(frozenInput) as unknown as LearningContext.Preparation)
-        : generation === 4
-          ? (prepareFrozenGate20ALearningContextCut(frozenInput) as unknown as LearningContext.Preparation)
-        : generation === 3
-          ? (prepareFrozenGate20LearningContextCut(frozenInput) as unknown as LearningContext.Preparation)
-        : yield* prepareLegacyLearningContextCut({
-            sessionID,
-            turnID,
-            inputID,
-            occurrenceID: occurrence.id,
-            assistantMessageID,
-            ordinal: operation.ordinal,
-            cutAsOf: operation.timeAdmitted,
-            throughSharedFrontier: { sequence: operation.observedSequence, time: operation.observedTime },
-            retainedSteeringFingerprint: operation.retainedFingerprint,
-            generation,
-            collideWithFutureLazyReadID: true,
-          })
+      generation === 6 || generation === 2 || generation === 1
+        ? (prepareFrozenV23LearningContextCut(generation, frozenInput) as unknown as LearningContext.Preparation)
+        : generation === 5
+          ? (prepareFrozenGate20BLearningContextCut(frozenInput) as unknown as LearningContext.Preparation)
+          : generation === 4
+            ? (prepareFrozenGate20ALearningContextCut(frozenInput) as unknown as LearningContext.Preparation)
+            : generation === 3
+              ? (prepareFrozenGate20LearningContextCut(frozenInput) as unknown as LearningContext.Preparation)
+              : yield* prepareLegacyLearningContextCut({
+                  sessionID,
+                  turnID,
+                  inputID,
+                  occurrenceID: occurrence.id,
+                  assistantMessageID,
+                  ordinal: operation.ordinal,
+                  cutAsOf: operation.timeAdmitted,
+                  throughSharedFrontier: { sequence: operation.observedSequence, time: operation.observedTime },
+                  retainedSteeringFingerprint: operation.retainedFingerprint,
+                  generation,
+                  collideWithFutureLazyReadID: true,
+                })
     yield* db.run(sql`
       INSERT INTO turn_learning_context_cut (
         assistant_message_id, canonical_cut, canonical_bytes, cut_fingerprint, cut_as_of,
@@ -1871,7 +1886,138 @@ function seedFrozenLearningContextCut(db: TestDatabase, generation: 2 | 3 | 4 | 
         ${legacy.cut.budget.renderedBytes}, ${legacy.cut.renderedFingerprint}
       )
     `)
-    return { assistantMessageID, before: yield* db.transaction((tx) => LearningContext.readCut(tx, assistantMessageID)) }
+    return {
+      assistantMessageID,
+      before: yield* db.transaction((tx) => LearningContext.readCut(tx, assistantMessageID)),
+    }
+  })
+}
+
+type StoredLearningContextRow = Readonly<{
+  assistantMessageID: string
+  canonicalCut: string
+  canonicalBytes: number
+  cutFingerprint: string
+  cutAsOf: number
+  renderedBlock: string
+  renderedBytes: number
+  renderedFingerprint: string
+  canonicalHex: string
+  renderedHex: string
+}>
+
+function storedLearningContextRows(db: TestDatabase) {
+  return db.all<StoredLearningContextRow>(sql`
+    SELECT
+      assistant_message_id AS assistantMessageID,
+      canonical_cut AS canonicalCut,
+      canonical_bytes AS canonicalBytes,
+      cut_fingerprint AS cutFingerprint,
+      cut_as_of AS cutAsOf,
+      rendered_block AS renderedBlock,
+      rendered_bytes AS renderedBytes,
+      rendered_fingerprint AS renderedFingerprint,
+      hex(CAST(canonical_cut AS BLOB)) AS canonicalHex,
+      hex(CAST(rendered_block AS BLOB)) AS renderedHex
+    FROM turn_learning_context_cut
+    ORDER BY assistant_message_id
+  `)
+}
+
+function learningContextTupleMatrix(db: TestDatabase, assistantMessageID: string) {
+  return Effect.gen(function* () {
+    const original = yield* db.get<StoredLearningContextRow>(sql`
+      SELECT
+        assistant_message_id AS assistantMessageID,
+        canonical_cut AS canonicalCut,
+        canonical_bytes AS canonicalBytes,
+        cut_fingerprint AS cutFingerprint,
+        cut_as_of AS cutAsOf,
+        rendered_block AS renderedBlock,
+        rendered_bytes AS renderedBytes,
+        rendered_fingerprint AS renderedFingerprint,
+        hex(CAST(canonical_cut AS BLOB)) AS canonicalHex,
+        hex(CAST(rendered_block AS BLOB)) AS renderedHex
+      FROM turn_learning_context_cut
+      WHERE assistant_message_id = ${assistantMessageID}
+    `)
+    if (!original) return yield* Effect.die("Missing frozen learning-context tuple probe")
+    const attempt = (mutate: (value: Record<string, unknown>) => void) =>
+      Effect.gen(function* () {
+        yield* db.run(sql`DELETE FROM turn_learning_context_cut WHERE assistant_message_id = ${assistantMessageID}`)
+        const value = JSON.parse(original.canonicalCut) as Record<string, unknown>
+        mutate(value)
+        const canonicalCut = LearningContext.canonicalJson(LearningContext.toJsonValue(value))
+        return yield* db
+          .run(
+            sql`
+            INSERT INTO turn_learning_context_cut (
+              assistant_message_id, canonical_cut, canonical_bytes, cut_fingerprint, cut_as_of,
+              rendered_block, rendered_bytes, rendered_fingerprint
+            ) VALUES (
+              ${assistantMessageID}, ${canonicalCut}, ${LearningContext.utf8Bytes(canonicalCut)},
+              ${original.cutFingerprint}, ${original.cutAsOf}, ${original.renderedBlock},
+              ${original.renderedBytes}, ${original.renderedFingerprint}
+            )
+          `,
+          )
+          .pipe(Effect.exit, Effect.map(Exit.isSuccess))
+      })
+    const tupleCases = [
+      [1, 1],
+      [2, 2],
+      [3, 3],
+      [4, 4],
+      [5, 5],
+      [6, 6],
+      [6, 7],
+      [1, 2],
+      [5, 7],
+      [6, 5],
+      [6, 8],
+      [7, 7],
+    ] as const
+    const tuples = yield* Effect.forEach(
+      tupleCases,
+      ([policyVersion, rendererVersion]) =>
+        Effect.gen(function* () {
+          const accepted = yield* attempt((value) => {
+            value.policyVersion = policyVersion
+            value.rendererVersion = rendererVersion
+          })
+          return { policyVersion, rendererVersion, accepted }
+        }),
+      { concurrency: 1 },
+    )
+    const requiredFields = yield* Effect.forEach(
+      ["schemaVersion", "policyVersion", "rendererVersion"] as const,
+      (field) =>
+        Effect.forEach(
+          ["missing", "null"] as const,
+          (variant) =>
+            Effect.gen(function* () {
+              const accepted = yield* attempt((value) => {
+                if (variant === "missing") delete value[field]
+                else value[field] = null
+              })
+              return { field, variant, accepted }
+            }),
+          { concurrency: 1 },
+        ),
+      { concurrency: 1 },
+    )
+    yield* db.run(sql`DELETE FROM turn_learning_context_cut WHERE assistant_message_id = ${assistantMessageID}`)
+    yield* db.run(sql`
+      INSERT INTO turn_learning_context_cut (
+        assistant_message_id, canonical_cut, canonical_bytes, cut_fingerprint, cut_as_of,
+        rendered_block, rendered_bytes, rendered_fingerprint
+      ) VALUES (
+        ${original.assistantMessageID}, ${original.canonicalCut}, ${original.canonicalBytes},
+        ${original.cutFingerprint}, ${original.cutAsOf}, ${original.renderedBlock},
+        ${original.renderedBytes}, ${original.renderedFingerprint}
+      )
+    `)
+    return { tuples, requiredFields: requiredFields.flat() }
   })
 }
 
@@ -1921,6 +2067,7 @@ function dropGate20B(db: TestDatabase) {
 
 function dropGate21(db: TestDatabase) {
   return Effect.gen(function* () {
+    yield* db.run(sql`DELETE FROM repa_migration WHERE version = ${BASELINE_VERSION + 23}`)
     yield* db.run(sql.raw("PRAGMA foreign_keys = OFF"))
     yield* db.run(sql`DROP TRIGGER IF EXISTS learning_command_invocation_terminal_validate_v23`)
     const triggers = yield* db.all<{ name: string }>(sql`
@@ -2579,6 +2726,7 @@ describe("DatabaseMigration", () => {
           { version: BASELINE_VERSION + 20, id: assignmentAuthorityMigration.id },
           { version: BASELINE_VERSION + 21, id: learnerStateJudgmentMigration.id },
           { version: BASELINE_VERSION + 22, id: advisoryLearningPlanningMigration.id },
+          { version: BASELINE_VERSION + 23, id: gate21ALearningContextRendererV7Migration.id },
         ])
         expect(
           yield* db.all(sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'course%' ORDER BY name`),
@@ -3247,7 +3395,10 @@ describe("DatabaseMigration", () => {
 
     expect(upgraded.manifest).toEqual(fresh)
     expect(upgraded.journal).toEqual([
-      { version: BASELINE_VERSION + databaseV22Migrations.length + 1, id: advisoryLearningPlanningMigration.id },
+      {
+        version: BASELINE_VERSION + databaseV23Migrations.length + 1,
+        id: gate21ALearningContextRendererV7Migration.id,
+      },
     ])
     expect(upgraded.target).toEqual({
       authority_kind: "content_root",
@@ -3340,7 +3491,10 @@ describe("DatabaseMigration", () => {
 
     expect(upgraded.manifest).toEqual(fresh)
     expect(upgraded.journal).toEqual([
-      { version: BASELINE_VERSION + databaseV22Migrations.length + 1, id: advisoryLearningPlanningMigration.id },
+      {
+        version: BASELINE_VERSION + databaseV23Migrations.length + 1,
+        id: gate21ALearningContextRendererV7Migration.id,
+      },
     ])
     expect(upgraded.table?.definition).toContain("WITHOUT ROWID")
     expect(upgraded.trigger?.definition).toContain("BEFORE UPDATE ON turn_learning_context_cut")
@@ -3579,7 +3733,10 @@ describe("DatabaseMigration", () => {
 
     expect(upgraded.manifest).toEqual(fresh)
     expect(upgraded.journal).toEqual([
-      { version: BASELINE_VERSION + databaseV22Migrations.length + 1, id: advisoryLearningPlanningMigration.id },
+      {
+        version: BASELINE_VERSION + databaseV23Migrations.length + 1,
+        id: gate21ALearningContextRendererV7Migration.id,
+      },
     ])
     expect(upgraded.before).toEqual(upgraded.after)
     expect(upgraded.after.type).toBe("available")
@@ -3588,7 +3745,9 @@ describe("DatabaseMigration", () => {
     expect(upgraded.after.cut.rendererVersion).toBe(1)
     expect(upgraded.after.cut.capabilityBasis.effectiveLazyReadCapabilities).toEqual([])
     expect(
-      upgraded.after.cut.capabilityBasis.effectiveProviderToolSurfaceBinding.definitions.map((definition) => definition.id),
+      upgraded.after.cut.capabilityBasis.effectiveProviderToolSurfaceBinding.definitions.map(
+        (definition) => definition.id,
+      ),
     ).toEqual(["learner_response_evidence_read"])
     expect(upgraded.after.cut.sections).toHaveLength(5)
     expect(upgraded.tables.map((row) => row.name)).toEqual([
@@ -3659,7 +3818,10 @@ describe("DatabaseMigration", () => {
 
     expect(upgraded.manifest).toEqual(fresh)
     expect(upgraded.journal).toEqual([
-      { version: BASELINE_VERSION + databaseV22Migrations.length + 1, id: advisoryLearningPlanningMigration.id },
+      {
+        version: BASELINE_VERSION + databaseV23Migrations.length + 1,
+        id: gate21ALearningContextRendererV7Migration.id,
+      },
     ])
     expect(upgraded.before).toEqual(upgraded.after)
     expect(upgraded.after.type).toBe("available")
@@ -3669,7 +3831,9 @@ describe("DatabaseMigration", () => {
     expect(upgraded.after.cut.capabilityBasis.catalogVersion).toBe(2)
     expect(upgraded.after.cut.capabilityBasis.effectiveLazyReadCapabilities).toEqual([])
     expect(
-      upgraded.after.cut.capabilityBasis.effectiveProviderToolSurfaceBinding.definitions.map((definition) => definition.id),
+      upgraded.after.cut.capabilityBasis.effectiveProviderToolSurfaceBinding.definitions.map(
+        (definition) => definition.id,
+      ),
     ).toEqual(["future_attention_read"])
     expect(upgraded.after.cut.sections).toHaveLength(6)
     expect(upgraded.tables.map((row) => row.name)).toEqual([
@@ -3808,7 +3972,9 @@ describe("DatabaseMigration", () => {
     expect(upgraded.after.cut.capabilityBasis.catalogVersion).toBe(3)
     expect(upgraded.after.cut.capabilityBasis.effectiveLazyReadCapabilities).toEqual([])
     expect(
-      upgraded.after.cut.capabilityBasis.effectiveProviderToolSurfaceBinding.definitions.map((definition) => definition.id),
+      upgraded.after.cut.capabilityBasis.effectiveProviderToolSurfaceBinding.definitions.map(
+        (definition) => definition.id,
+      ),
     ).toEqual(["assignment_read"])
     expect(upgraded.after.cut.sections.map((section) => section.owner)).toEqual([
       "course",
@@ -3960,7 +4126,9 @@ describe("DatabaseMigration", () => {
     expect(upgraded.after.cut.capabilityBasis.catalogVersion).toBe(4)
     expect(upgraded.after.cut.capabilityBasis.effectiveLazyReadCapabilities).toEqual([])
     expect(
-      upgraded.after.cut.capabilityBasis.effectiveProviderToolSurfaceBinding.definitions.map((definition) => definition.id),
+      upgraded.after.cut.capabilityBasis.effectiveProviderToolSurfaceBinding.definitions.map(
+        (definition) => definition.id,
+      ),
     ).toEqual(["learner_state_judgment_read"])
     expect(upgraded.after.cut.sections.map((section) => section.owner)).toEqual([
       "course",
@@ -3989,7 +4157,7 @@ describe("DatabaseMigration", () => {
     const fresh = await run(
       Effect.gen(function* () {
         const db = yield* makeDb
-        yield* DatabaseMigration.apply(db)
+        yield* initializeDatabaseV23(db)
         return yield* completeSchemaManifest(db)
       }),
     )
@@ -4022,7 +4190,7 @@ describe("DatabaseMigration", () => {
           FROM turn_learning_context_cut
           WHERE assistant_message_id = ${seeded.assistantMessageID}
         `)
-        yield* DatabaseMigration.apply(db, { path: "frozen-gate20b.db" })
+        yield* DatabaseMigration.apply(db, { path: "frozen-gate20b.db", migrations: databaseV23Migrations })
 
         return {
           manifest: yield* completeSchemaManifest(db),
@@ -4090,7 +4258,9 @@ describe("DatabaseMigration", () => {
     expect(upgraded.after.cut.capabilityBasis.catalogVersion).toBe(5)
     expect(upgraded.after.cut.capabilityBasis.effectiveLazyReadCapabilities).toEqual([])
     expect(
-      upgraded.after.cut.capabilityBasis.effectiveProviderToolSurfaceBinding.definitions.map((definition) => definition.id),
+      upgraded.after.cut.capabilityBasis.effectiveProviderToolSurfaceBinding.definitions.map(
+        (definition) => definition.id,
+      ),
     ).toEqual(["advisory_plan_suggestion_read"])
     expect(upgraded.after.cut.sections.map((section) => section.owner)).toEqual([
       "course",
@@ -4109,9 +4279,138 @@ describe("DatabaseMigration", () => {
     expect(upgraded.triggers.map((row) => row.name)).toContain("learning_command_invocation_terminal_validate_v23")
     expect(upgraded.triggers.map((row) => row.name)).toContain("advisory_plan_suggestion_commit_seal_validate")
     expect(upgraded.triggers.map((row) => row.name)).toContain("advisory_plan_suggestion_no_change_validate")
-    expect(upgraded.userVersion).toEqual({ user_version: DatabaseMigration.version })
+    expect(upgraded.userVersion).toEqual({ user_version: BASELINE_VERSION + databaseV23Migrations.length })
     expect(upgraded.foreignKeysEnabled).toEqual({ foreign_keys: 1 })
     expect(upgraded.foreignKeys).toEqual([])
+  })
+
+  test("upgrades a frozen v23 database to v24 while byte-copying every v1-v6 learning-context cut", async () => {
+    const fresh = await run(
+      Effect.gen(function* () {
+        const db = yield* makeDb
+        yield* DatabaseMigration.apply(db)
+        const probe = yield* seedFrozenLearningContextCut(db, 6)
+        return {
+          manifest: yield* completeSchemaManifest(db),
+          tupleProbe: yield* learningContextTupleMatrix(db, probe.assistantMessageID),
+        }
+      }),
+    )
+    const upgraded = await run(
+      Effect.gen(function* () {
+        const db = yield* makeDb
+        yield* initializeDatabaseV23(db)
+        const beforeJournal = yield* db.all(sql`SELECT version, id FROM repa_migration ORDER BY version`)
+        const seeded = yield* Effect.forEach(
+          [1, 2, 3, 4, 5, 6] as const,
+          (generation) => seedFrozenLearningContextCut(db, generation),
+          { concurrency: 1 },
+        )
+        const beforeStored = yield* storedLearningContextRows(db)
+        const beforeReads = yield* Effect.forEach(seeded, (item) =>
+          db.transaction((tx) => LearningContext.readCut(tx, item.assistantMessageID)),
+        )
+        expect(yield* db.get<Record<string, number>>(sql.raw("PRAGMA user_version"))).toEqual({ user_version: 23 })
+
+        yield* DatabaseMigration.apply(db, { path: "frozen-gate21.db" })
+
+        const afterStored = yield* storedLearningContextRows(db)
+        const afterReads = yield* Effect.forEach(seeded, (item) =>
+          db.transaction((tx) => LearningContext.readCut(tx, item.assistantMessageID)),
+        )
+        const immutableUpdate = yield* db
+          .run(
+            sql`UPDATE turn_learning_context_cut SET rendered_block = rendered_block WHERE assistant_message_id = ${seeded[0]!.assistantMessageID}`,
+          )
+          .pipe(Effect.exit)
+        return {
+          manifest: yield* completeSchemaManifest(db),
+          beforeJournal,
+          journal: yield* db.all(sql`SELECT version, id FROM repa_migration ORDER BY version`),
+          beforeStored,
+          afterStored,
+          beforeReads,
+          afterReads,
+          immutableUpdate,
+          tupleProbe: yield* learningContextTupleMatrix(db, seeded.at(-1)!.assistantMessageID),
+          table: yield* db.get<{ definition: string }>(sql`
+            SELECT sql AS definition FROM sqlite_schema
+            WHERE type = 'table' AND name = 'turn_learning_context_cut'
+          `),
+          foreignKeyList: yield* db.all<Record<string, unknown>>(
+            sql.raw("PRAGMA foreign_key_list(turn_learning_context_cut)"),
+          ),
+          foreignKeysEnabled: yield* db.get<Record<string, number>>(sql.raw("PRAGMA foreign_keys")),
+          foreignKeys: yield* db.all(sql.raw("PRAGMA foreign_key_check")),
+          integrity: yield* db.all<Record<string, string>>(sql.raw("PRAGMA integrity_check")),
+          userVersion: yield* db.get<Record<string, number>>(sql.raw("PRAGMA user_version")),
+        }
+      }),
+    )
+
+    expect(upgraded.manifest).toEqual(fresh.manifest)
+    expect(upgraded.beforeJournal).toEqual([
+      { version: BASELINE_VERSION, id: BASELINE_ID },
+      ...databaseV23Migrations.map((migration, index) => ({
+        version: BASELINE_VERSION + index + 1,
+        id: migration.id,
+      })),
+    ])
+    expect(upgraded.journal).toEqual([
+      ...upgraded.beforeJournal,
+      { version: 24, id: gate21ALearningContextRendererV7Migration.id },
+    ])
+    expect(upgraded.beforeStored).toHaveLength(6)
+    expect(upgraded.afterStored).toEqual(upgraded.beforeStored)
+    expect(upgraded.afterReads).toEqual(upgraded.beforeReads)
+    expect(
+      upgraded.afterReads.map((read) =>
+        read.type === "available" ? [read.cut.policyVersion, read.cut.rendererVersion] : null,
+      ),
+    ).toEqual([
+      [1, 1],
+      [2, 2],
+      [3, 3],
+      [4, 4],
+      [5, 5],
+      [6, 6],
+    ])
+    expect(Exit.isFailure(upgraded.immutableUpdate)).toBeTrue()
+    expect(upgraded.table?.definition).toContain("WITHOUT ROWID")
+    expect(upgraded.table?.definition).toContain("turn_learning_context_cut_canonical_shape")
+    expect(upgraded.table?.definition).toContain("turn_learning_context_cut_bytes")
+    expect(upgraded.table?.definition).toContain("32768")
+    expect(upgraded.table?.definition).toContain("16384")
+    expect(upgraded.foreignKeyList).toContainEqual(
+      expect.objectContaining({ table: "turn_model_operation", from: "assistant_message_id", on_delete: "CASCADE" }),
+    )
+    expect(upgraded.foreignKeysEnabled).toEqual({ foreign_keys: 1 })
+    expect(upgraded.foreignKeys).toEqual([])
+    expect(upgraded.integrity).toEqual([{ integrity_check: "ok" }])
+    expect(upgraded.userVersion).toEqual({ user_version: 24 })
+    expect(fresh.tupleProbe).toEqual(upgraded.tupleProbe)
+    expect(upgraded.tupleProbe.tuples).toEqual([
+      { policyVersion: 1, rendererVersion: 1, accepted: true },
+      { policyVersion: 2, rendererVersion: 2, accepted: true },
+      { policyVersion: 3, rendererVersion: 3, accepted: true },
+      { policyVersion: 4, rendererVersion: 4, accepted: true },
+      { policyVersion: 5, rendererVersion: 5, accepted: true },
+      { policyVersion: 6, rendererVersion: 6, accepted: true },
+      { policyVersion: 6, rendererVersion: 7, accepted: true },
+      { policyVersion: 1, rendererVersion: 2, accepted: false },
+      { policyVersion: 5, rendererVersion: 7, accepted: false },
+      { policyVersion: 6, rendererVersion: 5, accepted: false },
+      { policyVersion: 6, rendererVersion: 8, accepted: false },
+      { policyVersion: 7, rendererVersion: 7, accepted: false },
+    ])
+    expect(upgraded.tupleProbe.requiredFields).toEqual([
+      { field: "schemaVersion", variant: "missing", accepted: false },
+      { field: "schemaVersion", variant: "null", accepted: false },
+      { field: "policyVersion", variant: "missing", accepted: false },
+      { field: "policyVersion", variant: "null", accepted: false },
+      { field: "rendererVersion", variant: "missing", accepted: false },
+      { field: "rendererVersion", variant: "null", accepted: false },
+    ])
   })
 
   test("upgrades the frozen v12 schema through v13 to exact current Default-Course structural parity", async () => {
@@ -8042,6 +8341,7 @@ describe("DatabaseMigration", () => {
           { version: BASELINE_VERSION + 20, id: assignmentAuthorityMigration.id },
           { version: BASELINE_VERSION + 21, id: learnerStateJudgmentMigration.id },
           { version: BASELINE_VERSION + 22, id: advisoryLearningPlanningMigration.id },
+          { version: BASELINE_VERSION + 23, id: gate21ALearningContextRendererV7Migration.id },
         ])
       }),
     )

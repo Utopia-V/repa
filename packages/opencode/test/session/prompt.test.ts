@@ -8,10 +8,10 @@ import { Course } from "@opencode-ai/core/course"
 import { EventSequenceTable, EventTable } from "@opencode-ai/core/event/sql"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { SessionProjector } from "@opencode-ai/core/session/projector"
-import { eq, sql } from "drizzle-orm"
+import { and, eq, gt, sql } from "drizzle-orm"
 import { EventV2Bridge } from "@/event-v2-bridge"
 import { EventV2 } from "@opencode-ai/core/event"
-import { expect, setSystemTime } from "bun:test"
+import { expect, setSystemTime, test } from "bun:test"
 import { Cause, DateTime, Deferred, Duration, Effect, Exit, Fiber, Layer } from "effect"
 import path from "path"
 import { fileURLToPath, pathToFileURL } from "url"
@@ -61,7 +61,7 @@ import { Truncate } from "@/tool/truncate"
 import { CrossSpawnSpawner } from "@opencode-ai/core/cross-spawn-spawner"
 import { Ripgrep } from "@opencode-ai/core/ripgrep"
 import { Format } from "../../src/format"
-import { TestInstance, tmpdirScoped } from "../fixture/fixture"
+import { TestInstance, tmpdir, tmpdirScoped } from "../fixture/fixture"
 import { materializeTestSession } from "../fixture/session"
 import { admitModelWithLearningContext } from "../fixture/model-admission"
 import { awaitWithTimeout, pollWithTimeout, testEffect } from "../lib/effect"
@@ -71,6 +71,7 @@ import { ProviderV2 } from "@opencode-ai/core/provider"
 import { ModelV2 } from "@opencode-ai/core/model"
 import { LocationServiceMap, locationServiceMapLayer } from "@opencode-ai/core/location-services"
 import { InstanceStore } from "@/project/instance-store"
+import { InstanceBootstrap } from "@/project/bootstrap-service"
 import { TestConsole } from "effect/testing"
 import { LearningCommand, Occurrence } from "@opencode-ai/core/learning-command"
 import { LearnerGoal } from "@opencode-ai/core/learner-goal"
@@ -140,6 +141,10 @@ function providerText(value: unknown): string[] {
   if (Array.isArray(value)) return value.flatMap(providerText)
   if (value && typeof value === "object") return Object.values(value as Record<string, unknown>).flatMap(providerText)
   return []
+}
+
+function isJsonObject(value: unknown): value is Readonly<Record<string, unknown>> {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
 }
 
 type CompletedToolPart = SessionV1.ToolPart & { state: SessionV1.ToolStateCompleted }
@@ -322,6 +327,20 @@ function makeHttp(input?: { mcpInstructions?: MCP.ServerInstructions[]; processo
   return LayerNode.compile(root, replacements)
 }
 
+function makeProcessRestartBoundary(filename: string) {
+  return LayerNode.compile(LayerNode.group([promptRoot, testLLMServerNode, InstanceStore.node]), [
+    [SessionSummary.node, summary],
+    [LSP.node, lsp],
+    [MCP.node, makeMcp()],
+    [RuntimeFlags.node, runtimeFlags],
+    [Database.node, Database.runtimeLayerFromPath(filename).pipe(Layer.orDie)],
+    [
+      InstanceStore.bootstrapNode,
+      Layer.succeed(InstanceBootstrap.Service, InstanceBootstrap.Service.of({ run: Effect.void })),
+    ],
+  ])
+}
+
 function makeHttpNoLLMServer(input?: { mcpInstructions?: MCP.ServerInstructions[]; processor?: "blocking" }) {
   return makePrompt(input)
 }
@@ -412,6 +431,104 @@ const cfg = {
       },
     },
   },
+}
+
+const runningModelCrashFixture = fileURLToPath(new URL("../fixture/running-model-crash.ts", import.meta.url))
+
+type RunningModelCrashSeed = {
+  readonly sessionID: SessionID
+  readonly turnID: Turn.ID
+  readonly inputID: Turn.InputID
+  readonly userMessageID: MessageID
+  readonly assistantMessageID: MessageID
+  readonly eventSequence: number
+  readonly modelOperationState: "running"
+  readonly contextFingerprint: string
+  readonly rendererVersion: 7
+}
+
+async function processOrphan(filename: string, directory: string) {
+  const child = Bun.spawn([process.execPath, "run", "--conditions=browser", runningModelCrashFixture, "seed"], {
+    cwd: directory,
+    env: {
+      ...process.env,
+      HOME: directory,
+      XDG_CONFIG_HOME: path.join(directory, ".config"),
+      XDG_DATA_HOME: path.join(directory, ".local/share"),
+      XDG_STATE_HOME: path.join(directory, ".local/state"),
+      XDG_CACHE_HOME: path.join(directory, ".cache"),
+      REPA_TEST_HOME: directory,
+      REPA_DB: filename,
+      REPA_CONFIG_CONTENT: JSON.stringify({ $schema: "https://opencode.ai/config.json", ...cfg }),
+      REPA_DISABLE_PROJECT_CONFIG: "1",
+      REPA_DISABLE_MODELS_FETCH: "1",
+      REPA_DISABLE_AUTOCOMPACT: "1",
+      REPA_AUTH_CONTENT: "{}",
+      REPA_PURE: "1",
+      BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0",
+    },
+    stdin: "pipe",
+    stdout: "pipe",
+    stderr: "pipe",
+  })
+  const reader = child.stdout.getReader()
+  const decoder = new TextDecoder()
+  let buffered = ""
+  let locked = true
+  let timeout: ReturnType<typeof setTimeout> | undefined
+  try {
+    const seed = await Promise.race([
+      (async () => {
+        while (true) {
+          const next = await reader.read()
+          if (next.done) throw new Error("Crash fixture exited before publishing its durable ready record")
+          buffered += decoder.decode(next.value, { stream: true })
+          const lines = buffered.split(/\r?\n/)
+          buffered = lines.pop() ?? ""
+          const line = lines.find((value) => value.startsWith("REPA_RUNNING_MODEL_READY "))
+          if (line)
+            return { line, seed: JSON.parse(line.slice("REPA_RUNNING_MODEL_READY ".length)) as RunningModelCrashSeed }
+        }
+      })(),
+      new Promise<never>((_, reject) => {
+        timeout = setTimeout(() => reject(new Error("Crash fixture did not become ready within 20 seconds")), 20_000)
+      }),
+    ])
+    if (timeout) clearTimeout(timeout)
+    reader.releaseLock()
+    locked = false
+    child.kill()
+    const exitCode = await child.exited
+    const stderr = await new Response(child.stderr).text()
+    if (exitCode === 0) throw new Error(`Crash fixture exited normally instead of losing its owner\n${stderr}`)
+    return { ...seed, exitCode, stderr }
+  } catch (error) {
+    if (timeout) clearTimeout(timeout)
+    if (locked) reader.releaseLock()
+    if (child.exitCode === null) child.kill()
+    await child.exited
+    const stderr = await new Response(child.stderr).text()
+    throw new Error(`Could not seed the process-orphaned model operation\n${stderr}`, { cause: error })
+  }
+}
+
+async function retainDatabaseFamily(filename: string, directory: string, stem: string) {
+  return Promise.all(
+    ["", "-wal", "-shm"].map(async (suffix) => {
+      const source = Bun.file(`${filename}${suffix}`)
+      const target = path.join(directory, `${stem}.db${suffix}`)
+      if (!(await source.exists())) return { suffix, state: "absent" as const }
+      const bytes = new Uint8Array(await source.arrayBuffer())
+      await Bun.write(target, bytes)
+      return {
+        suffix,
+        state: "present" as const,
+        path: target,
+        byteLength: bytes.byteLength,
+        sha256: new Bun.CryptoHasher("sha256").update(bytes).digest("hex"),
+      }
+    }),
+  )
 }
 
 function providerCfg(url: string) {
@@ -661,6 +778,139 @@ const boot = Effect.fn("test.boot")(function* (input?: { title?: string }) {
   const chat = (yield* materializeTestSession(input ?? { title: "Pinned" })).info
   return { prompt, run, sessions, chat }
 })
+
+test("recovers a process-orphaned running model before accepting a later Turn without resend", async () => {
+  await using tmp = await tmpdir()
+  const filename = path.join(tmp.path, "process-restart.db")
+  const orphaned = await processOrphan(filename, tmp.path)
+  const orphan = orphaned.seed
+  const evidenceDirectory = process.env.REPA_GATE21A_DETERMINISTIC_EVIDENCE_DIR
+  const beforeDatabase = evidenceDirectory
+    ? await retainDatabaseFamily(filename, evidenceDirectory, "process-restart.running")
+    : undefined
+  let transitionEvidence: Record<string, unknown> | undefined
+
+  await Effect.runPromise(
+    Effect.gen(function* () {
+      const llm = yield* TestLLMServer
+      yield* useMachineConfig(providerCfg(llm.url))
+      const instances = yield* InstanceStore.Service
+      yield* instances.provide(
+        { directory: tmp.path },
+        Effect.gen(function* () {
+          const prompt = yield* SessionPrompt.Service
+          const database = yield* Database.Service
+
+          expect(orphan.modelOperationState).toBe("running")
+          expect(orphan.rendererVersion).toBe(7)
+          const startupProviderCalls = yield* llm.calls
+          const startupInputs = yield* llm.inputs
+          expect(startupProviderCalls).toBe(0)
+          expect(startupInputs).toEqual([])
+
+          const recovered = yield* prompt.getTurn(orphan.sessionID, orphan.turnID)
+          expect(recovered).toMatchObject({
+            id: orphan.turnID,
+            sessionID: orphan.sessionID,
+            state: "interrupted",
+            terminal: { outcome: "interrupted", reason: "startup_recovery" },
+          })
+          const recoveredModel = yield* database.db
+            .select({ state: TurnModelOperationTable.state, timeSettled: TurnModelOperationTable.time_settled })
+            .from(TurnModelOperationTable)
+            .where(eq(TurnModelOperationTable.assistant_message_id, orphan.assistantMessageID))
+            .get()
+            .pipe(Effect.orDie)
+          expect(recoveredModel?.state).toBe("interrupted")
+          expect(typeof recoveredModel?.timeSettled).toBe("number")
+          const recoveredAssistant = (yield* MessageV2.get({
+            sessionID: orphan.sessionID,
+            messageID: orphan.assistantMessageID,
+          })).info
+          if (recoveredAssistant.role !== "assistant") {
+            return yield* Effect.die("Startup recovery produced a non-assistant model result")
+          }
+          expect(recoveredAssistant.error?.name).toBe("MessageAbortedError")
+          expect(typeof recoveredAssistant.time.completed).toBe("number")
+
+          const startupEvents = yield* database.db
+            .select({ seq: EventTable.seq, type: EventTable.type })
+            .from(EventTable)
+            .where(and(eq(EventTable.aggregate_id, orphan.sessionID), gt(EventTable.seq, orphan.eventSequence)))
+            .orderBy(EventTable.seq)
+            .all()
+            .pipe(Effect.orDie)
+          expect(startupEvents.filter((event) => event.type.startsWith("turn.terminal"))).toHaveLength(1)
+          expect(startupEvents.some((event) => event.type.startsWith("turn.model.admitted"))).toBe(false)
+          expect(startupEvents.some((event) => event.type.startsWith("turn.tool.admitted"))).toBe(false)
+          const startupCounts = yield* database.db.get<{ models: number; tools: number }>(sql`
+                SELECT
+                  (SELECT count(*) FROM turn_model_operation) AS models,
+                  (SELECT count(*) FROM turn_tool_invocation) AS tools
+              `)
+          expect(startupCounts).toEqual({ models: 1, tools: 0 })
+
+          yield* llm.text("Fresh response after startup recovery.")
+          const laterTurnID = Turn.ID.create()
+          const started = yield* prompt.start({
+            sessionID: orphan.sessionID,
+            turnID: laterTurnID,
+            inputID: Turn.InputID.create(),
+            messageID: MessageID.ascending(),
+            agent: "repa",
+            model: ref,
+            limits: { model: 1, tool: 0 },
+            parts: [{ type: "text", text: "Continue from current truth after the restart." }],
+          })
+          expect(started.id).toBe(laterTurnID)
+          expect(laterTurnID).not.toBe(orphan.turnID)
+          expect(yield* prompt.awaitTurn(orphan.sessionID, laterTurnID)).toMatchObject({
+            id: laterTurnID,
+            state: "completed",
+            terminal: { outcome: "completed", reason: "normal" },
+          })
+          const finalProviderCalls = yield* llm.calls
+          expect(finalProviderCalls).toBe(1)
+          expect(yield* prompt.getTurn(orphan.sessionID, orphan.turnID)).toEqual(recovered)
+          const finalCounts = yield* database.db.get<{ models: number; tools: number }>(sql`
+                SELECT
+                  (SELECT count(*) FROM turn_model_operation) AS models,
+                  (SELECT count(*) FROM turn_tool_invocation) AS tools
+              `)
+          expect(finalCounts).toEqual({ models: 2, tools: 0 })
+          transitionEvidence = {
+            startupProviderCalls,
+            startupInputs,
+            recovered,
+            recoveredModel: {
+              state: recoveredModel?.state,
+              timeSettled: String(recoveredModel?.timeSettled),
+            },
+            recoveredAssistant: {
+              id: recoveredAssistant.id,
+              errorName: recoveredAssistant.error?.name,
+              timeCompleted:
+                recoveredAssistant.time.completed === undefined ? null : String(recoveredAssistant.time.completed),
+            },
+            startupEvents,
+            startupCounts,
+            laterTurnID,
+            laterTerminal: yield* prompt.getTurn(orphan.sessionID, laterTurnID),
+            finalProviderCalls,
+            finalCounts,
+          }
+        }),
+      )
+    }).pipe(Effect.provide(makeProcessRestartBoundary(filename)), Effect.scoped),
+  )
+  if (evidenceDirectory) {
+    const afterDatabase = await retainDatabaseFamily(filename, evidenceDirectory, "process-restart.reentered")
+    await Bun.write(
+      path.join(evidenceDirectory, "process-restart.result.json"),
+      JSON.stringify({ orphaned, beforeDatabase, transition: transitionEvidence, afterDatabase }, null, 2) + "\n",
+    )
+  }
+}, 60_000)
 
 noLLMServer.instance(
   "strict root start atomically admits a finite Turn and exact replay appends nothing",
@@ -2794,15 +3044,6 @@ projectOriginIt(
         value.includes("[Repa learning context — protected]"),
       )
       if (!laterBlock) return yield* Effect.die("Provider request omitted the production learning-context block")
-      expect(laterBlock).toContain('"owner":"learner_response_evidence"')
-      expect(laterBlock).toContain('"relation":"supports"')
-      expect(laterBlock).toContain('"exposure":"learner_response_before_tutor_disclosure"')
-      expect(laterBlock).not.toContain(responseText)
-      expect(laterBlock).not.toContain(criterion)
-      const firstOracle = laterBlock.includes('"relation":"supports"')
-        ? "application_question_only"
-        : "underdetermined_without_record"
-      expect(firstOracle).toBe("application_question_only")
       const laterOperation = yield* database.db
         .select({ assistantMessageID: TurnModelOperationTable.assistant_message_id })
         .from(TurnModelOperationTable)
@@ -2814,10 +3055,27 @@ projectOriginIt(
         LearningContext.readCut(tx, laterOperation.assistantMessageID),
       )
       if (firstCut.type !== "available") return yield* Effect.die("Missing stored Gate 19 production cut")
-      expect(firstCut.cut.sections.find((section) => section.owner === "learner_response_evidence")).toMatchObject({
+      expect(laterBlock).toBe(firstCut.renderedBlock)
+      expect(laterBlock).not.toContain(responseText)
+      expect(laterBlock).not.toContain(criterion)
+      const firstEvidence = firstCut.cut.sections.find((section) => section.owner === "learner_response_evidence")
+      expect(firstEvidence).toMatchObject({
         countAtCut: 1,
-        entries: [{ semantic: { state: "value", value: { relation: "supports" } } }],
+        entries: [
+          {
+            semantic: {
+              state: "value",
+              value: { relation: "supports", exposure: "learner_response_before_tutor_disclosure" },
+            },
+          },
+        ],
       })
+      const firstSemantic = firstEvidence?.entries[0]?.semantic
+      const firstRelation =
+        firstSemantic?.state === "value" && isJsonObject(firstSemantic.value) ? firstSemantic.value.relation : undefined
+      expect(firstRelation === "supports" ? "application_question_only" : "underdetermined_without_record").toBe(
+        "application_question_only",
+      )
       const immutableFirstCut = JSON.stringify(firstCut.cut)
 
       const correctionSessionID = SessionID.create()
@@ -2917,10 +3175,34 @@ projectOriginIt(
         ? providerText(correctedHit.body).find((value) => value.includes("[Repa learning context — protected]"))
         : undefined
       if (!correctedBlock) return yield* Effect.die("Corrected provider request omitted production context")
-      expect(correctedBlock).toContain('"relation":"does_not_support"')
-      expect(
-        correctedBlock.includes('"relation":"does_not_support"') ? "correction_only" : "underdetermined_without_record",
-      ).toBe("correction_only")
+      const correctedOperation = yield* database.db
+        .select({ assistantMessageID: TurnModelOperationTable.assistant_message_id })
+        .from(TurnModelOperationTable)
+        .where(eq(TurnModelOperationTable.turn_id, correctedLaterTurnID))
+        .get()
+        .pipe(Effect.orDie)
+      if (!correctedOperation) return yield* Effect.die("Missing corrected later provider operation")
+      const correctedCut = yield* database.db.transaction((tx) =>
+        LearningContext.readCut(tx, correctedOperation.assistantMessageID),
+      )
+      if (correctedCut.type !== "available") return yield* Effect.die("Missing corrected later production cut")
+      expect(correctedBlock).toBe(correctedCut.renderedBlock)
+      expect(correctedCut.cut.fingerprint).not.toBe(firstCut.cut.fingerprint)
+      const correctedEvidence = correctedCut.cut.sections.find(
+        (section) => section.owner === "learner_response_evidence",
+      )
+      expect(correctedEvidence).toMatchObject({
+        countAtCut: 1,
+        entries: [{ semantic: { state: "value", value: { relation: "does_not_support" } } }],
+      })
+      const correctedSemantic = correctedEvidence?.entries[0]?.semantic
+      const correctedRelation =
+        correctedSemantic?.state === "value" && isJsonObject(correctedSemantic.value)
+          ? correctedSemantic.value.relation
+          : undefined
+      expect(correctedRelation === "does_not_support" ? "correction_only" : "underdetermined_without_record").toBe(
+        "correction_only",
+      )
 
       const disclosureCorrectionSessionID = SessionID.create()
       const disclosureCorrectionTurnID = Turn.ID.create()
@@ -2987,11 +3269,40 @@ projectOriginIt(
         ? providerText(disclosureHit.body).find((value) => value.includes("[Repa learning context — protected]"))
         : undefined
       if (!disclosureBlock) return yield* Effect.die("Disclosure-order request omitted production context")
-      expect(disclosureBlock).toContain('"relation":"supports"')
-      expect(disclosureBlock).toContain('"exposure":"tutor_disclosure_before_learner_response"')
+      const disclosureOperation = yield* database.db
+        .select({ assistantMessageID: TurnModelOperationTable.assistant_message_id })
+        .from(TurnModelOperationTable)
+        .where(eq(TurnModelOperationTable.turn_id, disclosureLaterTurnID))
+        .get()
+        .pipe(Effect.orDie)
+      if (!disclosureOperation) return yield* Effect.die("Missing disclosure-order provider operation")
+      const disclosureCut = yield* database.db.transaction((tx) =>
+        LearningContext.readCut(tx, disclosureOperation.assistantMessageID),
+      )
+      if (disclosureCut.type !== "available") return yield* Effect.die("Missing disclosure-order production cut")
+      expect(disclosureBlock).toBe(disclosureCut.renderedBlock)
+      const disclosureEvidence = disclosureCut.cut.sections.find(
+        (section) => section.owner === "learner_response_evidence",
+      )
+      expect(disclosureEvidence).toMatchObject({
+        countAtCut: 1,
+        entries: [
+          {
+            semantic: {
+              state: "value",
+              value: { relation: "supports", exposure: "tutor_disclosure_before_learner_response" },
+            },
+          },
+        ],
+      })
+      const disclosureSemantic = disclosureEvidence?.entries[0]?.semantic
+      const disclosureValue =
+        disclosureSemantic?.state === "value" && isJsonObject(disclosureSemantic.value)
+          ? disclosureSemantic.value
+          : undefined
       expect(
-        disclosureBlock.includes('"relation":"supports"') &&
-          disclosureBlock.includes('"exposure":"tutor_disclosure_before_learner_response"')
+        disclosureValue?.relation === "supports" &&
+          disclosureValue.exposure === "tutor_disclosure_before_learner_response"
           ? "new_answer_hidden_check_only"
           : "underdetermined_without_record",
       ).toBe("new_answer_hidden_check_only")
@@ -3116,7 +3427,7 @@ it.instance(
         value.includes("[Repa learning context — protected]"),
       )
       if (!beforeBlock) return yield* Effect.die("Before-due provider request omitted Learning Context")
-      expect(beforeBlock).toContain("futureAttention: none eligible at this immutable cut")
+      expect(beforeBlock).toContain('["future_attention","empty",0')
       expect(beforeBlock).not.toContain(purpose)
 
       setSystemTime(new Date(dueAt + 1))
@@ -3163,7 +3474,9 @@ it.instance(
         value.includes("[Repa learning context — protected]"),
       )
       if (!serviceBlock) return yield* Effect.die("Due provider request omitted Learning Context")
-      expect(serviceBlock).toContain("futureAttention: conditional_default")
+      expect(serviceBlock).toContain(
+        "FutureAttention: conditional default. An exact current learner request may override an overlapping present action; otherwise realize the sole complete concern naturally. Override alone neither serves nor mutates it.",
+      )
       expect(serviceBlock).toContain(purpose)
 
       const operations = yield* database.db
@@ -3237,7 +3550,7 @@ it.instance(
         value.includes("[Repa learning context — protected]"),
       )
       if (!afterBlock) return yield* Effect.die("After-service provider request omitted Learning Context")
-      expect(afterBlock).toContain("futureAttention: none eligible at this immutable cut")
+      expect(afterBlock).toContain('["future_attention","empty",0')
       expect(afterBlock).not.toContain(purpose)
 
       yield* sessions.remove(serviceSessionID)
@@ -3308,7 +3621,8 @@ it.instance(
         },
         {
           label: "no learning consumer",
-          request: "The library says I must return the textbook Friday; do not teach, guide, review, or plan around it.",
+          request:
+            "The library says I must return the textbook Friday; do not teach, guide, review, or plan around it.",
           response: "That return obligation has no teaching, guided-work, review, or Planning consumer here.",
         },
       ] as const
@@ -3466,12 +3780,14 @@ it.instance(
       const assignmentID = created.revision.assignmentID
       const revisionID = created.revision.id
       const writesBeforeTeaching = yield* database.db
-        .get(sql`
+        .get(
+          sql`
           SELECT
             (SELECT count(*) FROM assignment_revision) AS revisions,
             (SELECT count(*) FROM assignment_effect) AS effects,
             (SELECT count(*) FROM assignment_commit_seal) AS seals
-        `)
+        `,
+        )
         .pipe(Effect.orDie)
 
       const helpSessionID = SessionID.create()
@@ -3506,18 +3822,16 @@ it.instance(
         value.includes("[Repa learning context — protected]"),
       )
       if (!contextBlock) return yield* Effect.die("Explicit teaching request omitted Assignment Learning Context")
-      expect(contextBlock).toContain("assignment: sole_candidate_pressure")
+      expect(contextBlock).toContain(
+        "Assignment is learning-help pressure, not task administration/default/priority/plan/commitment/progress/result.",
+      )
       expect(contextBlock).toContain(summary)
       expect(contextBlock).toContain(created.revision.id)
-      expect(contextBlock).toContain("not the current/default task, a priority, a plan, a commitment, activity")
 
       const messages = yield* sessions.messages({ sessionID: helpSessionID })
       const readPart = messages
         .flatMap((message) => message.parts)
-        .find(
-          (part): part is SessionV1.ToolPart =>
-            part.type === "tool" && part.tool === Assignment.READ_CAPABILITY,
-        )
+        .find((part): part is SessionV1.ToolPart => part.type === "tool" && part.tool === Assignment.READ_CAPABILITY)
       if (!readPart || readPart.state.status !== "completed") {
         return yield* Effect.die("Explicit teaching request omitted the completed exact Assignment read")
       }
@@ -3539,19 +3853,19 @@ it.instance(
       expect(postReadProviderBody).toContain(revisionID)
       expect(postReadProviderBody).toContain(summary)
       expect(
-        messages
-          .flatMap((message) => message.parts)
-          .some((part) => part.type === "text" && part.text === explanation),
+        messages.flatMap((message) => message.parts).some((part) => part.type === "text" && part.text === explanation),
       ).toBe(true)
 
       expect(
         yield* database.db
-          .get(sql`
+          .get(
+            sql`
             SELECT
               (SELECT count(*) FROM assignment_revision) AS revisions,
               (SELECT count(*) FROM assignment_effect) AS effects,
               (SELECT count(*) FROM assignment_commit_seal) AS seals
-          `)
+          `,
+          )
           .pipe(Effect.orDie),
       ).toEqual(writesBeforeTeaching)
       const afterTeaching = yield* database.db.transaction((tx) =>
@@ -3586,7 +3900,8 @@ isolatedDatabaseBoundary.instance(
 
       const report =
         "I can state the binary-search invariant, but I still get lost when deciding which half is safe to discard."
-      const initialBody = "Can state the binary-search invariant; applying it to choose the safe discarded half remains uncertain."
+      const initialBody =
+        "Can state the binary-search invariant; applying it to choose the safe discarded half remains uncertain."
       const subject = "Binary-search invariant application"
       const creationAcknowledgement =
         "I retained that fallible learning-state judgment so later teaching can focus on applying the invariant."
@@ -3664,10 +3979,7 @@ isolatedDatabaseBoundary.instance(
             value.includes(`"revisionID":"${input.revisionID}"`) &&
             value.includes(`"version":${input.version}`),
         )
-      const hasExactRead = (
-        body: unknown,
-        input: { revisionID: string; version: number; judgmentBody: string },
-      ) =>
+      const hasExactRead = (body: unknown, input: { revisionID: string; version: number; judgmentBody: string }) =>
         providerText(body).some(
           (value) =>
             value.includes('"page":{') &&
@@ -3691,19 +4003,19 @@ isolatedDatabaseBoundary.instance(
           )
           yield* llm.textMatch(
             (hit) =>
-              hasApplicationRequest(hit.body) &&
-              hasExactDirectory(hit.body, input) &&
-              hasExactRead(hit.body, input),
+              hasApplicationRequest(hit.body) && hasExactDirectory(hit.body, input) && hasExactRead(hit.body, input),
             input.teaching,
           )
         })
       const writesAfterCreate = yield* database.db
-        .get(sql`
+        .get(
+          sql`
           SELECT
             (SELECT count(*) FROM learner_state_judgment_revision) AS revisions,
             (SELECT count(*) FROM learner_state_judgment_effect) AS effects,
             (SELECT count(*) FROM learner_state_judgment_commit_seal) AS seals
-        `)
+        `,
+        )
         .pipe(Effect.orDie)
 
       const applicationSessionID = SessionID.create()
@@ -3746,14 +4058,16 @@ isolatedDatabaseBoundary.instance(
       expect(firstApplicationBody).toContain("learner_state_judgment")
       expect(firstApplicationBody).toContain(subject)
       expect(firstApplicationBody).toContain(firstRevisionID)
-      expect(firstApplicationBody).toContain("Use update_learner_state_judgment only when a fuzzy, source-bearing account")
+      expect(firstApplicationBody).toContain(
+        "Use update_learner_state_judgment only when a fuzzy, source-bearing account",
+      )
       expect(firstApplicationBody).not.toContain(report)
       expect(firstApplicationBody).not.toContain(creationAcknowledgement)
       const absentBody = (yield* llm.hits)[creationHit]?.body
       expect(hasExactDirectory(absentBody, { revisionID: firstRevisionID, version: 1 })).toBe(false)
-      expect(
-        hasExactRead(absentBody, { revisionID: firstRevisionID, version: 1, judgmentBody: initialBody }),
-      ).toBe(false)
+      expect(hasExactRead(absentBody, { revisionID: firstRevisionID, version: 1, judgmentBody: initialBody })).toBe(
+        false,
+      )
       expect(hasExactDirectory(applicationContextBody, { revisionID: firstRevisionID, version: 1 })).toBe(true)
       expect(
         hasExactRead(applicationReadBody, {
@@ -3793,12 +4107,14 @@ isolatedDatabaseBoundary.instance(
       ).toBe(true)
       expect(
         yield* database.db
-          .get(sql`
+          .get(
+            sql`
             SELECT
               (SELECT count(*) FROM learner_state_judgment_revision) AS revisions,
               (SELECT count(*) FROM learner_state_judgment_effect) AS effects,
               (SELECT count(*) FROM learner_state_judgment_commit_seal) AS seals
-          `)
+          `,
+          )
           .pipe(Effect.orDie),
       ).toEqual(writesAfterCreate)
 
@@ -3846,8 +4162,7 @@ isolatedDatabaseBoundary.instance(
       const initialAdviceTurnID = Turn.ID.create()
       yield* llm.toolMatch(
         (hit) =>
-          hasApplicationRequest(hit.body) &&
-          hasExactDirectory(hit.body, { revisionID: firstRevisionID, version: 1 }),
+          hasApplicationRequest(hit.body) && hasExactDirectory(hit.body, { revisionID: firstRevisionID, version: 1 }),
         LearnerStateJudgment.READ_CAPABILITY,
         { action: "revision", judgmentID, revisionID: firstRevisionID },
       )
@@ -3899,10 +4214,12 @@ isolatedDatabaseBoundary.instance(
         LearnerStateJudgment.readCurrent(tx, judgmentID, Date.now()),
       )
       if (!beforeCorrection) return yield* Effect.die("Learner-state correction lost the exact current head")
-      if (!beforeCorrection.currentHead) return yield* Effect.die("Current learner-state read omitted its correction head")
+      if (!beforeCorrection.currentHead)
+        return yield* Effect.die("Current learner-state read omitted its correction head")
       const correction =
         "Correction: I do not reliably understand what the binary-search invariant means yet, so start with the definition."
-      const correctedBody = "The binary-search invariant definition itself remains uncertain; application should follow later."
+      const correctedBody =
+        "The binary-search invariant definition itself remains uncertain; application should follow later."
       const correctionInput = {
         operation: "revise" as const,
         judgmentID,
@@ -4173,9 +4490,7 @@ isolatedDatabaseBoundary.instance(
       expect(correctedContext).toContain(correctedAdvice.revision.id)
       expect(correctedContext).not.toContain(initialAdviceRevisionID)
       expect(providerText(correctedReadBody).join("\n")).toContain(correctedAdviceBody)
-      expect(
-        hasExactDirectory(applicationContextBody, { revisionID: corrected.revision.id, version: 1 }),
-      ).toBe(false)
+      expect(hasExactDirectory(applicationContextBody, { revisionID: corrected.revision.id, version: 1 })).toBe(false)
       expect(
         hasExactRead(applicationReadBody, {
           revisionID: corrected.revision.id,
@@ -4246,7 +4561,8 @@ isolatedDatabaseBoundary.instance(
       `)
       const zeroWriteSessionID = SessionID.create()
       const zeroWriteTurnID = Turn.ID.create()
-      const zeroWriteTeaching = "A mutex protects one critical section at a time; picture one key passed between threads."
+      const zeroWriteTeaching =
+        "A mutex protects one critical section at a time; picture one key passed between threads."
       const zeroWriteRequest = "Explain a mutex with one concrete picture."
       const pendingBeforeZeroWrite = yield* llm.pending
       yield* llm.textMatch(
@@ -4426,8 +4742,7 @@ isolatedDatabaseBoundary.instance(
       ).toEqual({ courses: 0, goals: 0, assignments: 0, materials: 0, evidence: 0, learnerState: 0 })
 
       const teachingRequest = "Continue our study of continuations using the current advice you retained for me."
-      const hasTeachingRequest = (body: unknown) =>
-        providerText(body).some((value) => value.includes(teachingRequest))
+      const hasTeachingRequest = (body: unknown) => providerText(body).some((value) => value.includes(teachingRequest))
       const hasExactDirectory = (
         body: unknown,
         input: { revisionID: string; version: number; directorySummary: string },
@@ -4443,10 +4758,7 @@ isolatedDatabaseBoundary.instance(
             value.includes('"retrievalArm":"learner_home_fallback"') &&
             value.includes(`"directorySummary":${JSON.stringify(input.directorySummary)}`),
         )
-      const hasExactRead = (
-        body: unknown,
-        input: { revisionID: string; version: number; body: string },
-      ) =>
+      const hasExactRead = (body: unknown, input: { revisionID: string; version: number; body: string }) =>
         providerText(body).some(
           (value) =>
             value.includes('"page":{') &&
@@ -4471,9 +4783,7 @@ isolatedDatabaseBoundary.instance(
           )
           yield* llm.textMatch(
             (hit) =>
-              hasTeachingRequest(hit.body) &&
-              hasExactDirectory(hit.body, input) &&
-              hasExactRead(hit.body, input),
+              hasTeachingRequest(hit.body) && hasExactDirectory(hit.body, input) && hasExactRead(hit.body, input),
             input.teaching,
           )
         })
@@ -4484,7 +4794,8 @@ isolatedDatabaseBoundary.instance(
           (SELECT count(*) FROM advisory_plan_suggestion_effect) AS effects,
           (SELECT count(*) FROM advisory_plan_suggestion_commit_seal) AS seals
       `)
-      const absentControl = "No retained advisory directory is available in this Session, so I need current guidance before using it."
+      const absentControl =
+        "No retained advisory directory is available in this Session, so I need current guidance before using it."
       const absentSessionID = SessionID.create()
       const absentTurnID = Turn.ID.create()
       const absentHit = (yield* llm.hits).length
@@ -4522,7 +4833,9 @@ isolatedDatabaseBoundary.instance(
       expect(providerText(absentContextBody).join("\n")).not.toContain(`"suggestionID":"${suggestionID}"`)
       const absentMessages = yield* sessions.messages({ sessionID: absentSessionID })
       expect(
-        absentMessages.flatMap((message) => message.parts).some((part) => part.type === "text" && part.text === absentControl),
+        absentMessages
+          .flatMap((message) => message.parts)
+          .some((part) => part.type === "text" && part.text === absentControl),
       ).toBe(true)
       expect(
         absentMessages
@@ -4577,11 +4890,13 @@ isolatedDatabaseBoundary.instance(
 
       const firstContextBody = (yield* llm.hits)[firstTeachingHit]?.body
       const firstReadBody = (yield* llm.hits)[firstTeachingHit + 1]?.body
-      expect(hasExactDirectory(firstContextBody, {
-        revisionID: firstRevisionID,
-        version: 1,
-        directorySummary: initialSummary,
-      })).toBe(true)
+      expect(
+        hasExactDirectory(firstContextBody, {
+          revisionID: firstRevisionID,
+          version: 1,
+          directorySummary: initialSummary,
+        }),
+      ).toBe(true)
       expect(providerText(firstContextBody).join("\n")).not.toContain(initialBody)
       expect(hasExactRead(firstReadBody, { revisionID: firstRevisionID, version: 1, body: initialBody })).toBe(true)
       const firstTeachingMessages = yield* sessions.messages({ sessionID: firstTeachingSessionID })
@@ -4738,31 +5053,41 @@ isolatedDatabaseBoundary.instance(
       expect(yield* llm.pending).toBe(pendingBeforeCorrectedTeaching)
       const correctedContextBody = (yield* llm.hits)[correctedTeachingHit]?.body
       const correctedReadBody = (yield* llm.hits)[correctedTeachingHit + 1]?.body
-      expect(hasExactDirectory(correctedContextBody, {
-        revisionID: corrected.revision.id,
-        version: 2,
-        directorySummary: correctedSummary,
-      })).toBe(true)
-      expect(hasExactRead(correctedReadBody, {
-        revisionID: corrected.revision.id,
-        version: 2,
-        body: correctedBody,
-      })).toBe(true)
-      expect(hasExactDirectory(firstContextBody, {
-        revisionID: corrected.revision.id,
-        version: 2,
-        directorySummary: correctedSummary,
-      })).toBe(false)
-      expect(hasExactRead(firstReadBody, {
-        revisionID: corrected.revision.id,
-        version: 2,
-        body: correctedBody,
-      })).toBe(false)
-      expect(hasExactDirectory(correctedContextBody, {
-        revisionID: firstRevisionID,
-        version: 2,
-        directorySummary: correctedSummary,
-      })).toBe(false)
+      expect(
+        hasExactDirectory(correctedContextBody, {
+          revisionID: corrected.revision.id,
+          version: 2,
+          directorySummary: correctedSummary,
+        }),
+      ).toBe(true)
+      expect(
+        hasExactRead(correctedReadBody, {
+          revisionID: corrected.revision.id,
+          version: 2,
+          body: correctedBody,
+        }),
+      ).toBe(true)
+      expect(
+        hasExactDirectory(firstContextBody, {
+          revisionID: corrected.revision.id,
+          version: 2,
+          directorySummary: correctedSummary,
+        }),
+      ).toBe(false)
+      expect(
+        hasExactRead(firstReadBody, {
+          revisionID: corrected.revision.id,
+          version: 2,
+          body: correctedBody,
+        }),
+      ).toBe(false)
+      expect(
+        hasExactDirectory(correctedContextBody, {
+          revisionID: firstRevisionID,
+          version: 2,
+          directorySummary: correctedSummary,
+        }),
+      ).toBe(false)
       const correctedTeachingMessages = yield* sessions.messages({ sessionID: correctedTeachingSessionID })
       expect(
         correctedTeachingMessages
@@ -4842,26 +5167,34 @@ isolatedDatabaseBoundary.instance(
       expect(yield* llm.pending).toBe(pendingBeforeWrongRevisionControl + 2)
       const wrongRevisionContextBody = (yield* llm.hits)[wrongRevisionHit]?.body
       const wrongRevisionReadBody = (yield* llm.hits)[wrongRevisionHit + 1]?.body
-      expect(hasExactDirectory(wrongRevisionContextBody, {
-        revisionID: corrected.revision.id,
-        version: 2,
-        directorySummary: correctedSummary,
-      })).toBe(true)
-      expect(hasExactDirectory(wrongRevisionContextBody, {
-        revisionID: firstRevisionID,
-        version: 1,
-        directorySummary: initialSummary,
-      })).toBe(false)
-      expect(hasExactRead(wrongRevisionReadBody, {
-        revisionID: corrected.revision.id,
-        version: 2,
-        body: correctedBody,
-      })).toBe(true)
-      expect(hasExactRead(wrongRevisionReadBody, {
-        revisionID: firstRevisionID,
-        version: 1,
-        body: initialBody,
-      })).toBe(false)
+      expect(
+        hasExactDirectory(wrongRevisionContextBody, {
+          revisionID: corrected.revision.id,
+          version: 2,
+          directorySummary: correctedSummary,
+        }),
+      ).toBe(true)
+      expect(
+        hasExactDirectory(wrongRevisionContextBody, {
+          revisionID: firstRevisionID,
+          version: 1,
+          directorySummary: initialSummary,
+        }),
+      ).toBe(false)
+      expect(
+        hasExactRead(wrongRevisionReadBody, {
+          revisionID: corrected.revision.id,
+          version: 2,
+          body: correctedBody,
+        }),
+      ).toBe(true)
+      expect(
+        hasExactRead(wrongRevisionReadBody, {
+          revisionID: firstRevisionID,
+          version: 1,
+          body: initialBody,
+        }),
+      ).toBe(false)
       const wrongRevisionMessages = yield* sessions.messages({ sessionID: wrongRevisionSessionID })
       expect(
         wrongRevisionMessages
@@ -4871,9 +5204,7 @@ isolatedDatabaseBoundary.instance(
       expect(
         wrongRevisionMessages
           .flatMap((message) => message.parts)
-          .some(
-            (part) => part.type === "text" && part.text === staleBodyTeaching,
-          ),
+          .some((part) => part.type === "text" && part.text === staleBodyTeaching),
       ).toBe(false)
       yield* llm.reset
 
@@ -4935,7 +5266,9 @@ isolatedDatabaseBoundary.instance(
             )
             const messages = yield* sessions.messages({ sessionID })
             expect(
-              messages.flatMap((message) => message.parts).some((part) => part.type === "text" && part.text === item.response),
+              messages
+                .flatMap((message) => message.parts)
+                .some((part) => part.type === "text" && part.text === item.response),
             ).toBe(true)
             expect(
               messages

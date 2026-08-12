@@ -15,7 +15,8 @@ export const GATE19_RENDERER_VERSION = 2 as const
 export const GATE20_RENDERER_VERSION = 3 as const
 export const GATE20A_RENDERER_VERSION = 4 as const
 export const GATE20B_RENDERER_VERSION = 5 as const
-export const RENDERER_VERSION = 6 as const
+export const GATE21_RENDERER_VERSION = 6 as const
+export const RENDERER_VERSION = 7 as const
 export const LEGACY_CAPABILITY_CATALOG_VERSION = 1 as const
 export const GATE19_CAPABILITY_CATALOG_VERSION = 2 as const
 export const GATE20_CAPABILITY_CATALOG_VERSION = 3 as const
@@ -346,6 +347,7 @@ export type Cut = Readonly<{
     | typeof GATE20_RENDERER_VERSION
     | typeof GATE20A_RENDERER_VERSION
     | typeof GATE20B_RENDERER_VERSION
+    | typeof GATE21_RENDERER_VERSION
     | typeof RENDERER_VERSION
   operation: Operation
   cutAsOf: number

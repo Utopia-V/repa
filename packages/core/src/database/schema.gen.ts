@@ -4272,7 +4272,7 @@ export default {
           \`rendered_bytes\` integer NOT NULL,
           \`rendered_fingerprint\` text NOT NULL,
           CONSTRAINT \`fk_turn_learning_context_cut_assistant_message_id_turn_model_operation_assistant_message_id_fk\` FOREIGN KEY (\`assistant_message_id\`) REFERENCES \`turn_model_operation\`(\`assistant_message_id\`) ON DELETE CASCADE,
-          CONSTRAINT "turn_learning_context_cut_canonical_shape" CHECK(json_valid("canonical_cut")
+          CONSTRAINT "turn_learning_context_cut_canonical_shape" CHECK(COALESCE((json_valid("canonical_cut")
                 AND json_type("canonical_cut") = 'object'
                 AND json_extract("canonical_cut", '$.schemaVersion') = 1
                 AND ((json_extract("canonical_cut", '$.policyVersion') = 1
@@ -4286,13 +4286,15 @@ export default {
                   OR (json_extract("canonical_cut", '$.policyVersion') = 5
                     AND json_extract("canonical_cut", '$.rendererVersion') = 5)
                   OR (json_extract("canonical_cut", '$.policyVersion') = 6
-                    AND json_extract("canonical_cut", '$.rendererVersion') = 6))
+                    AND json_extract("canonical_cut", '$.rendererVersion') = 6)
+                  OR (json_extract("canonical_cut", '$.policyVersion') = 6
+                    AND json_extract("canonical_cut", '$.rendererVersion') = 7))
                 AND json_extract("canonical_cut", '$.operation.assistantMessageID') = "assistant_message_id"
                 AND json_extract("canonical_cut", '$.cutAsOf') = "cut_as_of"
                 AND json_extract("canonical_cut", '$.budget.canonicalBytes') = "canonical_bytes"
                 AND json_extract("canonical_cut", '$.budget.renderedBytes') = "rendered_bytes"
                 AND json_extract("canonical_cut", '$.fingerprint') = "cut_fingerprint"
-                AND json_extract("canonical_cut", '$.renderedFingerprint') = "rendered_fingerprint"),
+                AND json_extract("canonical_cut", '$.renderedFingerprint') = "rendered_fingerprint"), FALSE)),
           CONSTRAINT "turn_learning_context_cut_bytes" CHECK("canonical_bytes" = length(CAST("canonical_cut" AS BLOB))
                 AND "canonical_bytes" BETWEEN 1 AND 32768
                 AND "rendered_bytes" = length(CAST("rendered_block" AS BLOB))

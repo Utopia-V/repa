@@ -22,7 +22,7 @@ export const TurnLearningContextCutTable = sqliteTable(
   (table) => [
     check(
       "turn_learning_context_cut_canonical_shape",
-      sql`json_valid(${table.canonical_cut})
+      sql`COALESCE((json_valid(${table.canonical_cut})
         AND json_type(${table.canonical_cut}) = 'object'
         AND json_extract(${table.canonical_cut}, '$.schemaVersion') = 1
         AND ((json_extract(${table.canonical_cut}, '$.policyVersion') = 1
@@ -36,13 +36,15 @@ export const TurnLearningContextCutTable = sqliteTable(
           OR (json_extract(${table.canonical_cut}, '$.policyVersion') = 5
             AND json_extract(${table.canonical_cut}, '$.rendererVersion') = 5)
           OR (json_extract(${table.canonical_cut}, '$.policyVersion') = 6
-            AND json_extract(${table.canonical_cut}, '$.rendererVersion') = 6))
+            AND json_extract(${table.canonical_cut}, '$.rendererVersion') = 6)
+          OR (json_extract(${table.canonical_cut}, '$.policyVersion') = 6
+            AND json_extract(${table.canonical_cut}, '$.rendererVersion') = 7))
         AND json_extract(${table.canonical_cut}, '$.operation.assistantMessageID') = ${table.assistant_message_id}
         AND json_extract(${table.canonical_cut}, '$.cutAsOf') = ${table.cut_as_of}
         AND json_extract(${table.canonical_cut}, '$.budget.canonicalBytes') = ${table.canonical_bytes}
         AND json_extract(${table.canonical_cut}, '$.budget.renderedBytes') = ${table.rendered_bytes}
         AND json_extract(${table.canonical_cut}, '$.fingerprint') = ${table.cut_fingerprint}
-        AND json_extract(${table.canonical_cut}, '$.renderedFingerprint') = ${table.rendered_fingerprint}`,
+        AND json_extract(${table.canonical_cut}, '$.renderedFingerprint') = ${table.rendered_fingerprint}), FALSE)`,
     ),
     check(
       "turn_learning_context_cut_bytes",

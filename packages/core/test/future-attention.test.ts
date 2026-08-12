@@ -189,8 +189,9 @@ describe.serial("FutureAttention", () => {
         omission: { type: "none" },
         entries: [],
       })
-      expect(beforePrepared.renderedBlock).toContain("futureAttention: none eligible at this immutable cut")
-      expect(beforePrepared.cut.budget).toMatchObject({ canonicalBytes: 6_394, renderedBytes: 6_160 })
+      expect(beforePrepared.renderedBlock).toContain("FutureAttention: none eligible at this immutable cut.")
+      expect(beforePrepared.renderedBlock).not.toContain("sole complete concern")
+      expect(beforePrepared.cut.budget).toMatchObject({ canonicalBytes: 8_453, renderedBytes: 5_173 })
       const settled = yield* applyFutureInvocation(db, invocation, time + 2)
       if (settled.outcome !== "applied") return yield* Effect.die("Expected minimum FutureAttention concern")
       const concernID = (settled as FutureAttention.AppliedSettlement).changes[0]!.concernID
@@ -225,9 +226,8 @@ describe.serial("FutureAttention", () => {
           },
         ],
       })
-      expect(prepared.renderedBlock).toContain("futureAttention: conditional_default")
       expect(prepared.renderedBlock).toContain(
-        "Override alone does not serve, dismiss, or otherwise mutate the concern",
+        "FutureAttention: conditional default. An exact current learner request may override an overlapping present action; otherwise realize the sole complete concern naturally. Override alone neither serves nor mutates it.",
       )
       expect({
         minimumSemanticBytes,
@@ -235,8 +235,8 @@ describe.serial("FutureAttention", () => {
         renderedBytes: prepared.cut.budget.renderedBytes,
       }).toEqual({
         minimumSemanticBytes: 785,
-        canonicalBytes: 7_393,
-        renderedBytes: 7_446,
+        canonicalBytes: 9_452,
+        renderedBytes: 6_004,
       })
       expect(
         LearningContext.decodeStored(
@@ -1979,8 +1979,8 @@ describe.serial("FutureAttention", () => {
         renderedBytes: prepared.cut.budget.renderedBytes,
       }).toEqual({
         noOrderBytes: 1_815,
-        canonicalBytes: 9_048,
-        renderedBytes: 9_073,
+        canonicalBytes: 11_114,
+        renderedBytes: 7_517,
       })
       expect(prepared.canonicalCut).not.toContain(maximumPayload.notBefore.sourceExpression)
       const eagerDetail = LearningContext.canonicalJson(
@@ -2615,11 +2615,14 @@ describe.serial("FutureAttention", () => {
         context.entries.map((entry) => entry.concern.id),
       )
       expect(section?.entries.every((entry) => entry.locator.lazyReadAvailable === true)).toBeTrue()
-      expect(prepared.renderedBlock).toContain("futureAttention: multiple_unresolved; exactEligibleCount=10")
-      expect(prepared.renderedBlock).toContain("Candidate order is deterministic storage order, never priority")
+      expect(prepared.renderedBlock).toContain("separate omission-honest owners compose and audit order never wins.")
+      expect(prepared.renderedBlock).toContain(
+        'FutureAttention: multiple unresolved; exactEligibleCount=10; omission={"omitted":2,"reasons":[{"omitted":2,"reason":"candidate_limit"}],"type":"exact"}.',
+      )
+      expect(prepared.renderedBlock).not.toContain("sole complete concern")
       expect(prepared.cut.budget.canonicalBytes).toBe(LearningContext.utf8Bytes(prepared.canonicalCut))
       expect(prepared.cut.budget.renderedBytes).toBe(LearningContext.utf8Bytes(prepared.renderedBlock))
-      expect(prepared.cut.budget).toMatchObject({ canonicalBytes: 14_763, renderedBytes: 14_855 })
+      expect(prepared.cut.budget).toMatchObject({ canonicalBytes: 16_822, renderedBytes: 9_298 })
 
       const lazyConcern = yield* db.transaction((tx) =>
         FutureAttention.read(tx, { type: "concern", concernID: context.entries[0]!.concern.id }, { now: dueAt }),

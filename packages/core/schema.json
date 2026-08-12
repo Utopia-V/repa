@@ -1,9 +1,9 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "0e6776c9-889b-4cb8-bc29-702bad068823",
+  "id": "dd841c54-8ecc-4ea2-99f6-11606d2f3987",
   "prevIds": [
-    "25996186-f20b-4c32-91a7-493fb36f8373"
+    "1fea2282-65bb-4c29-8f97-edc40f8d7f1d"
   ],
   "ddl": [
     {
@@ -32622,7 +32622,7 @@
       "table": "learning_command_receipt"
     },
     {
-      "value": "json_valid(\"canonical_cut\")\n        AND json_type(\"canonical_cut\") = 'object'\n        AND json_extract(\"canonical_cut\", '$.schemaVersion') = 1\n        AND ((json_extract(\"canonical_cut\", '$.policyVersion') = 1\n            AND json_extract(\"canonical_cut\", '$.rendererVersion') = 1)\n          OR (json_extract(\"canonical_cut\", '$.policyVersion') = 2\n            AND json_extract(\"canonical_cut\", '$.rendererVersion') = 2)\n          OR (json_extract(\"canonical_cut\", '$.policyVersion') = 3\n            AND json_extract(\"canonical_cut\", '$.rendererVersion') = 3)\n          OR (json_extract(\"canonical_cut\", '$.policyVersion') = 4\n            AND json_extract(\"canonical_cut\", '$.rendererVersion') = 4)\n          OR (json_extract(\"canonical_cut\", '$.policyVersion') = 5\n            AND json_extract(\"canonical_cut\", '$.rendererVersion') = 5)\n          OR (json_extract(\"canonical_cut\", '$.policyVersion') = 6\n            AND json_extract(\"canonical_cut\", '$.rendererVersion') = 6))\n        AND json_extract(\"canonical_cut\", '$.operation.assistantMessageID') = \"assistant_message_id\"\n        AND json_extract(\"canonical_cut\", '$.cutAsOf') = \"cut_as_of\"\n        AND json_extract(\"canonical_cut\", '$.budget.canonicalBytes') = \"canonical_bytes\"\n        AND json_extract(\"canonical_cut\", '$.budget.renderedBytes') = \"rendered_bytes\"\n        AND json_extract(\"canonical_cut\", '$.fingerprint') = \"cut_fingerprint\"\n        AND json_extract(\"canonical_cut\", '$.renderedFingerprint') = \"rendered_fingerprint\"",
+      "value": "COALESCE((json_valid(\"canonical_cut\")\n        AND json_type(\"canonical_cut\") = 'object'\n        AND json_extract(\"canonical_cut\", '$.schemaVersion') = 1\n        AND ((json_extract(\"canonical_cut\", '$.policyVersion') = 1\n            AND json_extract(\"canonical_cut\", '$.rendererVersion') = 1)\n          OR (json_extract(\"canonical_cut\", '$.policyVersion') = 2\n            AND json_extract(\"canonical_cut\", '$.rendererVersion') = 2)\n          OR (json_extract(\"canonical_cut\", '$.policyVersion') = 3\n            AND json_extract(\"canonical_cut\", '$.rendererVersion') = 3)\n          OR (json_extract(\"canonical_cut\", '$.policyVersion') = 4\n            AND json_extract(\"canonical_cut\", '$.rendererVersion') = 4)\n          OR (json_extract(\"canonical_cut\", '$.policyVersion') = 5\n            AND json_extract(\"canonical_cut\", '$.rendererVersion') = 5)\n          OR (json_extract(\"canonical_cut\", '$.policyVersion') = 6\n            AND json_extract(\"canonical_cut\", '$.rendererVersion') = 6)\n          OR (json_extract(\"canonical_cut\", '$.policyVersion') = 6\n            AND json_extract(\"canonical_cut\", '$.rendererVersion') = 7))\n        AND json_extract(\"canonical_cut\", '$.operation.assistantMessageID') = \"assistant_message_id\"\n        AND json_extract(\"canonical_cut\", '$.cutAsOf') = \"cut_as_of\"\n        AND json_extract(\"canonical_cut\", '$.budget.canonicalBytes') = \"canonical_bytes\"\n        AND json_extract(\"canonical_cut\", '$.budget.renderedBytes') = \"rendered_bytes\"\n        AND json_extract(\"canonical_cut\", '$.fingerprint') = \"cut_fingerprint\"\n        AND json_extract(\"canonical_cut\", '$.renderedFingerprint') = \"rendered_fingerprint\"), FALSE)",
       "name": "turn_learning_context_cut_canonical_shape",
       "entityType": "checks",
       "table": "turn_learning_context_cut"
