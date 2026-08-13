@@ -1,7 +1,7 @@
 # Gate 21A: Tutor move selection and flow continuity
 
 Status: **contract/theory and implementation/evidence accepted; integrated
-locally**
+into `origin/main`**
 
 Date: 2026-08-12
 
@@ -748,6 +748,6 @@ failure/re-entry evidence on a pinned lineage. The same top-level reviewer
 closed `G21A-IR-001..008` and accepted implementation/evidence without reopening
 this contract. Implementation commit
 `d43109fc3dd67301327f9a5aa7379b0abc98e079` is fixed on the feature branch and
-included in local `main` through whole-Gate acceptance commit
-`984f046fa6686681ba10604bab199a5b97aa7ff1`. No release, push, Gate 22, or Gate
-23 claim follows.
+included in `origin/main` through local-integration/status commit
+`6d7855d9a6f8a444e6dabc5f7728a4437a113c2c`. No release, Gate 22, or Gate 23
+claim follows.

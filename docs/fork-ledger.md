@@ -4016,9 +4016,21 @@ merge resolution or candidate drift. This docs-only successor records that
 local integration identity without altering the reviewer-accepted production,
 migration, tests, qualification artifacts, or evidence disposition.
 
-`origin/main` remains at the pre-Gate baseline. The feature branch remains as
-exact provenance; no push, branch cleanup, release, credentialed-provider
-recapture, Gate 22, or Gate 23 action occurred.
+The feature branch remains as exact provenance. No branch cleanup, release,
+credentialed-provider recapture, Gate 22, or Gate 23 action occurred.
+
+### 2026-08-13 Gate 21A direct `origin/main` publication
+
+After the local integration record was committed at
+`6d7855d9a6f8a444e6dabc5f7728a4437a113c2c`, direct publication succeeded:
+`origin/main` fast-forwarded from
+`97212bcb8786c63e2c2c2a01d553f7707474ea29` through that commit. This
+docs-only successor records the completed remote fact; it changes no reviewed
+package blob, Gate boundary, acceptance verdict, or evidence disposition.
+
+The feature branch remains as exact local provenance and was not published or
+deleted. No pull request, release, credentialed-provider recapture, Gate 22, or
+Gate 23 action occurred.
 
 The current [implementation/evidence record](research/repa-gate-21a-tutor-move-selection-flow-continuity-implementation-evidence-2026-08-12.md)
 binds the exact artifacts and focused executable results. Both review layers
