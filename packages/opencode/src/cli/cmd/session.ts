@@ -13,6 +13,8 @@ import { NotFoundError } from "@/storage/storage"
 import { EOL } from "os"
 import path from "path"
 import { which } from "@opencode-ai/core/util/which"
+import { Database } from "@opencode-ai/core/database/database"
+import { SessionDeletion } from "@opencode-ai/core/session-deletion"
 
 function pagerCmd(): string[] {
   const lessOptions = ["-R", "-S"]
@@ -52,22 +54,89 @@ export const SessionDeleteCommand = effectCmd({
   command: "delete <sessionID>",
   describe: "delete a session",
   builder: (yargs) =>
-    yargs.positional("sessionID", {
-      describe: "session ID to delete",
-      type: "string",
-      demandOption: true,
-    }),
+    yargs
+      .positional("sessionID", {
+        describe: "session ID to delete",
+        type: "string",
+        demandOption: true,
+      })
+      .option("mode", {
+        describe: "delete all lineage or retain the purgeable minimal inspection audit",
+        type: "string",
+        choices: ["full", "minimal-audit"] as const,
+        demandOption: true,
+      })
+      .option("confirm", {
+        describe: "exact request fingerprint printed by a prior no-effect proposal",
+        type: "string",
+  }),
   handler: Effect.fn("Cli.session.delete")(function* (args) {
     const svc = yield* Session.Service
     const sessionID = SessionID.make(args.sessionID)
-    yield* svc.remove(sessionID).pipe(
+    const mode = args.mode === "minimal-audit" ? "minimal_audit" : "full"
+    const { db } = yield* Database.Service
+    const existing = yield* db.transaction((tx) => SessionDeletion.readStatus(tx, sessionID)).pipe(Effect.orDie)
+    if (existing.type === "deleted") {
+      if (existing.settlement.mode !== mode) {
+        return yield* fail(
+          `Session was already deleted with mode ${existing.settlement.mode}; deletion mode cannot be changed`,
+        )
+      }
+      UI.println(
+        `Session ${args.sessionID} already deleted at ${existing.settlement.deletionTime}; audit ${existing.auditAvailable ? "retained" : "not retained"}`,
+      )
+      return
+    }
+    const proposal = yield* svc
+      .proposeRemoval({
+        sessionID,
+        mode,
+      })
+      .pipe(
+        Effect.catchIf(NotFoundError.isInstance, () => fail(`Session not found: ${args.sessionID}`)),
+        Effect.catchTag("SessionBusyError", () => fail(`Session is busy: ${args.sessionID}`)),
+        Effect.catchTag("SessionTreeBusyError", (error) =>
+          fail(`Session tree is busy (${error.activeTurnIDs.join(", ")}): ${args.sessionID}`),
+        ),
+      )
+    if ("type" in proposal) {
+      if (proposal.type === "deletion_mode_conflict") {
+        return yield* fail(
+          `Session was already deleted with mode ${proposal.settlement.mode}; deletion mode cannot be changed`,
+        )
+      }
+      UI.println(
+        `Session ${args.sessionID} already deleted at ${proposal.settlement.deletionTime}; audit ${proposal.auditAvailable ? "retained" : "not retained"}`,
+      )
+      return
+    }
+    if (args.confirm !== proposal.requestFingerprint) {
+      UI.println(`Deletion proposal for ${proposal.rootSessionID}`)
+      UI.println(`  mode: ${args.mode}`)
+      UI.println(`  complete Session subtree: ${proposal.subtreeCount}`)
+      proposal.targets.forEach((target) =>
+        UI.println(`  - ${target.sessionID}${target.parentSessionID ? ` (child of ${target.parentSessionID})` : " (root)"}`),
+      )
+      UI.println(`  request fingerprint: ${proposal.requestFingerprint}`)
+      UI.println(`Local export files are outside this deletion and are not removed.`)
+      UI.println(`No data was deleted. Re-run with --confirm ${proposal.requestFingerprint}`)
+      return
+    }
+    const result = yield* svc.commitRemoval(proposal).pipe(
       Effect.catchIf(NotFoundError.isInstance, () => fail(`Session not found: ${args.sessionID}`)),
       Effect.catchTag("SessionBusyError", () => fail(`Session is busy: ${args.sessionID}`)),
       Effect.catchTag("SessionTreeBusyError", (error) =>
         fail(`Session tree is busy (${error.activeTurnIDs.join(", ")}): ${args.sessionID}`),
       ),
+      Effect.catchTag("SessionTreeChangedError", () => fail(`Session tree changed; request a new proposal`)),
+      Effect.catchTag("SessionDeletion.InvocationConflictError", () => fail(`Deletion request identity conflicted`)),
+      Effect.catchTag("SessionDeletion.AuditProjectionError", (error) => fail(`Minimal audit unavailable: ${error.reason}`)),
     )
-    UI.println(UI.Style.TEXT_SUCCESS_BOLD + `Session ${args.sessionID} deleted` + UI.Style.TEXT_NORMAL)
+    UI.println(
+      UI.Style.TEXT_SUCCESS_BOLD +
+        `Session ${args.sessionID} deletion ${result.type}; audit ${result.auditAvailable ? "retained" : "not retained"}` +
+        UI.Style.TEXT_NORMAL,
+    )
   }),
 })
 

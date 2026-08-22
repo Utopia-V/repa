@@ -8,11 +8,13 @@ import { Course } from "@opencode-ai/core/course"
 import { EventSequenceTable, EventTable } from "@opencode-ai/core/event/sql"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { SessionProjector } from "@opencode-ai/core/session/projector"
-import { and, eq, gt, sql } from "drizzle-orm"
+import { and, eq, gt, inArray, sql } from "drizzle-orm"
 import { EventV2Bridge } from "@/event-v2-bridge"
 import { EventV2 } from "@opencode-ai/core/event"
 import { expect, setSystemTime, test } from "bun:test"
-import { Cause, DateTime, Deferred, Duration, Effect, Exit, Fiber, Layer } from "effect"
+import { Cause, DateTime, Deferred, Duration, Effect, Exit, Fiber, Layer, Schema } from "effect"
+import { testRender } from "@opentui/solid"
+import { createComponent } from "solid-js"
 import path from "path"
 import { fileURLToPath, pathToFileURL } from "url"
 import { NamedError } from "@opencode-ai/core/util/error"
@@ -35,9 +37,23 @@ import { Session } from "@/session/session"
 import {
   SessionHistoricalMessagePresentationTable,
   SessionHistoricalPartPresentationTable,
+  MessageTable,
+  PartTable,
   SessionMessageTable,
   SessionTable,
 } from "@opencode-ai/core/session/sql"
+import { SessionPresentation } from "@opencode-ai/core/session-presentation"
+import {
+  SessionAdministrativeHistoryEmbeddedPartTable,
+  SessionAdministrativeHistoryMessageTable,
+  SessionAdministrativeHistoryPartTable,
+  SessionAdministrativeHistoryTable,
+  SessionPresentationFrontierTable,
+} from "@opencode-ai/core/session-presentation/sql"
+import { SessionDeletion } from "@opencode-ai/core/session-deletion"
+import { SessionDeletionControlReceiptTable } from "@opencode-ai/core/session-deletion/sql"
+import { LearnerHomeIdentity } from "@opencode-ai/core/database/identity"
+import { TurnLearningContextCutTable } from "@opencode-ai/core/learning-context/sql"
 import { LLM } from "../../src/session/llm"
 import { MessageV2 } from "../../src/session/message-v2"
 import { FSUtil } from "@opencode-ai/core/fs-util"
@@ -47,6 +63,7 @@ import { Instruction } from "../../src/session/instruction"
 import { SessionProcessor } from "../../src/session/processor"
 import { SessionPrompt } from "../../src/session/prompt"
 import { SessionRevert } from "../../src/session/revert"
+import { SessionImportHistory } from "../../src/session/import-history"
 import { SessionRunState } from "../../src/session/run-state"
 import { MessageID, PartID, SessionID } from "../../src/session/schema"
 import { SessionStatus } from "../../src/session/status"
@@ -72,15 +89,23 @@ import { ModelV2 } from "@opencode-ai/core/model"
 import { LocationServiceMap, locationServiceMapLayer } from "@opencode-ai/core/location-services"
 import { InstanceStore } from "@/project/instance-store"
 import { InstanceBootstrap } from "@/project/bootstrap-service"
+import { InstanceState } from "@/effect/instance-state"
 import { TestConsole } from "effect/testing"
 import { LearningCommand, Occurrence } from "@opencode-ai/core/learning-command"
+import { LearnerAdmission } from "@opencode-ai/core/learning-command/occurrence-schema"
 import { LearnerGoal } from "@opencode-ai/core/learner-goal"
+import { SemanticPresentation } from "@opencode-ai/core/semantic-presentation"
+import { LearningInspectionCursor } from "@opencode-ai/core/learning-inspection-cursor-schema"
+import { LearningInspectionSchema } from "@opencode-ai/core/learning-inspection-schema"
 import { LearnerResponseEvidence } from "@opencode-ai/core/learner-response-evidence"
 import { FutureAttention } from "@opencode-ai/core/future-attention"
 import { Assignment } from "@opencode-ai/core/assignment"
 import { LearnerStateJudgment } from "@opencode-ai/core/learner-state-judgment"
 import { AdvisoryPlanSuggestion } from "@opencode-ai/core/advisory-plan-suggestion"
-import { AdmittedLearnerOccurrenceTable } from "@opencode-ai/core/learning-command/occurrence.sql"
+import {
+  AdmittedLearnerOccurrenceTable,
+  LearnerOccurrenceSourceOrderTable,
+} from "@opencode-ai/core/learning-command/occurrence.sql"
 import { RetainedSteering } from "@opencode-ai/core/retained-steering"
 import { TurnLifecycle } from "@opencode-ai/core/turn/turn"
 import {
@@ -97,8 +122,13 @@ import { Project } from "@opencode-ai/schema/project"
 import { TurnEvent } from "@opencode-ai/schema/turn-event"
 import { entryBody } from "@/cli/cmd/run/entry.body"
 import { toolInlineInfo } from "@/cli/cmd/run/tool"
+import { PlanExitTool } from "@/tool/plan"
 import type { StreamCommit } from "@/cli/cmd/run/types"
-import type { ToolPart as SDKToolPart } from "@opencode-ai/sdk/v2"
+import type { ToolPart as SDKToolPart, TurnInfo as SDKTurnInfo } from "@opencode-ai/sdk/v2"
+import {
+  LearningInspectionExhaustionContent,
+  LearningInspectionToolContent,
+} from "../../../tui/src/component/learning-inspection"
 
 const summary = Layer.succeed(
   SessionSummary.Service,
@@ -398,6 +428,102 @@ const unix = process.platform !== "win32" ? it.instance : it.instance.skip
 const unixNoLLMServer = process.platform !== "win32" ? noLLMServer.instance : noLLMServer.instance.skip
 const projectOriginIt = process.platform === "win32" ? it.instance : it.instance.skip
 const projectOriginNoLLMServer = process.platform === "win32" ? noLLMServer.instance : noLLMServer.instance.skip
+
+noLLMServer.instance("plan exit asks before appending its strict-successor User presentation", () =>
+  Effect.gen(function* () {
+    const created = yield* materializeTestSession({ agent: "plan" })
+    const session = yield* Session.Service
+    const question = yield* Question.Service
+    const definition = yield* PlanExitTool
+    const tool = yield* definition.init()
+    const before = yield* session.messages({ sessionID: created.info.id })
+    const fiber = yield* tool
+      .execute(
+        {},
+        {
+          sessionID: created.info.id,
+          messageID: created.user.id,
+          callID: "plan-exit-success",
+          agent: "plan",
+          abort: AbortSignal.any([]),
+          messages: before,
+          metadata: () => Effect.void,
+          ask: () => Effect.void,
+        },
+      )
+      .pipe(Effect.forkScoped)
+    const pending = yield* pollWithTimeout(
+      question.list().pipe(Effect.map((items) => items[0])),
+      "plan exit did not ask for learner approval",
+    )
+    yield* question.reply({ requestID: pending.id, answers: [["Yes"]] })
+    const result = yield* Fiber.join(fiber)
+    const after = yield* session.messages({ sessionID: created.info.id })
+
+    expect(result.title).toBe("Returning to the Repa profile")
+    expect(after).toHaveLength(before.length + 1)
+    expect(after.at(-1)?.info.role).toBe("user")
+    expect(after.at(-1)?.info.time.created).toBeGreaterThan(before.at(-1)!.info.time.created)
+    expect(after.at(-1)?.parts[0]).toMatchObject({
+      type: "text",
+      synthetic: true,
+      text: expect.stringContaining("has been approved"),
+    })
+  }),
+)
+
+noLLMServer.instance("plan exit refuses an exhausted presentation frontier before asking", () =>
+  Effect.gen(function* () {
+    const created = yield* materializeTestSession({ agent: "plan" })
+    const database = yield* Database.Service
+    const session = yield* Session.Service
+    const question = yield* Question.Service
+    const events = yield* EventV2Bridge.Service
+    let asked = 0
+    const off = yield* events.listen((event) =>
+      Effect.sync(() => {
+        if (event.type === Question.Event.Asked.type) asked++
+      }),
+    )
+    yield* Effect.addFinalizer(() => off)
+    const before = yield* session.messages({ sessionID: created.info.id })
+    yield* database.db
+      .update(SessionPresentationFrontierTable)
+      .set({ frontier_time: Number.MAX_SAFE_INTEGER })
+      .where(eq(SessionPresentationFrontierTable.session_id, created.info.id))
+      .run()
+      .pipe(Effect.orDie)
+
+    const definition = yield* PlanExitTool
+    const tool = yield* definition.init()
+    const exit = yield* awaitWithTimeout(
+      tool
+        .execute(
+          {},
+          {
+            sessionID: created.info.id,
+            messageID: created.user.id,
+            callID: "plan-exit-frontier",
+            agent: "plan",
+            abort: AbortSignal.any([]),
+            messages: before,
+            metadata: () => Effect.void,
+            ask: () => Effect.void,
+          },
+        )
+        .pipe(Effect.exit),
+      "plan exit did not reject the exhausted presentation frontier",
+    )
+
+    expect(Exit.isFailure(exit)).toBe(true)
+    if (Exit.isFailure(exit)) {
+      expect(Cause.squash(exit.cause)).toBeInstanceOf(SessionPresentation.FrontierUnrepresentableError)
+    }
+    expect(yield* question.list()).toEqual([])
+    expect(asked).toBe(0)
+    expect(yield* session.messages({ sessionID: created.info.id })).toEqual(before)
+  }),
+)
 
 // Config that registers a custom "test" provider with a "test-model" model
 // so provider model lookup succeeds inside the loop.
@@ -778,6 +904,1323 @@ const boot = Effect.fn("test.boot")(function* (input?: { title?: string }) {
   const chat = (yield* materializeTestSession(input ?? { title: "Pinned" })).info
   return { prompt, run, sessions, chat }
 })
+
+noLLMServer.instance(
+  "direct shell reserves its complete presentation block before running the command",
+  () =>
+    Effect.gen(function* () {
+      const { directory } = yield* TestInstance
+      const { prompt, sessions, chat } = yield* boot({ title: "shell frontier refusal" })
+      const database = yield* Database.Service
+      const marker = path.join(directory, "shell-frontier-command-ran")
+      const before = yield* sessions.messages({ sessionID: chat.id })
+      yield* database.db
+        .update(SessionPresentationFrontierTable)
+        .set({ frontier_time: Number.MAX_SAFE_INTEGER - 1 })
+        .where(eq(SessionPresentationFrontierTable.session_id, chat.id))
+        .run()
+        .pipe(Effect.orDie)
+
+      const refused = yield* prompt
+        .shell({
+          sessionID: chat.id,
+          agent: "repa",
+          model: ref,
+          command: `bun -e "await Bun.write(process.argv[1], 'ran')" ${JSON.stringify(marker)}`,
+        })
+        .pipe(Effect.exit)
+
+      expect(Exit.isFailure(refused)).toBe(true)
+      if (Exit.isFailure(refused)) {
+        expect(Cause.squash(refused.cause)).toBeInstanceOf(SessionPresentation.FrontierUnrepresentableError)
+      }
+      expect(yield* sessions.messages({ sessionID: chat.id })).toEqual(before)
+      expect(yield* Effect.promise(() => Bun.file(marker).exists())).toBe(false)
+      expect(
+        yield* database.db
+          .select({
+            frontierTime: SessionPresentationFrontierTable.frontier_time,
+            messageCount: SessionPresentationFrontierTable.message_count,
+          })
+          .from(SessionPresentationFrontierTable)
+          .where(eq(SessionPresentationFrontierTable.session_id, chat.id))
+          .get()
+          .pipe(Effect.orDie),
+      ).toEqual({ frontierTime: Number.MAX_SAFE_INTEGER - 1, messageCount: before.length })
+    }),
+  { config: cfg },
+)
+
+noLLMServer.instance(
+  "direct shell appends after a future presentation frontier and advances it for later writers",
+  () =>
+    Effect.gen(function* () {
+      const { prompt, sessions, chat } = yield* boot({ title: "future shell frontier" })
+      const database = yield* Database.Service
+      const before = yield* sessions.messages({ sessionID: chat.id })
+      const futureFrontier = Date.now() + 60_000
+      yield* database.db
+        .update(SessionPresentationFrontierTable)
+        .set({ frontier_time: futureFrontier })
+        .where(eq(SessionPresentationFrontierTable.session_id, chat.id))
+        .run()
+        .pipe(Effect.orDie)
+
+      const firstUserMessageID = MessageID.ascending()
+      const first = yield* prompt.shell({
+        sessionID: chat.id,
+        messageID: firstUserMessageID,
+        agent: "repa",
+        model: ref,
+        command: "echo frontier-shell-one",
+      })
+      const secondUserMessageID = MessageID.ascending()
+      const second = yield* prompt.shell({
+        sessionID: chat.id,
+        messageID: secondUserMessageID,
+        agent: "repa",
+        model: ref,
+        command: "echo frontier-shell-two",
+      })
+      const stored = yield* sessions.messages({ sessionID: chat.id })
+      const appended = stored.slice(before.length)
+
+      expect(appended.map((message) => message.info.id)).toEqual([
+        firstUserMessageID,
+        first.info.id,
+        secondUserMessageID,
+        second.info.id,
+      ])
+      expect(appended.map((message) => message.info.time.created)).toEqual([
+        futureFrontier + 1,
+        futureFrontier + 2,
+        futureFrontier + 3,
+        futureFrontier + 4,
+      ])
+      expect(
+        first.parts[0]?.type === "tool" && first.parts[0].state.status === "completed"
+          ? first.parts[0].state.output
+          : "",
+      ).toContain("frontier-shell-one")
+      expect(
+        second.parts[0]?.type === "tool" && second.parts[0].state.status === "completed"
+          ? second.parts[0].state.output
+          : "",
+      ).toContain("frontier-shell-two")
+      expect(
+        yield* database.db
+          .select({
+            frontierTime: SessionPresentationFrontierTable.frontier_time,
+            messageCount: SessionPresentationFrontierTable.message_count,
+          })
+          .from(SessionPresentationFrontierTable)
+          .where(eq(SessionPresentationFrontierTable.session_id, chat.id))
+          .get()
+          .pipe(Effect.orDie),
+      ).toEqual({ frontierTime: futureFrontier + 4, messageCount: before.length + 4 })
+    }),
+  { config: cfg },
+)
+
+it.instance(
+  "same-home import copy reidentifies a closed history graph and exact-replays its genuine learner Turn",
+  () =>
+    Effect.gen(function* () {
+      const { llm } = yield* useServerConfig(providerCfg)
+      const database = yield* Database.Service
+      const sessions = yield* Session.Service
+      const prompt = yield* SessionPrompt.Service
+      const revert = yield* SessionRevert.Service
+      const { directory } = yield* TestInstance
+      const sourceDatabaseID = yield* database.db.transaction(LearnerHomeIdentity.read).pipe(Effect.orDie)
+      const sourceSessionID = SessionID.create()
+      const sourceUserID = MessageID.ascending()
+      const sourceAssistantID = MessageID.ascending()
+      const sourceCompactionID = MessageID.ascending()
+      const sourceSummaryID = MessageID.ascending()
+      const sourceUserTextID = PartID.ascending()
+      const sourceStepStartID = PartID.ascending()
+      const sourceToolID = PartID.ascending()
+      const sourceAttachmentID = PartID.ascending()
+      const sourcePatchID = PartID.ascending()
+      const sourceStepFinishID = PartID.ascending()
+      const sourceCompactionPartID = PartID.ascending()
+      const sourceSummaryTextID = PartID.ascending()
+      const sourceTime = Date.now() + 60_000
+      const decoded = yield* SessionImportHistory.decode(
+        JSON.stringify({
+          type: "repa_session_offline_history",
+          schemaVersion: 1,
+          sourceDatabaseID,
+          info: {
+            id: sourceSessionID,
+            slug: "copy-source",
+            projectID: "source-project",
+            directory: "/source/project",
+            title: "Closed copy source",
+            version: "1",
+            time: { created: sourceTime, updated: sourceTime + 5 },
+          },
+          messages: [
+            {
+              info: {
+                id: sourceUserID,
+                sessionID: sourceSessionID,
+                role: "user",
+                time: { created: sourceTime },
+                agent: "repa",
+                model: { providerID: "test", modelID: "test-model" },
+              },
+              parts: [
+                {
+                  id: sourceUserTextID,
+                  sessionID: sourceSessionID,
+                  messageID: sourceUserID,
+                  type: "text",
+                  text: "future-dated imported learner history",
+                },
+              ],
+            },
+            {
+              info: {
+                id: sourceAssistantID,
+                sessionID: sourceSessionID,
+                parentID: sourceUserID,
+                role: "assistant",
+                mode: "repa",
+                agent: "repa",
+                cost: 0,
+                path: { cwd: "/source/project", root: "/source/project" },
+                time: { created: sourceTime + 1, completed: sourceTime + 2 },
+                finish: "stop",
+                tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+                providerID: "test",
+                modelID: "test-model",
+              },
+              parts: [
+                {
+                  id: sourceStepStartID,
+                  sessionID: sourceSessionID,
+                  messageID: sourceAssistantID,
+                  type: "step-start",
+                  snapshot: "source-step-snapshot",
+                },
+                {
+                  id: sourceToolID,
+                  sessionID: sourceSessionID,
+                  messageID: sourceAssistantID,
+                  type: "tool",
+                  tool: "read",
+                  callID: "call-copy-source",
+                  state: {
+                    status: "completed",
+                    input: { filePath: "/source/project/lesson.txt" },
+                    output: "historical tool output",
+                    title: "Historical read",
+                    metadata: {},
+                    time: { start: sourceTime + 1, end: sourceTime + 2 },
+                    attachments: [
+                      {
+                        id: sourceAttachmentID,
+                        sessionID: sourceSessionID,
+                        messageID: sourceAssistantID,
+                        type: "file",
+                        mime: "text/plain",
+                        filename: "lesson.txt",
+                        url: "data:text/plain,historical",
+                      },
+                    ],
+                  },
+                },
+                {
+                  id: sourcePatchID,
+                  sessionID: sourceSessionID,
+                  messageID: sourceAssistantID,
+                  type: "patch",
+                  hash: "source-patch-hash",
+                  files: ["lesson.txt"],
+                },
+                {
+                  id: sourceStepFinishID,
+                  sessionID: sourceSessionID,
+                  messageID: sourceAssistantID,
+                  type: "step-finish",
+                  reason: "stop",
+                  snapshot: "source-step-finished-snapshot",
+                  cost: 0,
+                  tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+                },
+              ],
+            },
+            {
+              info: {
+                id: sourceCompactionID,
+                sessionID: sourceSessionID,
+                role: "user",
+                time: { created: sourceTime + 3 },
+                agent: "repa",
+                model: { providerID: "test", modelID: "test-model" },
+              },
+              parts: [
+                {
+                  id: sourceCompactionPartID,
+                  sessionID: sourceSessionID,
+                  messageID: sourceCompactionID,
+                  type: "compaction",
+                  auto: true,
+                  tail_start_id: sourceUserID,
+                  capacity_history: {
+                    source_assistant_message_id: sourceAssistantID,
+                    removable_message_count: 2,
+                    removable_message_ids_fingerprint: "a".repeat(64),
+                  },
+                },
+              ],
+            },
+            {
+              info: {
+                id: sourceSummaryID,
+                sessionID: sourceSessionID,
+                parentID: sourceCompactionID,
+                role: "assistant",
+                mode: "repa",
+                agent: "repa",
+                cost: 0,
+                path: { cwd: "/source/project", root: "/source/project" },
+                time: { created: sourceTime + 4, completed: sourceTime + 5 },
+                finish: "stop",
+                summary: true,
+                tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+                providerID: "test",
+                modelID: "test-model",
+              },
+              parts: [
+                {
+                  id: sourceSummaryTextID,
+                  sessionID: sourceSessionID,
+                  messageID: sourceSummaryID,
+                  type: "text",
+                  text: "historical compaction summary",
+                },
+              ],
+            },
+          ],
+        }),
+      )
+      const proposal = yield* SessionImportHistory.prepareCopyProposal({
+        decoded,
+        prompt: "Continue this history as a fresh learner Turn",
+      })
+      expect(proposal.partMapping).toHaveLength(8)
+      yield* llm.text("Fresh local response after copied history.")
+      const copied = yield* SessionImportHistory.copy({
+        decoded,
+        proposal,
+        prompt: "Continue this history as a fresh learner Turn",
+        sourceStillMatches: Effect.succeed(true),
+      })
+      const terminal = copied.turn.terminal
+        ? copied.turn
+        : yield* prompt.awaitTurn(proposal.targetSessionID, proposal.turnID)
+      expect(terminal.terminal).toMatchObject({ outcome: "completed", reason: "normal" })
+
+      const messageMap = new Map(proposal.messageMapping.map((entry) => [entry.source, entry.target] as const))
+      const partMap = new Map(proposal.partMapping.map((entry) => [entry.source, entry.target] as const))
+      const targetUserID = messageMap.get(sourceUserID)
+      const targetAssistantID = messageMap.get(sourceAssistantID)
+      const targetToolID = partMap.get(sourceToolID)
+      const targetAttachmentID = partMap.get(sourceAttachmentID)
+      const targetCompactionPartID = partMap.get(sourceCompactionPartID)
+      if (!targetUserID || !targetAssistantID || !targetToolID || !targetAttachmentID || !targetCompactionPartID) {
+        return yield* Effect.die("Expected the copy proposal to map every referenced identity")
+      }
+      const copiedMessages = yield* sessions.messages({ sessionID: proposal.targetSessionID })
+      const importedMessages = copiedMessages.slice(0, 4)
+      expect(importedMessages.map((message) => message.info.id)).toEqual(
+        proposal.messageMapping.map((entry) => entry.target),
+      )
+      expect(importedMessages.map((message) => message.info.time.created)).toEqual([
+        proposal.historyStartTime,
+        proposal.historyStartTime + 1,
+        proposal.historyStartTime + 2,
+        proposal.historyStartTime + 3,
+      ])
+      const importedAssistant = importedMessages[1]
+      const importedCompaction = importedMessages[2]
+      if (importedAssistant?.info.role !== "assistant" || !importedCompaction) {
+        return yield* Effect.die("Expected copied Assistant and compaction presentations")
+      }
+      expect(importedAssistant.info.parentID).toBe(targetUserID)
+      const copiedTool = importedAssistant.parts.find((part) => part.id === targetToolID)
+      if (copiedTool?.type !== "tool" || copiedTool.state.status !== "completed") {
+        return yield* Effect.die("Expected copied terminal Tool presentation")
+      }
+      expect(copiedTool.state.attachments?.[0]).toMatchObject({
+        id: targetAttachmentID,
+        sessionID: proposal.targetSessionID,
+        messageID: targetAssistantID,
+      })
+      expect(
+        yield* database.db
+          .select()
+          .from(SessionAdministrativeHistoryEmbeddedPartTable)
+          .where(eq(SessionAdministrativeHistoryEmbeddedPartTable.part_id, targetAttachmentID))
+          .get()
+          .pipe(Effect.orDie),
+      ).toMatchObject({
+        session_id: proposal.targetSessionID,
+        message_id: targetAssistantID,
+        parent_part_id: targetToolID,
+        part_id: targetAttachmentID,
+        embedded_ordinal: 0,
+      })
+      const reusedNestedIdentity = yield* sessions
+        .updatePart({
+          id: targetAttachmentID,
+          sessionID: proposal.targetSessionID,
+          messageID: proposal.learnerMessageID,
+          type: "file",
+          mime: "text/plain",
+          filename: "must-not-reuse.txt",
+          url: "data:text/plain,blocked",
+        })
+        .pipe(Effect.exit)
+      expect(Exit.isFailure(reusedNestedIdentity)).toBe(true)
+      if (Exit.isFailure(reusedNestedIdentity)) {
+        expect(Cause.squash(reusedNestedIdentity.cause)).toBeInstanceOf(
+          SessionPresentation.AdministrativeHistoryIntegrityError,
+        )
+      }
+      const copiedCompaction = importedCompaction.parts.find((part) => part.id === targetCompactionPartID)
+      if (copiedCompaction?.type !== "compaction") {
+        return yield* Effect.die("Expected copied compaction presentation")
+      }
+      expect(copiedCompaction).toMatchObject({
+        tail_start_id: targetUserID,
+        capacity_history: { source_assistant_message_id: targetAssistantID },
+      })
+      expect(copiedMessages[4]?.info).toMatchObject({
+        id: proposal.learnerMessageID,
+        role: "user",
+        time: { created: proposal.learnerPresentationTime },
+      })
+      expect(copiedMessages[5]?.info.time.created).toBeGreaterThan(proposal.learnerPresentationTime)
+
+      const sealed = yield* database.db
+        .select()
+        .from(SessionAdministrativeHistoryTable)
+        .where(eq(SessionAdministrativeHistoryTable.session_id, proposal.targetSessionID))
+        .get()
+        .pipe(Effect.orDie)
+      expect(sealed).toMatchObject({
+        kind: "local_import_copy",
+        source_file_fingerprint: decoded.sourceFileFingerprint,
+        message_count: 4,
+        part_count: 8,
+        imported_revert_absent: true,
+      })
+      expect(
+        yield* database.db
+          .select({
+            id: SessionAdministrativeHistoryMessageTable.message_id,
+            sourceTime: SessionAdministrativeHistoryMessageTable.source_time_created,
+          })
+          .from(SessionAdministrativeHistoryMessageTable)
+          .where(eq(SessionAdministrativeHistoryMessageTable.session_id, proposal.targetSessionID))
+          .orderBy(SessionAdministrativeHistoryMessageTable.ordinal)
+          .all()
+          .pipe(Effect.orDie),
+      ).toEqual(
+        proposal.messageMapping.map((entry, index) => ({
+          id: entry.target,
+          sourceTime: decoded.bundle.messages[index]!.info.time.created,
+        })),
+      )
+      expect(
+        yield* database.db
+          .select({ id: SessionAdministrativeHistoryPartTable.part_id })
+          .from(SessionAdministrativeHistoryPartTable)
+          .where(eq(SessionAdministrativeHistoryPartTable.session_id, proposal.targetSessionID))
+          .all()
+          .pipe(Effect.orDie),
+      ).toHaveLength(7)
+      expect(
+        yield* database.db
+          .select({ id: TurnTable.id })
+          .from(TurnTable)
+          .where(eq(TurnTable.session_id, proposal.targetSessionID))
+          .all()
+          .pipe(Effect.orDie),
+      ).toEqual([{ id: proposal.turnID }])
+      expect(
+        yield* database.db
+          .select({ id: TurnInputTable.id })
+          .from(TurnInputTable)
+          .where(eq(TurnInputTable.session_id, proposal.targetSessionID))
+          .all()
+          .pipe(Effect.orDie),
+      ).toEqual([{ id: proposal.inputID }])
+      expect(
+        yield* database.db
+          .select({ messageID: AdmittedLearnerOccurrenceTable.origin_message_id })
+          .from(AdmittedLearnerOccurrenceTable)
+          .where(eq(AdmittedLearnerOccurrenceTable.origin_session_id, proposal.targetSessionID))
+          .all()
+          .pipe(Effect.orDie),
+      ).toEqual([{ messageID: proposal.learnerMessageID }])
+      const mappedMessageIDs = proposal.messageMapping.map((entry) => entry.target)
+      expect(
+        yield* database.db
+          .select({ id: TurnModelOperationTable.assistant_message_id })
+          .from(TurnModelOperationTable)
+          .where(inArray(TurnModelOperationTable.assistant_message_id, mappedMessageIDs))
+          .all()
+          .pipe(Effect.orDie),
+      ).toEqual([])
+      expect(
+        yield* database.db
+          .select({ id: TurnLearningContextCutTable.assistant_message_id })
+          .from(TurnLearningContextCutTable)
+          .where(inArray(TurnLearningContextCutTable.assistant_message_id, mappedMessageIDs))
+          .all()
+          .pipe(Effect.orDie),
+      ).toEqual([])
+      expect(
+        yield* database.db
+          .select({ id: MessageTable.id })
+          .from(MessageTable)
+          .where(inArray(MessageTable.id, [sourceUserID, sourceAssistantID, sourceCompactionID, sourceSummaryID]))
+          .all()
+          .pipe(Effect.orDie),
+      ).toEqual([])
+      expect(yield* sessions.get(proposal.targetSessionID)).toMatchObject({
+        id: proposal.targetSessionID,
+        parentID: undefined,
+        revert: undefined,
+      })
+
+      const sentinel = path.join(directory, "lesson.txt")
+      yield* Effect.promise(() => Bun.write(sentinel, "unchanged copied worktree"))
+      for (const message of importedMessages) {
+        const refused = yield* revert
+          .revert({ sessionID: proposal.targetSessionID, messageID: message.info.id })
+          .pipe(Effect.exit)
+        expect(Exit.isFailure(refused)).toBe(true)
+        if (Exit.isFailure(refused)) {
+          expect(Cause.squash(refused.cause)).toBeInstanceOf(
+            SessionPresentation.HistoricalPresentationNotRevertibleError,
+          )
+        }
+        for (const part of message.parts) {
+          const partRefused = yield* revert
+            .revert({ sessionID: proposal.targetSessionID, messageID: message.info.id, partID: part.id })
+            .pipe(Effect.exit)
+          expect(Exit.isFailure(partRefused)).toBe(true)
+          if (Exit.isFailure(partRefused)) {
+            expect(Cause.squash(partRefused.cause)).toBeInstanceOf(
+              SessionPresentation.HistoricalPresentationNotRevertibleError,
+            )
+          }
+        }
+      }
+      expect(yield* Effect.promise(() => Bun.file(sentinel).text())).toBe("unchanged copied worktree")
+      expect((yield* sessions.get(proposal.targetSessionID)).revert).toBeUndefined()
+      expect(yield* sessions.messages({ sessionID: proposal.targetSessionID })).toEqual(copiedMessages)
+
+      const replay = yield* SessionImportHistory.copy({
+        decoded,
+        proposal,
+        prompt: "Continue this history as a fresh learner Turn",
+        sourceStillMatches: Effect.succeed(true),
+      })
+      expect(replay.sessionID).toBe(copied.sessionID)
+      expect(replay.turn).toEqual(terminal)
+      expect(yield* llm.calls).toBe(1)
+      expect(yield* sessions.messages({ sessionID: proposal.targetSessionID })).toEqual(copiedMessages)
+
+      const changedSourceProposal = yield* SessionImportHistory.prepareCopyProposal({
+        decoded,
+        prompt: "Refuse this copy because its validated file changed",
+      })
+      const changedSource = yield* SessionImportHistory.copy({
+        decoded,
+        proposal: changedSourceProposal,
+        prompt: "Refuse this copy because its validated file changed",
+        sourceStillMatches: Effect.succeed(false),
+      }).pipe(Effect.exit)
+      expect(Exit.isFailure(changedSource)).toBe(true)
+      if (Exit.isFailure(changedSource)) {
+        expect(Cause.squash(changedSource.cause)).toBeInstanceOf(SessionImportHistory.SourceChangedError)
+      }
+      expect(
+        yield* database.db
+          .select({ id: SessionTable.id })
+          .from(SessionTable)
+          .where(eq(SessionTable.id, changedSourceProposal.targetSessionID))
+          .get()
+          .pipe(Effect.orDie),
+      ).toBeUndefined()
+
+      const racedSourceProposal = yield* SessionImportHistory.prepareCopyProposal({
+        decoded,
+        prompt: "Refuse this copy because its source changed at the transactional recheck",
+      })
+      let sourceChecks = 0
+      const racedSource = yield* SessionImportHistory.copy({
+        decoded,
+        proposal: racedSourceProposal,
+        prompt: "Refuse this copy because its source changed at the transactional recheck",
+        sourceStillMatches: Effect.sync(() => ++sourceChecks === 1),
+      }).pipe(Effect.exit)
+      expect(sourceChecks).toBe(2)
+      expect(Exit.isFailure(racedSource)).toBe(true)
+      if (Exit.isFailure(racedSource)) {
+        expect(Cause.squash(racedSource.cause)).toBeInstanceOf(SessionImportHistory.SourceChangedError)
+      }
+      expect(
+        yield* Effect.all({
+          session: database.db
+            .select({ id: SessionTable.id })
+            .from(SessionTable)
+            .where(eq(SessionTable.id, racedSourceProposal.targetSessionID))
+            .get()
+            .pipe(Effect.orDie),
+          history: database.db
+            .select({ id: SessionAdministrativeHistoryTable.session_id })
+            .from(SessionAdministrativeHistoryTable)
+            .where(eq(SessionAdministrativeHistoryTable.session_id, racedSourceProposal.targetSessionID))
+            .get()
+            .pipe(Effect.orDie),
+          turn: database.db
+            .select({ id: TurnTable.id })
+            .from(TurnTable)
+            .where(eq(TurnTable.id, racedSourceProposal.turnID))
+            .get()
+            .pipe(Effect.orDie),
+        }),
+      ).toEqual({ session: undefined, history: undefined, turn: undefined })
+
+      const collisionProposal = yield* SessionImportHistory.prepareCopyProposal({
+        decoded,
+        prompt: "Refuse this copy because another Session won the target address",
+      })
+      yield* llm.text("Competing Session response.")
+      const competingTurnID = Turn.ID.create()
+      const competing = yield* prompt.start({
+        sessionID: collisionProposal.targetSessionID,
+        turnID: competingTurnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 1, tool: 0 },
+        session: { title: "Competing target Session" },
+        parts: [{ type: "text", text: "Occupy the proposed import-copy target" }],
+      })
+      if (!competing.terminal) yield* prompt.awaitTurn(collisionProposal.targetSessionID, competingTurnID)
+      const competingMessages = yield* sessions.messages({ sessionID: collisionProposal.targetSessionID })
+      const collision = yield* SessionImportHistory.copy({
+        decoded,
+        proposal: collisionProposal,
+        prompt: "Refuse this copy because another Session won the target address",
+        sourceStillMatches: Effect.succeed(true),
+      }).pipe(Effect.exit)
+      expect(Exit.isFailure(collision)).toBe(true)
+      if (Exit.isFailure(collision)) expect(Cause.squash(collision.cause)).toBeInstanceOf(Turn.AdmissionConflictError)
+      expect(yield* sessions.messages({ sessionID: collisionProposal.targetSessionID })).toEqual(competingMessages)
+      expect(
+        yield* database.db
+          .select({ id: SessionAdministrativeHistoryTable.session_id })
+          .from(SessionAdministrativeHistoryTable)
+          .where(eq(SessionAdministrativeHistoryTable.session_id, collisionProposal.targetSessionID))
+          .get()
+          .pipe(Effect.orDie),
+      ).toBeUndefined()
+      expect(yield* llm.calls).toBe(2)
+
+      const retainedMessageProposal = yield* SessionImportHistory.prepareCopyProposal({
+        decoded,
+        prompt: "Refuse this copy because a mapped Message identity is retained by old lineage",
+      })
+      const retainedMessageID = retainedMessageProposal.messageMapping[0]?.target
+      if (!retainedMessageID) return yield* Effect.die("Expected a mapped Message identity")
+      yield* database.db
+        .insert(LearnerOccurrenceSourceOrderTable)
+        .values({
+          occurrence_id: LearningCommand.createOccurrenceID(),
+          origin_session_id: SessionID.create(),
+          origin_message_id: retainedMessageID,
+          time_allocated: Date.now(),
+          source_temporal_state: "unavailable",
+          source_temporal_unavailable_reason: "timezone_unavailable",
+        })
+        .run()
+        .pipe(Effect.orDie)
+      const retainedMessageCollision = yield* SessionImportHistory.copy({
+        decoded,
+        proposal: retainedMessageProposal,
+        prompt: "Refuse this copy because a mapped Message identity is retained by old lineage",
+        sourceStillMatches: Effect.succeed(true),
+      }).pipe(Effect.exit)
+      expect(Exit.isFailure(retainedMessageCollision)).toBe(true)
+      if (Exit.isFailure(retainedMessageCollision)) {
+        expect(Cause.squash(retainedMessageCollision.cause)).toBeInstanceOf(Turn.AdmissionConflictError)
+      }
+      expect(
+        yield* database.db
+          .select({ id: SessionTable.id })
+          .from(SessionTable)
+          .where(eq(SessionTable.id, retainedMessageProposal.targetSessionID))
+          .get()
+          .pipe(Effect.orDie),
+      ).toBeUndefined()
+
+      const retiredCopyProposal = yield* SessionImportHistory.prepareCopyProposal({
+        decoded,
+        prompt: "Refuse this copy with typed retired-address truth",
+      })
+      yield* materializeTestSession({
+        id: retiredCopyProposal.targetSessionID,
+        title: "Retire the proposed import-copy target",
+      })
+      const retiredDeletion = yield* sessions.proposeRemoval({
+        sessionID: retiredCopyProposal.targetSessionID,
+        mode: "full",
+      })
+      expect((yield* sessions.commitRemoval(retiredDeletion)).type).toBe("applied")
+      const retiredCopy = yield* SessionImportHistory.copy({
+        decoded,
+        proposal: retiredCopyProposal,
+        prompt: "Refuse this copy with typed retired-address truth",
+        sourceStillMatches: Effect.succeed(true),
+      }).pipe(Effect.exit)
+      expect(Exit.isFailure(retiredCopy)).toBe(true)
+      if (Exit.isFailure(retiredCopy)) {
+        expect(Cause.squash(retiredCopy.cause)).toBeInstanceOf(SessionDeletion.SessionIDRetiredError)
+      }
+
+      const nestedAttachmentProposal = yield* SessionImportHistory.prepareCopyProposal({
+        decoded,
+        prompt: "Refuse this copy because a mapped nested attachment identity is already live",
+      })
+      const nestedAttachmentID = nestedAttachmentProposal.partMapping.find(
+        (entry) => entry.source === sourceAttachmentID,
+      )?.target
+      if (!nestedAttachmentID) return yield* Effect.die("Expected a mapped nested attachment identity")
+      const identityHolder = (yield* materializeTestSession({ title: "Nested attachment identity holder" })).info
+      const holderMessage = yield* user(identityHolder.id, "hold the nested attachment target identity")
+      yield* sessions.updatePart({
+        id: nestedAttachmentID,
+        sessionID: identityHolder.id,
+        messageID: holderMessage.id,
+        type: "file",
+        mime: "text/plain",
+        filename: "identity-holder.txt",
+        url: "data:text/plain,held",
+      })
+      const nestedAttachmentCollision = yield* SessionImportHistory.copy({
+        decoded,
+        proposal: nestedAttachmentProposal,
+        prompt: "Refuse this copy because a mapped nested attachment identity is already live",
+        sourceStillMatches: Effect.succeed(true),
+      }).pipe(Effect.exit)
+      expect(Exit.isFailure(nestedAttachmentCollision)).toBe(true)
+      if (Exit.isFailure(nestedAttachmentCollision)) {
+        expect(Cause.squash(nestedAttachmentCollision.cause)).toBeInstanceOf(Turn.AdmissionConflictError)
+      }
+      expect(
+        yield* database.db
+          .select({ id: SessionTable.id })
+          .from(SessionTable)
+          .where(eq(SessionTable.id, nestedAttachmentProposal.targetSessionID))
+          .get()
+          .pipe(Effect.orDie),
+      ).toBeUndefined()
+
+      const retainedInputProposal = yield* SessionImportHistory.prepareCopyProposal({
+        decoded,
+        prompt: "Refuse this copy because its proposed Input identity is already occupied",
+      })
+      const inputSourceSessionID = SessionID.create()
+      const inputSourceTurnID = Turn.ID.create()
+      yield* llm.text("Input identity source response.")
+      const inputSource = yield* prompt.start({
+        sessionID: inputSourceSessionID,
+        turnID: inputSourceTurnID,
+        inputID: retainedInputProposal.inputID,
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 1, tool: 0 },
+        session: { title: "Historical Input identity source" },
+        parts: [{ type: "text", text: "Create the exact Input identity that a later copy must not reuse" }],
+      })
+      if (!inputSource.terminal) yield* prompt.awaitTurn(inputSourceSessionID, inputSourceTurnID)
+      const retainedInputCollision = yield* SessionImportHistory.copy({
+        decoded,
+        proposal: retainedInputProposal,
+        prompt: "Refuse this copy because its proposed Input identity is already occupied",
+        sourceStillMatches: Effect.succeed(true),
+      }).pipe(Effect.exit)
+      expect(Exit.isFailure(retainedInputCollision)).toBe(true)
+      if (Exit.isFailure(retainedInputCollision)) {
+        expect(Cause.squash(retainedInputCollision.cause)).toBeInstanceOf(Turn.AdmissionConflictError)
+      }
+      expect(
+        yield* database.db
+          .select({ id: SessionTable.id })
+          .from(SessionTable)
+          .where(eq(SessionTable.id, retainedInputProposal.targetSessionID))
+          .get()
+          .pipe(Effect.orDie),
+      ).toBeUndefined()
+
+      const retainedTurnProposal = yield* SessionImportHistory.prepareCopyProposal({
+        decoded,
+        prompt: "Refuse this copy because its fresh Turn identity is retained as unavailable lineage",
+      })
+      yield* database.db
+        .insert(TurnUnavailableSourceTable)
+        .values({
+          turn_id: retainedTurnProposal.turnID,
+          session_id: SessionID.create(),
+          admission_kind: "learner",
+          time_admitted: 1,
+          time_terminal: 2,
+          outcome: "completed",
+          depth: 0,
+          time_deleted: 3,
+        })
+        .run()
+        .pipe(Effect.orDie)
+      const retainedTurnCollision = yield* SessionImportHistory.copy({
+        decoded,
+        proposal: retainedTurnProposal,
+        prompt: "Refuse this copy because its fresh Turn identity is retained as unavailable lineage",
+        sourceStillMatches: Effect.succeed(true),
+      }).pipe(Effect.exit)
+      expect(Exit.isFailure(retainedTurnCollision)).toBe(true)
+      if (Exit.isFailure(retainedTurnCollision)) {
+        expect(Cause.squash(retainedTurnCollision.cause)).toBeInstanceOf(Turn.SourceUnavailableError)
+      }
+      expect(
+        yield* database.db
+          .select({ id: SessionTable.id })
+          .from(SessionTable)
+          .where(eq(SessionTable.id, retainedTurnProposal.targetSessionID))
+          .get()
+          .pipe(Effect.orDie),
+      ).toBeUndefined()
+    }),
+  { config: cfg },
+  30_000,
+)
+
+isolatedDatabaseBoundary.instance(
+  "exact restore refuses an imported identity retained by unavailable learner-occurrence lineage",
+  () =>
+    Effect.gen(function* () {
+      const database = yield* Database.Service
+      const context = yield* InstanceState.context
+      const targetDatabaseID = yield* database.db.transaction(LearnerHomeIdentity.read).pipe(Effect.orDie)
+      const sessionID = SessionID.create()
+      const messageID = MessageID.ascending()
+      const partID = PartID.ascending()
+      const created = Date.now()
+      const decoded = yield* SessionImportHistory.decode(
+        JSON.stringify({
+          type: "repa_session_offline_history",
+          schemaVersion: 1,
+          sourceDatabaseID:
+            targetDatabaseID === `lhm_${"1".repeat(32)}` ? `lhm_${"2".repeat(32)}` : `lhm_${"1".repeat(32)}`,
+          info: {
+            id: sessionID,
+            slug: "retained-message-collision",
+            projectID: "source-project",
+            directory: "/source/project",
+            title: "Retained message collision",
+            version: "1",
+            time: { created, updated: created },
+          },
+          messages: [
+            {
+              info: {
+                id: messageID,
+                sessionID,
+                role: "user",
+                time: { created },
+                agent: "repa",
+                model: { providerID: "test", modelID: "test-model" },
+              },
+              parts: [{ id: partID, sessionID, messageID, type: "text", text: "retained identity" }],
+            },
+          ],
+        }),
+      )
+      yield* database.db
+        .insert(LearnerOccurrenceSourceOrderTable)
+        .values({
+          occurrence_id: LearningCommand.createOccurrenceID(),
+          origin_session_id: SessionID.create(),
+          origin_message_id: messageID,
+          time_allocated: created,
+          source_temporal_state: "unavailable",
+          source_temporal_unavailable_reason: "timezone_unavailable",
+        })
+        .run()
+        .pipe(Effect.orDie)
+
+      const result = yield* SessionImportHistory.exactRestore({
+        decoded,
+        context,
+        sourceStillMatches: Effect.succeed(true),
+      }).pipe(Effect.exit)
+      expect(Exit.isFailure(result)).toBe(true)
+      if (Exit.isFailure(result)) {
+        const conflict = Cause.squash(result.cause)
+        expect(conflict).toBeInstanceOf(SessionImportHistory.IdentityConflictError)
+        if (conflict instanceof SessionImportHistory.IdentityConflictError) {
+          expect(conflict.identityKind).toBe("message")
+          expect(conflict.identity).toBe(messageID)
+        }
+      }
+      expect(
+        yield* Effect.all({
+          session: database.db
+            .select({ id: SessionTable.id })
+            .from(SessionTable)
+            .where(eq(SessionTable.id, sessionID))
+            .get()
+            .pipe(Effect.orDie),
+          message: database.db
+            .select({ id: MessageTable.id })
+            .from(MessageTable)
+            .where(eq(MessageTable.id, messageID))
+            .get()
+            .pipe(Effect.orDie),
+          part: database.db
+            .select({ id: PartTable.id })
+            .from(PartTable)
+            .where(eq(PartTable.id, partID))
+            .get()
+            .pipe(Effect.orDie),
+          seal: database.db
+            .select({ id: SessionAdministrativeHistoryTable.session_id })
+            .from(SessionAdministrativeHistoryTable)
+            .where(eq(SessionAdministrativeHistoryTable.session_id, sessionID))
+            .get()
+            .pipe(Effect.orDie),
+        }),
+      ).toEqual({ session: undefined, message: undefined, part: undefined, seal: undefined })
+    }),
+  { config: cfg },
+)
+
+test("exact restore survives restart and floors every later transcript writer above future imported history", async () => {
+  await using tmp = await tmpdir()
+  const filename = path.join(tmp.path, "exact-restore-frontier.db")
+  const sessionID = SessionID.create()
+  const importedMessageID = MessageID.ascending()
+  const importedPartID = PartID.ascending()
+  const sourceTime = Date.now() + 60_000
+  let source = ""
+  let expectedMessages: SessionV1.WithParts[] = []
+  let expectedFrontierTime = 0
+
+  await Effect.runPromise(
+    Effect.gen(function* () {
+      const instances = yield* InstanceStore.Service
+      yield* instances.provide(
+        { directory: tmp.path },
+        Effect.gen(function* () {
+          const database = yield* Database.Service
+          const sessions = yield* Session.Service
+          const context = yield* InstanceState.context
+          const targetDatabaseID = yield* database.db.transaction(LearnerHomeIdentity.read).pipe(Effect.orDie)
+          const sharedBefore = yield* database.db.transaction((tx) => LearningFrontier.read(tx))
+          source = JSON.stringify({
+            type: "repa_session_offline_history",
+            schemaVersion: 1,
+            sourceDatabaseID:
+              targetDatabaseID === `lhm_${"1".repeat(32)}` ? `lhm_${"2".repeat(32)}` : `lhm_${"1".repeat(32)}`,
+            info: {
+              id: sessionID,
+              slug: "future-exact-restore",
+              projectID: "source-project",
+              directory: "/source/project",
+              title: "Future exact restore",
+              version: "1",
+              time: { created: sourceTime, updated: sourceTime + 5 },
+            },
+            messages: [
+              {
+                info: {
+                  id: importedMessageID,
+                  sessionID,
+                  role: "user",
+                  time: { created: sourceTime },
+                  agent: "repa",
+                  model: { providerID: "test", modelID: "test-model" },
+                },
+                parts: [
+                  {
+                    id: importedPartID,
+                    sessionID,
+                    messageID: importedMessageID,
+                    type: "text",
+                    text: "future imported exact history",
+                  },
+                ],
+              },
+            ],
+          })
+          const decoded = yield* SessionImportHistory.decode(source)
+          const changedSource = yield* SessionImportHistory.exactRestore({
+            decoded,
+            context,
+            sourceStillMatches: Effect.succeed(false),
+          }).pipe(Effect.exit)
+          expect(Exit.isFailure(changedSource)).toBe(true)
+          if (Exit.isFailure(changedSource)) {
+            expect(Cause.squash(changedSource.cause)).toBeInstanceOf(SessionImportHistory.SourceChangedError)
+          }
+          expect(
+            yield* database.db
+              .select({ id: SessionTable.id })
+              .from(SessionTable)
+              .where(eq(SessionTable.id, sessionID))
+              .get()
+              .pipe(Effect.orDie),
+          ).toBeUndefined()
+          const applied = yield* SessionImportHistory.exactRestore({
+            decoded,
+            context,
+            sourceStillMatches: Effect.succeed(true),
+          })
+          const replay = yield* SessionImportHistory.exactRestore({
+            decoded,
+            context,
+            sourceStillMatches: Effect.succeed(true),
+          })
+          expect(applied).toEqual({ type: "applied", sessionID })
+          expect(replay).toEqual({ type: "already_present", sessionID })
+          yield* database.db
+            .update(SessionTable)
+            .set({ title: "Drifted after exact restore" })
+            .where(eq(SessionTable.id, sessionID))
+            .run()
+            .pipe(Effect.orDie)
+          const drifted = yield* SessionImportHistory.exactRestore({
+            decoded,
+            context,
+            sourceStillMatches: Effect.succeed(true),
+          }).pipe(Effect.exit)
+          expect(Exit.isFailure(drifted)).toBe(true)
+          if (Exit.isFailure(drifted)) {
+            expect(Cause.squash(drifted.cause)).toBeInstanceOf(SessionImportHistory.IdentityConflictError)
+          }
+          yield* database.db
+            .update(SessionTable)
+            .set({ title: "Future exact restore" })
+            .where(eq(SessionTable.id, sessionID))
+            .run()
+            .pipe(Effect.orDie)
+          expect(yield* sessions.get(sessionID)).toMatchObject({
+            id: sessionID,
+            projectID: context.project.id,
+            directory: context.directory,
+            parentID: undefined,
+            revert: undefined,
+          })
+          expect(yield* sessions.messages({ sessionID })).toMatchObject([
+            { info: { id: importedMessageID, time: { created: sourceTime } } },
+          ])
+          expect(
+            yield* Effect.all({
+              turns: database.db
+                .select()
+                .from(TurnTable)
+                .where(eq(TurnTable.session_id, sessionID))
+                .all()
+                .pipe(Effect.orDie),
+              inputs: database.db
+                .select()
+                .from(TurnInputTable)
+                .where(eq(TurnInputTable.session_id, sessionID))
+                .all()
+                .pipe(Effect.orDie),
+              models: database.db
+                .select()
+                .from(TurnModelOperationTable)
+                .where(eq(TurnModelOperationTable.session_id, sessionID))
+                .all()
+                .pipe(Effect.orDie),
+              events: database.db
+                .select()
+                .from(EventTable)
+                .where(eq(EventTable.aggregate_id, sessionID))
+                .all()
+                .pipe(Effect.orDie),
+            }),
+          ).toEqual({ turns: [], inputs: [], models: [], events: [] })
+          expect(yield* database.db.transaction((tx) => LearningFrontier.read(tx))).toEqual(sharedBefore)
+          expect(
+            yield* database.db
+              .select()
+              .from(SessionAdministrativeHistoryTable)
+              .where(eq(SessionAdministrativeHistoryTable.session_id, sessionID))
+              .get()
+              .pipe(Effect.orDie),
+          ).toMatchObject({
+            kind: "offline_exact_restore",
+            message_count: 1,
+            part_count: 1,
+            history_frontier_time: sourceTime + 5,
+          })
+        }),
+      )
+    }).pipe(Effect.provide(makeProcessRestartBoundary(filename)), Effect.scoped),
+  )
+
+  await Effect.runPromise(
+    Effect.gen(function* () {
+      setSystemTime(new Date(1_000))
+      yield* Effect.addFinalizer(() => Effect.sync(() => setSystemTime()))
+      const llm = yield* TestLLMServer
+      yield* useMachineConfig(providerCfg(llm.url))
+      const instances = yield* InstanceStore.Service
+      yield* instances.provide(
+        { directory: tmp.path },
+        Effect.gen(function* () {
+          const database = yield* Database.Service
+          const prompt = yield* SessionPrompt.Service
+          const revert = yield* SessionRevert.Service
+          const sessions = yield* Session.Service
+          yield* database.db.transaction((tx) =>
+            SessionPresentation.assertAdministrativeHistoryIntegrity(tx, sessionID),
+          )
+
+          const shell = yield* prompt.shell({
+            sessionID,
+            messageID: MessageID.ascending(),
+            agent: "repa",
+            model: ref,
+            command: "echo exact-restore-utility",
+          })
+          expect(
+            shell.parts[0]?.type === "tool" && shell.parts[0].state.status === "completed"
+              ? shell.parts[0].state.output
+              : "",
+          ).toContain("exact-restore-utility")
+
+          const firstTurnID = Turn.ID.create()
+          const firstInputID = Turn.InputID.create()
+          const firstMessageID = MessageID.ascending()
+          yield* llm.text("First local response after exact restore.")
+          const first = yield* prompt.start({
+            sessionID,
+            turnID: firstTurnID,
+            inputID: firstInputID,
+            messageID: firstMessageID,
+            agent: "repa",
+            model: ref,
+            limits: { model: 1, tool: 0 },
+            parts: [{ type: "text", text: "First local Turn after future history" }],
+          })
+          const firstTerminal = first.terminal ? first : yield* prompt.awaitTurn(sessionID, firstTurnID)
+          expect(firstTerminal.terminal).toMatchObject({ outcome: "completed", reason: "normal" })
+          const beforeReplay = yield* sessions.messages({ sessionID })
+          expect(
+            yield* prompt.start({
+              sessionID,
+              turnID: firstTurnID,
+              inputID: firstInputID,
+              messageID: firstMessageID,
+              agent: "repa",
+              model: ref,
+              limits: { model: 1, tool: 0 },
+              parts: [{ type: "text", text: "First local Turn after future history" }],
+            }),
+          ).toEqual(firstTerminal)
+          expect(yield* sessions.messages({ sessionID })).toEqual(beforeReplay)
+
+          const secondTurnID = Turn.ID.create()
+          const secondInputID = Turn.InputID.create()
+          const secondMessageID = MessageID.ascending()
+          yield* llm.text("Second local response after exact restore.")
+          yield* prompt.start({
+            sessionID,
+            turnID: secondTurnID,
+            inputID: secondInputID,
+            messageID: secondMessageID,
+            agent: "repa",
+            model: ref,
+            limits: { model: 1, tool: 0 },
+            parts: [{ type: "text", text: "Second local Turn after the replay" }],
+          })
+          expect((yield* prompt.awaitTurn(sessionID, secondTurnID)).terminal).toMatchObject({
+            outcome: "completed",
+            reason: "normal",
+          })
+
+          const messages = yield* sessions.messages({ sessionID })
+          const times = messages.map((message) => message.info.time.created)
+          expect(messages[0]?.info.id).toBe(importedMessageID)
+          expect(times.every((time, index) => index === 0 || time > times[index - 1]!)).toBe(true)
+          expect(times[1]).toBeGreaterThan(sourceTime + 5)
+          for (const message of messages) {
+            const created = message.info.time.created
+            if (message.info.role === "assistant" && message.info.time.completed !== undefined) {
+              expect(message.info.time.completed).toBeGreaterThanOrEqual(created)
+            }
+            for (const part of message.parts) {
+              if ((part.type === "text" || part.type === "reasoning") && part.time) {
+                expect(part.time.start).toBeGreaterThanOrEqual(created)
+                if (part.time.end !== undefined) expect(part.time.end).toBeGreaterThanOrEqual(part.time.start)
+              }
+              if (part.type === "tool" && part.state.status !== "pending") {
+                expect(part.state.time.start).toBeGreaterThanOrEqual(created)
+                if (part.state.status !== "running") {
+                  expect(part.state.time.end).toBeGreaterThanOrEqual(part.state.time.start)
+                  if (part.state.status === "completed" && part.state.time.compacted !== undefined) {
+                    expect(part.state.time.compacted).toBeGreaterThanOrEqual(part.state.time.end)
+                  }
+                }
+              }
+            }
+          }
+          expect(messages.findIndex((message) => message.info.id === firstMessageID)).toBeGreaterThan(0)
+          expect(messages.findIndex((message) => message.info.id === secondMessageID)).toBeGreaterThan(
+            messages.findIndex((message) => message.info.id === firstMessageID),
+          )
+          const frontier = yield* database.db
+            .select()
+            .from(SessionPresentationFrontierTable)
+            .where(eq(SessionPresentationFrontierTable.session_id, sessionID))
+            .get()
+            .pipe(Effect.orDie)
+          expect(frontier).toMatchObject({ frontier_time: times.at(-1), message_count: messages.length })
+          const turns = yield* database.db
+            .select({ id: TurnTable.id, time: TurnTable.time_admitted })
+            .from(TurnTable)
+            .where(eq(TurnTable.session_id, sessionID))
+            .orderBy(TurnTable.time_admitted)
+            .all()
+            .pipe(Effect.orDie)
+          expect(turns).toEqual([
+            {
+              id: firstTurnID,
+              time: messages.find((message) => message.info.id === firstMessageID)!.info.time.created,
+            },
+            {
+              id: secondTurnID,
+              time: messages.find((message) => message.info.id === secondMessageID)!.info.time.created,
+            },
+          ])
+          const occurrences = yield* database.db
+            .select({
+              messageID: AdmittedLearnerOccurrenceTable.origin_message_id,
+              time: AdmittedLearnerOccurrenceTable.time_admitted,
+            })
+            .from(AdmittedLearnerOccurrenceTable)
+            .where(eq(AdmittedLearnerOccurrenceTable.origin_session_id, sessionID))
+            .orderBy(AdmittedLearnerOccurrenceTable.time_admitted)
+            .all()
+            .pipe(Effect.orDie)
+          expect(occurrences.map((occurrence) => occurrence.messageID)).toEqual([firstMessageID, secondMessageID])
+          expect(occurrences.every((occurrence) => occurrence.time > sourceTime + 5)).toBe(true)
+          const operations = yield* database.db
+            .select({ assistantMessageID: TurnModelOperationTable.assistant_message_id })
+            .from(TurnModelOperationTable)
+            .where(eq(TurnModelOperationTable.session_id, sessionID))
+            .orderBy(TurnModelOperationTable.time_admitted)
+            .all()
+            .pipe(Effect.orDie)
+          expect(operations).toHaveLength(2)
+          for (const operation of operations) {
+            expect(
+              yield* database.db.transaction((tx) => LearningContext.readCut(tx, operation.assistantMessageID)),
+            ).toMatchObject({
+              type: "available",
+              cut: { operation: { assistantMessageID: operation.assistantMessageID } },
+            })
+          }
+          expect(yield* llm.calls).toBe(2)
+          const inputs = yield* llm.inputs
+          expect(inputs).toHaveLength(2)
+          const firstContext = JSON.stringify(inputs[0])
+          const importedPosition = firstContext.indexOf("future imported exact history")
+          const shellPosition = firstContext.indexOf("exact-restore-utility")
+          const learnerPosition = firstContext.indexOf("First local Turn after future history")
+          expect(importedPosition).toBeGreaterThanOrEqual(0)
+          expect(shellPosition).toBeGreaterThan(importedPosition)
+          expect(learnerPosition).toBeGreaterThan(shellPosition)
+          expect(yield* database.db.transaction((tx) => LearningFrontier.read(tx))).toEqual({ sequence: 0, time: 0 })
+
+          const reverted = yield* revert.revert({ sessionID, messageID: secondMessageID })
+          expect(reverted.revert).toMatchObject({ messageID: secondMessageID })
+          const beforeUnrevert = yield* sessions.messages({ sessionID })
+          expect((yield* revert.unrevert({ sessionID })).revert).toBeUndefined()
+          expect(yield* sessions.messages({ sessionID })).toEqual(beforeUnrevert)
+          const revertedAgain = yield* revert.revert({ sessionID, messageID: secondMessageID })
+          yield* revert.cleanup(revertedAgain)
+
+          const cleaned = yield* sessions.messages({ sessionID })
+          expect(cleaned.some((message) => message.info.id === importedMessageID)).toBe(true)
+          expect(cleaned.some((message) => message.info.id === firstMessageID)).toBe(true)
+          expect(cleaned.some((message) => message.info.id === secondMessageID)).toBe(false)
+          expect((yield* sessions.get(sessionID)).revert).toBeUndefined()
+          yield* database.db.transaction((tx) =>
+            SessionPresentation.assertAdministrativeHistoryIntegrity(tx, sessionID),
+          )
+          expect(
+            yield* database.db
+              .select({
+                frontierTime: SessionPresentationFrontierTable.frontier_time,
+                messageCount: SessionPresentationFrontierTable.message_count,
+              })
+              .from(SessionPresentationFrontierTable)
+              .where(eq(SessionPresentationFrontierTable.session_id, sessionID))
+              .get()
+              .pipe(Effect.orDie),
+          ).toEqual({ frontierTime: times.at(-1)!, messageCount: cleaned.length })
+          expectedMessages = cleaned
+          expectedFrontierTime = times.at(-1)!
+        }),
+      )
+    }).pipe(Effect.provide(makeProcessRestartBoundary(filename)), Effect.scoped),
+  )
+
+  await Effect.runPromise(
+    Effect.gen(function* () {
+      const llm = yield* TestLLMServer
+      const instances = yield* InstanceStore.Service
+      yield* instances.provide(
+        { directory: tmp.path },
+        Effect.gen(function* () {
+          const database = yield* Database.Service
+          const sessions = yield* Session.Service
+          expect(yield* llm.calls).toBe(0)
+          yield* database.db.transaction((tx) =>
+            SessionPresentation.assertAdministrativeHistoryIntegrity(tx, sessionID),
+          )
+          expect(yield* sessions.messages({ sessionID })).toEqual(expectedMessages)
+          expect(
+            yield* database.db
+              .select()
+              .from(SessionPresentationFrontierTable)
+              .where(eq(SessionPresentationFrontierTable.session_id, sessionID))
+              .get()
+              .pipe(Effect.orDie),
+          ).toMatchObject({
+            frontier_time: expectedFrontierTime,
+            message_count: expectedMessages.length,
+          })
+        }),
+      )
+    }).pipe(Effect.provide(makeProcessRestartBoundary(filename)), Effect.scoped),
+  )
+}, 60_000)
 
 test("recovers a process-orphaned running model before accepting a later Turn without resend", async () => {
   await using tmp = await tmpdir()
@@ -2554,7 +3997,7 @@ it.instance(
 )
 
 it.instance(
-  "keeps the learner Goal acknowledgement after the following provider operation fails",
+  "keeps the Goal acknowledgement after provider failure and qualifies a later same-snapshot inspection through released v1",
   () =>
     Effect.gen(function* () {
       const { llm } = yield* useServerConfig(providerCfg)
@@ -2620,12 +4063,713 @@ it.instance(
       expect(final).toEqual({ type: "text", content: inline.body })
       expect(JSON.stringify(final)).not.toContain(" completed")
       expect(JSON.stringify(final)).not.toContain('"receiptID"')
-      expect((yield* database.db.transaction((tx) => LearnerGoal.discover(tx, Date.now()))).items).toMatchObject([
+      const discovered = yield* database.db.transaction((tx) => LearnerGoal.discover(tx, Date.now()))
+      expect(discovered.items).toMatchObject([
         { head: { schemaVersion: 2, outcome: input.operations[0].outcome, disposition: { type: "active" } } },
       ])
+      const goalID = discovered.items[0]?.head.goalID
+      if (!goalID) return yield* Effect.die("Expected one exact Goal for Gate 22 inspection")
+      yield* llm.tool("learner_goal_query", { action: "get", goalID, includeInspection: true })
+      yield* llm.tool("learning_interaction_read", { action: "inspect_current_context" })
+      yield* llm.tool("learning_interaction_read", { action: "inspect_retained_steering_history" })
+      yield* llm.tool("learning_interaction_read", { action: "list_terminal_roots", limit: 1 })
+      const staleCursor = LearningInspectionSchema.createPageCursor(
+        "live_lineage",
+        SessionV1.PartID.make("prt_stale_inspection_cursor"),
+        [{ ownerKind: "learner_goal", recordID: goalID, revisionID: "glr_wrong", revisionVersion: 999 }],
+        "msg_after",
+      )
+      yield* llm.tool("learner_goal_query", {
+        action: "get",
+        goalID,
+        includeInspection: { cursor: staleCursor },
+      })
+      yield* llm.text("The inspection reports owner and operational facts without claiming record-level causality.")
+      const inspectionTurnID = Turn.ID.create()
+      yield* prompt.start({
+        sessionID,
+        turnID: inspectionTurnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 6, tool: 5 },
+        parts: [
+          {
+            type: "text",
+            text: "What does Repa remember about that Goal, and did it enter earlier operational context?",
+          },
+        ],
+      })
+      expect(yield* prompt.awaitTurn(sessionID, inspectionTurnID)).toMatchObject({
+        state: "completed",
+        terminal: { outcome: "completed", counters: { model: 6, tool: 5 } },
+      })
+      const inspectionPart = (yield* sessions.messages({ sessionID }))
+        .flatMap((message) => message.parts)
+        .find(
+          (candidate): candidate is SessionV1.ToolPart =>
+            candidate.type === "tool" &&
+            candidate.tool === "learner_goal_query" &&
+            candidate.state.status === "completed",
+        )
+      if (!inspectionPart || inspectionPart.state.status !== "completed") {
+        return yield* Effect.die("Expected the released-v1 Goal inspection Tool result")
+      }
+      const inspectionRead = SemanticPresentation.readInspection(inspectionPart)
+      expect(inspectionRead).toMatchObject({
+        type: "valid",
+        value: {
+          status: "available",
+          owner: { kind: "learner_goal", arm: "learner_goal", records: [{ recordID: goalID }] },
+          nonCausality: "operational_lineage_not_per_record_answer_causality",
+        },
+      })
+      const inspectionInline = toolInlineInfo(inspectionPart as unknown as SDKToolPart)
+      expect(inspectionInline).toMatchObject({
+        title: "Learning inspection — Available",
+        mode: "block",
+        body: expect.stringContaining("Operational lineage does not prove"),
+      })
+      const interactionParts = (yield* sessions.messages({ sessionID }))
+        .flatMap((message) => message.parts)
+        .filter(
+          (candidate): candidate is SessionV1.ToolPart =>
+            candidate.type === "tool" &&
+            candidate.tool === "learning_interaction_read" &&
+            candidate.state.status === "completed",
+        )
+      const contextPart = interactionParts.find(
+        (candidate) =>
+          candidate.state.status === "completed" && candidate.state.input.action === "inspect_current_context",
+      )
+      if (!contextPart || contextPart.state.status !== "completed") {
+        return yield* Effect.die("Expected the released-v1 current Context inspection")
+      }
+      expect(SemanticPresentation.readInspection(contextPart)).toMatchObject({
+        type: "valid",
+        value: { owner: { kind: "learning_context", arm: "learning_context" }, status: "available" },
+      })
+      const steeringPart = interactionParts.find(
+        (candidate) =>
+          candidate.state.status === "completed" &&
+          candidate.state.input.action === "inspect_retained_steering_history",
+      )
+      if (!steeringPart || steeringPart.state.status !== "completed") {
+        return yield* Effect.die("Expected the released-v1 retained-steering unsupported projection")
+      }
+      expect(SemanticPresentation.readInspection(steeringPart)).toMatchObject({
+        type: "valid",
+        value: {
+          owner: { kind: "retained_steering", arm: "retained_steering" },
+          status: "read_shape_unsupported",
+        },
+      })
+      const searchPart = interactionParts.find((candidate) => {
+        if (candidate.state.status !== "completed") return false
+        const value = JSON.parse(candidate.state.output) as { ownerResult?: { search?: unknown } }
+        return Boolean(value.ownerResult?.search)
+      })
+      if (!searchPart || searchPart.state.status !== "completed") {
+        return yield* Effect.die("Expected the released-v1 Interaction search Tool result")
+      }
+      const searchOutput = JSON.parse(searchPart.state.output) as {
+        ownerResult?: { search?: { continuation?: unknown } }
+      }
+      expect(
+        Schema.is(LearningInspectionCursor.Continuation)(searchOutput.ownerResult?.search?.continuation),
+      ).toBeTrue()
+      const searchInline = toolInlineInfo(searchPart as unknown as SDKToolPart)
+      const searchInspection = SemanticPresentation.readInspection(searchPart)
+      expect(searchInspection).toMatchObject({
+        type: "valid",
+        value: {
+          owner: {
+            arm: "learning_interaction",
+            facts: expect.arrayContaining([
+              { label: "Search status", value: "complete" },
+              { label: "Search coverage", value: expect.stringContaining("continuation complete") },
+            ]),
+          },
+        },
+      })
+      expect(searchInline).toMatchObject({
+        mode: "block",
+        body: expect.stringContaining("Search coverage"),
+      })
+      const goalInspectionParts = (yield* sessions.messages({ sessionID }))
+        .flatMap((message) => message.parts)
+        .filter(
+          (candidate): candidate is SessionV1.ToolPart =>
+            candidate.type === "tool" &&
+            candidate.tool === "learner_goal_query" &&
+            candidate.state.status === "completed",
+        )
+      expect(goalInspectionParts).toHaveLength(2)
+      expect(SemanticPresentation.readInspection(goalInspectionParts[1]!)).toMatchObject({
+        type: "valid",
+        value: { status: "stale_inspection", lineage: { items: [] } },
+      })
+      expect(yield* database.db.transaction((tx) => LearnerGoal.readCurrent(tx, goalID, Date.now()))).toMatchObject({
+        head: { version: 1, outcome: input.operations[0].outcome },
+      })
+      const correctedOutcome = "Learn operating systems by tracing scheduler invariants"
+      yield* llm.tool(LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY, {
+        operations: [
+          {
+            type: "update",
+            goalID,
+            headRevisionID: LearnerGoal.createRevisionID(),
+            patch: { outcome: "This stale correction must not apply" },
+          },
+        ],
+      })
+      yield* llm.tool("learner_goal_query", { action: "get", goalID, includeInspection: true })
+      yield* llm.text("The stale correction was rejected; current owner truth was re-read before another admission.")
+      const staleCorrectionTurnID = Turn.ID.create()
+      yield* prompt.start({
+        sessionID,
+        turnID: staleCorrectionTurnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 3, tool: 2 },
+        parts: [{ type: "text", text: `Correction: change that Goal to “${correctedOutcome}”.` }],
+      })
+      expect(yield* prompt.awaitTurn(sessionID, staleCorrectionTurnID)).toMatchObject({
+        state: "completed",
+        terminal: { outcome: "completed", counters: { model: 3, tool: 2 } },
+      })
+      const staleCorrectionParts = (yield* sessions.messages({ sessionID }))
+        .flatMap((message) => message.parts)
+        .filter(
+          (candidate): candidate is SessionV1.ToolPart =>
+            candidate.type === "tool" &&
+            candidate.tool === LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY &&
+            candidate.state.status === "completed" &&
+            candidate.state.input.operations?.some?.((operation: { goalID?: string }) => operation.goalID === goalID),
+        )
+      expect(staleCorrectionParts).toHaveLength(1)
+      expect(SemanticPresentation.readResult(staleCorrectionParts[0]!)).toMatchObject({
+        type: "valid",
+        value: { outcome: "failed" },
+      })
+      expect(yield* database.db.transaction((tx) => LearnerGoal.readCurrent(tx, goalID, Date.now()))).toMatchObject({
+        head: { version: 1, outcome: input.operations[0].outcome },
+      })
+      const rereadAfterStale = (yield* sessions.messages({ sessionID }))
+        .flatMap((message) => message.parts)
+        .filter(
+          (candidate): candidate is SessionV1.ToolPart =>
+            candidate.type === "tool" &&
+            candidate.tool === "learner_goal_query" &&
+            candidate.state.status === "completed",
+        )
+        .at(-1)
+      if (!rereadAfterStale || rereadAfterStale.state.status !== "completed") {
+        return yield* Effect.die("Expected exact owner re-read after stale correction")
+      }
+      expect(SemanticPresentation.readInspection(rereadAfterStale)).toMatchObject({
+        type: "valid",
+        value: { status: "available", owner: { records: [{ recordID: goalID, revisionVersion: 1 }] } },
+      })
+      yield* llm.tool(LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY, {
+        operations: [
+          {
+            type: "update",
+            goalID,
+            headRevisionID: discovered.items[0]!.head.id,
+            patch: { outcome: correctedOutcome },
+          },
+        ],
+      })
+      yield* llm.tool("learner_goal_query", { action: "get", goalID, includeInspection: true })
+      yield* llm.text("The corrected owner head is visible through a fresh inspection cut.")
+      const correctionTurnID = Turn.ID.create()
+      yield* prompt.start({
+        sessionID,
+        turnID: correctionTurnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 3, tool: 2 },
+        parts: [{ type: "text", text: `Correction: change that Goal to “${correctedOutcome}”.` }],
+      })
+      expect(yield* prompt.awaitTurn(sessionID, correctionTurnID)).toMatchObject({
+        state: "completed",
+        terminal: { outcome: "completed", counters: { model: 3, tool: 2 } },
+      })
+      const corrected = yield* database.db.transaction((tx) => LearnerGoal.readCurrent(tx, goalID, Date.now()))
+      expect(corrected?.head).toMatchObject({ outcome: correctedOutcome, version: 2 })
+      if (!corrected) return yield* Effect.die("Expected corrected Goal head")
+      const correctionWrites = (yield* sessions.messages({ sessionID }))
+        .flatMap((message) => message.parts)
+        .filter(
+          (candidate): candidate is SessionV1.ToolPart =>
+            candidate.type === "tool" &&
+            candidate.tool === LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY &&
+            candidate.state.status === "completed" &&
+            candidate.state.input.operations?.some?.((operation: { goalID?: string }) => operation.goalID === goalID),
+        )
+        .filter((candidate) => {
+          const read = SemanticPresentation.readResult(candidate)
+          return read.type === "valid" && read.value.outcome === "committed"
+        })
+      expect(correctionWrites).toHaveLength(1)
+      const correctedInspection = (yield* sessions.messages({ sessionID }))
+        .flatMap((message) => message.parts)
+        .filter(
+          (candidate): candidate is SessionV1.ToolPart =>
+            candidate.type === "tool" &&
+            candidate.tool === "learner_goal_query" &&
+            candidate.state.status === "completed",
+        )
+        .at(-1)
+      if (!correctedInspection || correctedInspection.state.status !== "completed") {
+        return yield* Effect.die("Expected the corrected Goal inspection")
+      }
+      expect(SemanticPresentation.readInspection(correctedInspection)).toMatchObject({
+        type: "valid",
+        value: { status: "available", owner: { records: [{ recordID: goalID, revisionVersion: 2 }] } },
+      })
+      const renderActualTuiPart = (part: SessionV1.ToolPart) =>
+        Effect.promise(async () => {
+          const app = await testRender(
+            () =>
+              createComponent(LearningInspectionToolContent, {
+                part: part as unknown as SDKToolPart,
+              }),
+            { width: 180, height: 34 },
+          )
+          try {
+            await app.renderOnce()
+            return app.captureCharFrame()
+          } finally {
+            app.renderer.destroy()
+          }
+        })
+      const persistedInspectionRows = yield* database.db
+        .select()
+        .from(PartTable)
+        .where(inArray(PartTable.id, [searchPart.id, correctedInspection.id]))
+        .all()
+        .pipe(Effect.orDie)
+      const persistedInspectionParts = new Map(
+        persistedInspectionRows.map(
+          (row) =>
+            [
+              row.id,
+              {
+                id: row.id,
+                messageID: row.message_id,
+                sessionID: row.session_id,
+                ...row.data,
+              } as SessionV1.ToolPart,
+            ] as const,
+        ),
+      )
+      expect(yield* renderActualTuiPart(persistedInspectionParts.get(searchPart.id)!)).toContain(
+        "Search status: complete",
+      )
+      expect(yield* renderActualTuiPart(persistedInspectionParts.get(correctedInspection.id)!)).toContain(
+        `learner_goal:${goalID}@${corrected.head.id}#2`,
+      )
+      const restartFilename = `${database.filename}.gate22-restart`
+      yield* database.db.run(sql`VACUUM INTO ${restartFilename}`)
+      const restarted = yield* Effect.promise(() =>
+        Effect.runPromise(
+          Effect.gen(function* () {
+            const reopened = yield* Database.Service
+            return yield* reopened.db.transaction((tx) =>
+              Effect.gen(function* () {
+                const current = yield* LearnerGoal.readCurrent(tx, goalID, Date.now())
+                const history = yield* LearnerGoal.readHistory(tx, goalID, Date.now(), { limit: 16 })
+                const rows = yield* tx
+                  .select()
+                  .from(PartTable)
+                  .where(inArray(PartTable.id, [goalInspectionParts[0]!.id, correctedInspection.id]))
+                  .all()
+                  .pipe(Effect.orDie)
+                const inspectionVersions = rows.flatMap((row) => {
+                  const read = SemanticPresentation.readInspection({
+                    id: row.id,
+                    messageID: row.message_id,
+                    sessionID: row.session_id,
+                    ...row.data,
+                  } as SessionV1.ToolPart)
+                  return read.type === "valid" ? read.value.owner.records.map((record) => record.revisionVersion) : []
+                })
+                return {
+                  current,
+                  historyVersions: history.items.map((item) => item.version),
+                  inspectionVersions,
+                }
+              }),
+            )
+          }).pipe(Effect.provide(Database.layerFromPath(restartFilename)), Effect.scoped),
+        ),
+      )
+      expect(restarted.current?.head).toMatchObject({ outcome: correctedOutcome, version: 2 })
+      expect(restarted.historyVersions).toEqual(expect.arrayContaining([1, 2]))
+      expect(restarted.inspectionVersions).toEqual(expect.arrayContaining([1, 2]))
       yield* sessions.remove(sessionID)
     }),
   { config: cfg },
+  { timeout: 30_000 },
+)
+
+it.instance(
+  "runs a real large-history Interaction search through Tool persistence, exhaustion, and primary-TUI rendering",
+  () =>
+    Effect.gen(function* () {
+      const { llm } = yield* useServerConfig(providerCfg)
+      const prompt = yield* SessionPrompt.Service
+      const sessions = yield* Session.Service
+      const database = yield* Database.Service
+      const project = yield* database.db
+        .select({ id: ProjectTable.id })
+        .from(ProjectTable)
+        .limit(1)
+        .get()
+        .pipe(Effect.orDie)
+      if (!project) return yield* Effect.die("Expected the test Project")
+      let oversizedSessionID: SessionID | undefined
+      let oversizedTurnID: Turn.ID | undefined
+
+      yield* Effect.forEach(
+        Array.from({ length: 70 }, (_, index) => index),
+        (index) =>
+          Effect.gen(function* () {
+            const sessionID = SessionID.create()
+            const turnID = Turn.ID.create()
+            const inputID = Turn.InputID.create()
+            const messageID = SessionV1.MessageID.ascending()
+            const partID = SessionV1.PartID.ascending()
+            const assistantMessageID = SessionV1.MessageID.ascending()
+            const time = 100 + index * 10
+            yield* database.db.run(sql`
+              INSERT INTO session (id, project_id, slug, directory, title, version, time_created, time_updated)
+              VALUES (
+                ${sessionID}, ${project.id}, ${`gate22-root-${index}`}, '/', ${`Gate 22 root ${index}`},
+                'test', ${time}, ${time}
+              )
+            `)
+            yield* database.db.run(sql`
+              INSERT INTO message (id, session_id, time_created, time_updated, data)
+              VALUES (
+                ${messageID}, ${sessionID}, ${time}, ${time},
+                ${JSON.stringify({
+                  role: "user",
+                  time: { created: time },
+                  agent: "repa",
+                  model: { providerID: "test-provider", modelID: "test-model" },
+                })}
+              )
+            `)
+            yield* database.db.run(sql`
+              INSERT INTO part (id, message_id, session_id, time_created, time_updated, data)
+              VALUES (
+                ${partID}, ${messageID}, ${sessionID}, ${time}, ${time},
+                ${JSON.stringify({ type: "text", text: `root ${index}` })}
+              )
+            `)
+            if (index === 5) {
+              oversizedSessionID = sessionID
+              oversizedTurnID = turnID
+              yield* Effect.forEach(
+                Array.from({ length: 32 }, (_, partIndex) => partIndex),
+                (partIndex) =>
+                  database.db.run(sql`
+                    INSERT INTO part (id, message_id, session_id, time_created, time_updated, data)
+                    VALUES (
+                      ${SessionV1.PartID.ascending()}, ${messageID}, ${sessionID}, ${time}, ${time},
+                      ${JSON.stringify({ type: "text", text: `oversized ${partIndex}` })}
+                    )
+                  `),
+                { concurrency: 1, discard: true },
+              )
+            }
+            const occurrence = yield* database.db.transaction((tx) =>
+              Occurrence.admit(tx, {
+                admission: LearnerAdmission.interactive({}),
+                sessionID,
+                messageID,
+                timeAdmitted: time,
+              }),
+            )
+            yield* database.db.transaction((tx) =>
+              TurnLifecycle.admit(tx, {
+                kind: "learner",
+                turnID,
+                sessionID,
+                inputID,
+                messageID,
+                occurrenceID: occurrence.id,
+                limits: { model: 0, tool: 0 },
+                envelope: { index },
+                policyBasis: { source: "gate22-large-history-test" },
+                timeAdmitted: time,
+              }),
+            )
+            yield* database.db.run(sql`
+              INSERT INTO message (id, session_id, time_created, time_updated, data)
+              VALUES (
+                ${assistantMessageID}, ${sessionID}, ${time + 1}, ${time + 1},
+                ${JSON.stringify({
+                  role: "assistant",
+                  parentID: messageID,
+                  time: { created: time + 1 },
+                })}
+              )
+            `)
+            yield* database.db.transaction((tx) =>
+              admitModelWithLearningContext(tx, {
+                turnID,
+                sessionID,
+                assistantMessageID,
+                requestEnvelope: { index },
+                contextFingerprint: "b".repeat(64),
+                snapshotFrontier: { sequence: 0, time: 0 },
+                timeAdmitted: time + 1,
+              }),
+            )
+          }),
+        { concurrency: 1, discard: true },
+      )
+      if (!oversizedSessionID || !oversizedTurnID) return yield* Effect.die("Expected oversized root fixture")
+
+      const sessionID = SessionID.create()
+      const searchParts = () =>
+        sessions
+          .messages({ sessionID })
+          .pipe(
+            Effect.map((messages) =>
+              messages
+                .flatMap((message) => message.parts)
+                .filter(
+                  (part): part is SessionV1.ToolPart =>
+                    part.type === "tool" &&
+                    part.tool === "learning_interaction_read" &&
+                    part.state.status === "completed",
+                ),
+            ),
+          )
+      const latestSearch = () =>
+        searchParts().pipe(
+          Effect.flatMap((parts) =>
+            parts.at(-1) ? Effect.succeed(parts.at(-1)!) : Effect.die("Expected Interaction search Part"),
+          ),
+        )
+      const decodeSearch = (part: SessionV1.ToolPart) => {
+        if (part.state.status !== "completed") throw new Error("Expected completed search Part")
+        const parsed: unknown = JSON.parse(part.state.output)
+        const owner =
+          typeof parsed === "object" && parsed !== null && "ownerResult" in parsed
+            ? (parsed as { ownerResult?: unknown }).ownerResult
+            : undefined
+        const search =
+          typeof owner === "object" && owner !== null && "search" in owner
+            ? (owner as { search?: unknown }).search
+            : undefined
+        if (
+          typeof search !== "object" ||
+          search === null ||
+          !("continuation" in search) ||
+          !("payload" in search) ||
+          !Schema.is(LearningInspectionCursor.Continuation)(search.continuation) ||
+          typeof search.payload !== "object" ||
+          search.payload === null
+        ) {
+          throw new Error(`Expected typed Interaction search output: ${part.state.output.slice(0, 1000)}`)
+        }
+        return {
+          continuation: search.continuation,
+          payload: search.payload as Record<string, unknown>,
+        }
+      }
+      const runTurn = (turnID: Turn.ID, limits: { model: number; tool: number }, text: string, first = false) =>
+        prompt
+          .start({
+            sessionID,
+            turnID,
+            inputID: Turn.InputID.create(),
+            messageID: MessageID.ascending(),
+            agent: "repa",
+            model: ref,
+            limits,
+            ...(first ? { session: { title: "real Gate 22 large-history trace" } } : {}),
+            parts: [{ type: "text", text }],
+          })
+          .pipe(Effect.andThen(prompt.awaitTurn(sessionID, turnID)))
+
+      yield* llm.tool("learning_interaction_read", { action: "list_terminal_roots", limit: 32 })
+      yield* llm.text("The first bounded page has a continuation.")
+      yield* runTurn(Turn.ID.create(), { model: 2, tool: 2 }, "Find an older retained interaction.", true)
+      const pageOnePart = yield* latestSearch()
+      const pageOne = decodeSearch(pageOnePart)
+      expect(pageOne.payload.status).toBe("continuation_pending")
+
+      yield* llm.tool("learning_interaction_read", {
+        action: "list_terminal_roots",
+        limit: 32,
+        predecessor: pageOne.continuation,
+      })
+      yield* llm.text("The second bounded page still has a continuation.")
+      yield* runTurn(Turn.ID.create(), { model: 2, tool: 2 }, "Continue through sixty-four roots.")
+      const pageMiddlePart = yield* latestSearch()
+      const pageMiddle = decodeSearch(pageMiddlePart)
+      expect(pageMiddle.payload.status).toBe("continuation_pending")
+
+      yield* llm.tool("learning_interaction_read", {
+        action: "list_terminal_roots",
+        limit: 1,
+        predecessor: pageMiddle.continuation,
+      })
+      yield* llm.text("The next exact candidate is selected for bounded materialization.")
+      yield* runTurn(Turn.ID.create(), { model: 2, tool: 2 }, "Continue that Interaction search.")
+      const pageTwoPart = yield* latestSearch()
+      const pageTwo = decodeSearch(pageTwoPart)
+      const candidate = Array.isArray(pageTwo.payload.items)
+        ? pageTwo.payload.items.find(
+            (item) =>
+              Schema.is(LearningInspectionCursor.Candidate)(item) &&
+              item.descriptor.sessionID === oversizedSessionID &&
+              item.descriptor.turnID === oversizedTurnID,
+          )
+        : undefined
+      if (!candidate || !Schema.is(LearningInspectionCursor.Candidate)(candidate)) {
+        return yield* Effect.die("Expected the 65th oversized Interaction candidate")
+      }
+
+      const materializeInput = {
+        action: "materialize_interaction_locator" as const,
+        candidate,
+        predecessor: pageTwo.continuation,
+        maxRows: 16,
+        maxBytes: 32_768,
+      }
+      yield* llm.tool("learning_interaction_read", materializeInput)
+      yield* llm.text("The candidate exceeded the bounded locator budget.")
+      yield* runTurn(Turn.ID.create(), { model: 2, tool: 2 }, "Inspect that exact candidate.")
+      const overBudgetPart = yield* latestSearch()
+      const overBudget = decodeSearch(overBudgetPart)
+      expect(overBudget.payload.status).toBe("interaction_locator_over_budget")
+      const persistedOverBudget = yield* database.db
+        .select()
+        .from(PartTable)
+        .where(eq(PartTable.id, overBudgetPart.id))
+        .get()
+        .pipe(Effect.orDie)
+      expect(
+        persistedOverBudget
+          ? {
+              id: persistedOverBudget.id,
+              messageID: persistedOverBudget.message_id,
+              sessionID: persistedOverBudget.session_id,
+              ...persistedOverBudget.data,
+            }
+          : undefined,
+      ).toEqual(overBudgetPart)
+
+      yield* llm.tool("learning_interaction_read", {
+        action: "skip_interaction_candidate",
+        candidate,
+        predecessor: overBudget.continuation,
+      })
+      yield* llm.text("The oversized candidate was explicitly skipped with a permanent gap.")
+      yield* runTurn(Turn.ID.create(), { model: 2, tool: 2 }, "Skip it and continue truthfully.")
+      const skippedPart = yield* latestSearch()
+      const skipped = decodeSearch(skippedPart)
+      expect(skipped.payload.status).toBe("candidate_skipped")
+      expect(skipped.continuation.gapCounts.oversizedCandidateSkipped).toBe(1)
+
+      yield* llm.tool("learning_interaction_read", {
+        action: "list_terminal_roots",
+        limit: 1,
+        predecessor: skipped.continuation,
+      })
+      const exhaustionTurnID = Turn.ID.create()
+      const exhausted = yield* runTurn(
+        exhaustionTurnID,
+        { model: 1, tool: 1 },
+        "Continue until the exact Turn budget is exhausted.",
+      )
+      expect(exhausted).toMatchObject({
+        state: "exhausted",
+        inspectionExhaustion: {
+          type: "predecessor_continuation_exhausted",
+          counter: "model",
+          gapCounts: { oversizedCandidateSkipped: 1 },
+        },
+      })
+      const exhaustedPart = yield* latestSearch()
+
+      const persistedRows = yield* database.db
+        .select()
+        .from(PartTable)
+        .where(
+          inArray(PartTable.id, [
+            pageOnePart.id,
+            pageMiddlePart.id,
+            pageTwoPart.id,
+            overBudgetPart.id,
+            skippedPart.id,
+            exhaustedPart.id,
+          ]),
+        )
+        .all()
+        .pipe(Effect.orDie)
+      const persistedParts = persistedRows.map(
+        (row) =>
+          ({ id: row.id, messageID: row.message_id, sessionID: row.session_id, ...row.data }) as SessionV1.ToolPart,
+      )
+      const renderPart = async (part: SessionV1.ToolPart) => {
+        const app = await testRender(
+          () => createComponent(LearningInspectionToolContent, { part: part as unknown as SDKToolPart }),
+          { width: 180, height: 34 },
+        )
+        try {
+          await app.renderOnce()
+          return app.captureCharFrame()
+        } finally {
+          app.renderer.destroy()
+        }
+      }
+      const frames = yield* Effect.promise(() => Promise.all(persistedParts.map(renderPart)))
+      const replayA = yield* Effect.promise(() =>
+        renderPart(persistedParts.find((part) => part.id === overBudgetPart.id)!),
+      )
+      const replayB = yield* Effect.promise(() =>
+        renderPart(persistedParts.find((part) => part.id === overBudgetPart.id)!),
+      )
+      expect(replayA).toBe(replayB)
+      const exhaustionApp = yield* Effect.promise(() =>
+        testRender(
+          () =>
+            createComponent(LearningInspectionExhaustionContent, {
+              turn: exhausted as unknown as SDKTurnInfo,
+            }),
+          { width: 180, height: 12 },
+        ),
+      )
+      let exhaustionFrame = ""
+      try {
+        yield* Effect.promise(() => exhaustionApp.renderOnce())
+        exhaustionFrame = exhaustionApp.captureCharFrame()
+      } finally {
+        exhaustionApp.renderer.destroy()
+      }
+      const frame = [...frames, exhaustionFrame].join("\n")
+      expect(frame).toContain("continuation_pending")
+      expect(frame).toContain("interaction_locator_over_budget")
+      expect(frame).toContain("candidate_skipped")
+      expect(frame).toContain("Turn exhausted — model capacity 1/1")
+      yield* sessions.remove(sessionID)
+    }),
+  { config: cfg },
+  { timeout: 30_000 },
 )
 
 it.instance(
@@ -5893,6 +8037,392 @@ it.instance(
     }),
   { config: cfg },
   30_000,
+)
+
+it.instance(
+  "retired Session roots refuse first-Turn, fork-target, and child materialization before owner installation",
+  () =>
+    Effect.gen(function* () {
+      const { llm } = yield* useServerConfig(providerCfg)
+      const prompt = yield* SessionPrompt.Service
+      const sessions = yield* Session.Service
+      const database = yield* Database.Service
+      const retired = (yield* materializeTestSession({ title: "retired materialization target" })).info
+      const source = (yield* materializeTestSession({ title: "live fork source" })).info
+      const sourceSequence = yield* database.db
+        .select({ sequence: EventSequenceTable.seq })
+        .from(EventSequenceTable)
+        .where(eq(EventSequenceTable.aggregate_id, source.id))
+        .get()
+        .pipe(Effect.orDie)
+      if (!sourceSequence) return yield* Effect.die("Expected a live fork-source event sequence")
+      const deletion = yield* sessions.proposeRemoval({ sessionID: retired.id, mode: "full" })
+      if ("type" in deletion) return yield* Effect.die("Expected a fresh deletion proposal")
+      const appliedDeletion = yield* sessions.commitRemoval(deletion)
+      expect(appliedDeletion.type).toBe("applied")
+      expect(yield* sessions.proposeRemoval({ sessionID: retired.id, mode: "full" })).toMatchObject({
+        type: "already_deleted",
+        settlementBytes: appliedDeletion.settlementBytes,
+        auditAvailable: false,
+      })
+      expect(yield* sessions.proposeRemoval({ sessionID: retired.id, mode: "minimal_audit" })).toMatchObject({
+        type: "deletion_mode_conflict",
+        settlementBytes: appliedDeletion.settlementBytes,
+        auditAvailable: false,
+      })
+
+      const retiredAttempts = [
+        prompt.start({
+          sessionID: retired.id,
+          turnID: Turn.ID.create(),
+          inputID: Turn.InputID.create(),
+          messageID: MessageID.ascending(),
+          agent: "repa",
+          model: ref,
+          limits: { model: 1, tool: 0 },
+          session: { title: "must not recreate deleted root" },
+          parts: [{ type: "text" as const, text: "first-Turn root attempt" }],
+        }),
+        prompt.start({
+          sessionID: retired.id,
+          turnID: Turn.ID.create(),
+          inputID: Turn.InputID.create(),
+          messageID: MessageID.ascending(),
+          agent: "repa",
+          model: ref,
+          limits: { model: 1, tool: 0 },
+          session: { title: "must not recreate deleted fork target" },
+          fork: { sourceSessionID: source.id, sourceEventSequence: sourceSequence.sequence },
+          parts: [{ type: "text" as const, text: "fork target attempt" }],
+        }),
+        prompt.startChild({
+          childSessionID: retired.id,
+          childTurnID: Turn.ID.create(),
+          childInputID: Turn.InputID.create(),
+          messageID: MessageID.ascending(),
+          parentSessionID: source.id,
+          parentTurnID: Turn.ID.create(),
+          parentTaskPartID: PartID.ascending(),
+          parentModelMessageID: MessageID.ascending(),
+          delegatedCapability: { version: 2, parent: [], inherited: [], profile: [], explicit: [] },
+          depthLimit: 1,
+          limits: { model: 1, tool: 0 },
+          model: ref,
+          agent: "repa",
+          parts: [{ type: "text" as const, text: "delegated child target attempt" }],
+          session: { title: "must not recreate deleted child target" },
+        }),
+      ]
+      const exits = yield* Effect.forEach(retiredAttempts, (attempt) => attempt.pipe(Effect.exit), { concurrency: 1 })
+      exits.forEach((exit) => {
+        expect(Exit.isFailure(exit)).toBe(true)
+        if (Exit.isFailure(exit)) {
+          expect(Cause.squash(exit.cause)).toMatchObject({
+            _tag: "SessionIDRetiredError",
+            sessionID: retired.id,
+            deletionRequestID: deletion.requestID,
+            mode: "full",
+            settlement: appliedDeletion.settlement,
+            settlementBytes: appliedDeletion.settlementBytes,
+            auditAvailable: false,
+          })
+        }
+      })
+      expect(yield* llm.calls).toBe(0)
+      expect(
+        yield* Effect.all({
+          sessions: database.db
+            .select()
+            .from(SessionTable)
+            .where(eq(SessionTable.id, retired.id))
+            .all()
+            .pipe(Effect.orDie),
+          messages: database.db
+            .select()
+            .from(MessageTable)
+            .where(eq(MessageTable.session_id, retired.id))
+            .all()
+            .pipe(Effect.orDie),
+          parts: database.db
+            .select()
+            .from(PartTable)
+            .where(eq(PartTable.session_id, retired.id))
+            .all()
+            .pipe(Effect.orDie),
+          turns: database.db
+            .select()
+            .from(TurnTable)
+            .where(eq(TurnTable.session_id, retired.id))
+            .all()
+            .pipe(Effect.orDie),
+          events: database.db
+            .select()
+            .from(EventTable)
+            .where(eq(EventTable.aggregate_id, retired.id))
+            .all()
+            .pipe(Effect.orDie),
+          sequence: database.db
+            .select()
+            .from(EventSequenceTable)
+            .where(eq(EventSequenceTable.aggregate_id, retired.id))
+            .all()
+            .pipe(Effect.orDie),
+        }),
+      ).toEqual({ sessions: [], messages: [], parts: [], turns: [], events: [], sequence: [] })
+
+      const freshSessionID = SessionID.create()
+      const freshTurnID = Turn.ID.create()
+      yield* llm.text("fresh target remains usable")
+      yield* prompt.start({
+        sessionID: freshSessionID,
+        turnID: freshTurnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 1, tool: 0 },
+        session: { title: "fresh target" },
+        parts: [{ type: "text", text: "materialize an unrelated fresh target" }],
+      })
+      expect((yield* prompt.awaitTurn(freshSessionID, freshTurnID)).terminal).toMatchObject({ outcome: "completed" })
+      yield* sessions.remove(freshSessionID)
+      yield* sessions.remove(source.id)
+    }),
+  { config: cfg },
+  30_000,
+)
+
+noLLMServer.instance(
+  "session deletion refuses a concurrent materialization admission without waiting or reusing the stale proposal",
+  () =>
+    Effect.gen(function* () {
+      const { run, sessions, chat } = yield* boot({ title: "serialized materialization deletion race" })
+      const database = yield* Database.Service
+      const proposal = yield* sessions.proposeRemoval({ sessionID: chat.id, mode: "full" })
+      if ("type" in proposal) return yield* Effect.die("Expected a fresh deletion proposal")
+      const readerEntered = yield* Deferred.make<void>()
+      const releaseReader = yield* Deferred.make<void>()
+      const reader = yield* run
+        .shared(chat.id, Deferred.succeed(readerEntered, undefined).pipe(Effect.andThen(Deferred.await(releaseReader))))
+        .pipe(Effect.forkChild)
+      yield* Deferred.await(readerEntered)
+
+      const refused = yield* sessions.commitRemoval(proposal).pipe(Effect.exit)
+      expect(Exit.isFailure(refused)).toBe(true)
+      if (Exit.isFailure(refused))
+        expect(Cause.squash(refused.cause)).toEqual(new Session.BusyError({ sessionID: chat.id }))
+      expect(yield* run.phase(chat.id)).toBe("open")
+      expect(yield* sessions.get(chat.id)).toMatchObject({ id: chat.id })
+      expect(
+        yield* database.db
+          .select()
+          .from(SessionDeletionControlReceiptTable)
+          .where(eq(SessionDeletionControlReceiptTable.root_session_id, chat.id))
+          .all()
+          .pipe(Effect.orDie),
+      ).toEqual([])
+
+      yield* Deferred.succeed(releaseReader, undefined)
+      yield* Fiber.join(reader)
+      const stale = yield* sessions.commitRemoval(proposal).pipe(Effect.exit)
+      expect(Exit.isFailure(stale)).toBe(true)
+      if (Exit.isFailure(stale)) {
+        expect(Cause.squash(stale.cause)).toEqual(
+          new SessionDeletion.InvocationConflictError({ requestID: proposal.requestID }),
+        )
+      }
+      const fresh = yield* sessions.proposeRemoval({ sessionID: chat.id, mode: "full" })
+      if ("type" in fresh) return yield* Effect.die("Expected a fresh deletion proposal after busy refusal")
+      expect((yield* sessions.commitRemoval(fresh)).type).toBe("applied")
+      expect(
+        yield* Effect.all({
+          session: database.db.select().from(SessionTable).where(eq(SessionTable.id, chat.id)).all().pipe(Effect.orDie),
+          receipt: database.db
+            .select({ requestID: SessionDeletionControlReceiptTable.request_id })
+            .from(SessionDeletionControlReceiptTable)
+            .where(eq(SessionDeletionControlReceiptTable.root_session_id, chat.id))
+            .all()
+            .pipe(Effect.orDie),
+        }),
+      ).toEqual({ session: [], receipt: [{ requestID: fresh.requestID }] })
+    }),
+  { config: cfg },
+)
+
+it.instance(
+  "session deletion refuses active work without interruption and consumes the stale proposal",
+  () =>
+    Effect.gen(function* () {
+      const { llm } = yield* useServerConfig(providerCfg)
+      const prompt = yield* SessionPrompt.Service
+      const sessions = yield* Session.Service
+      const database = yield* Database.Service
+      const sessionID = (yield* materializeTestSession({ title: "deletion busy refusal" })).info.id
+      const proposal = yield* sessions.proposeRemoval({ sessionID, mode: "full" })
+      if ("type" in proposal) return yield* Effect.die("Expected a fresh deletion proposal")
+      const turnID = Turn.ID.create()
+      yield* llm.hang
+
+      yield* prompt.start({
+        sessionID,
+        turnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 1, tool: 0 },
+        parts: [{ type: "text", text: "keep this Turn active during deletion admission" }],
+      })
+      yield* awaitWithTimeout(llm.wait(1), "model operation was not sampled before deletion admission")
+      const eventsBeforeDeletion = yield* database.db
+        .select()
+        .from(EventTable)
+        .where(eq(EventTable.aggregate_id, sessionID))
+        .orderBy(EventTable.seq)
+        .all()
+        .pipe(Effect.orDie)
+
+      const preflight = yield* sessions.proposeRemoval({ sessionID, mode: "minimal_audit" }).pipe(Effect.exit)
+      expect(Exit.isFailure(preflight)).toBe(true)
+      if (Exit.isFailure(preflight)) {
+        expect(Cause.squash(preflight.cause)).toEqual(
+          new Turn.SessionTreeBusyError({ sessionID, activeTurnIDs: [turnID] }),
+        )
+      }
+
+      const raced = yield* sessions.commitRemoval(proposal).pipe(Effect.exit)
+      expect(Exit.isFailure(raced)).toBe(true)
+      if (Exit.isFailure(raced)) {
+        expect(Cause.squash(raced.cause)).toEqual(new Turn.SessionTreeBusyError({ sessionID, activeTurnIDs: [turnID] }))
+      }
+      expect(yield* sessions.get(sessionID)).toMatchObject({ id: sessionID })
+      expect(
+        yield* database.db
+          .select({ state: TurnTable.state })
+          .from(TurnTable)
+          .where(eq(TurnTable.id, turnID))
+          .get()
+          .pipe(Effect.orDie),
+      ).toEqual({ state: "running" })
+      expect(yield* llm.calls).toBe(1)
+      expect(
+        yield* database.db
+          .select()
+          .from(SessionDeletionControlReceiptTable)
+          .where(eq(SessionDeletionControlReceiptTable.root_session_id, sessionID))
+          .all()
+          .pipe(Effect.orDie),
+      ).toEqual([])
+      expect(
+        yield* database.db
+          .select()
+          .from(EventTable)
+          .where(eq(EventTable.aggregate_id, sessionID))
+          .orderBy(EventTable.seq)
+          .all()
+          .pipe(Effect.orDie),
+      ).toEqual(eventsBeforeDeletion)
+
+      const interrupted = yield* prompt.interruptTurn(sessionID, turnID)
+      expect(interrupted.terminal).toMatchObject({ outcome: "interrupted", reason: "learner_interrupt" })
+      const stale = yield* sessions.commitRemoval(proposal).pipe(Effect.exit)
+      expect(Exit.isFailure(stale)).toBe(true)
+      if (Exit.isFailure(stale)) {
+        expect(Cause.squash(stale.cause)).toEqual(
+          new SessionDeletion.InvocationConflictError({ requestID: proposal.requestID }),
+        )
+      }
+      expect(yield* sessions.get(sessionID)).toMatchObject({ id: sessionID })
+      expect(
+        yield* database.db
+          .select()
+          .from(SessionDeletionControlReceiptTable)
+          .where(eq(SessionDeletionControlReceiptTable.root_session_id, sessionID))
+          .all()
+          .pipe(Effect.orDie),
+      ).toEqual([])
+
+      const fresh = yield* sessions.proposeRemoval({ sessionID, mode: "full" })
+      expect(yield* sessions.commitRemoval(fresh)).toMatchObject({
+        type: "applied",
+        settlement: { rootSessionID: sessionID, mode: "full" },
+      })
+      expect(
+        yield* database.db
+          .select()
+          .from(SessionDeletionControlReceiptTable)
+          .where(eq(SessionDeletionControlReceiptTable.root_session_id, sessionID))
+          .all()
+          .pipe(Effect.orDie),
+      ).toHaveLength(1)
+    }),
+  { config: cfg },
+  30_000,
+)
+
+noLLMServer.instance(
+  "audit purge consumes an uncommitted proposal once and replays only the durable settlement",
+  () =>
+    Effect.gen(function* () {
+      const { sessions } = yield* boot({ title: "process-local audit purge proposal" })
+      const database = yield* Database.Service
+      const sessionID = (yield* materializeTestSession({ title: "minimal deletion audit to purge" })).info.id
+      const deletion = yield* sessions.proposeRemoval({ sessionID, mode: "minimal_audit" })
+      if ("type" in deletion) return yield* Effect.die("Expected a fresh deletion proposal")
+      expect(yield* sessions.commitRemoval(deletion)).toMatchObject({
+        type: "applied",
+        auditAvailable: true,
+        settlement: { rootSessionID: sessionID, mode: "minimal_audit" },
+      })
+
+      const stale = yield* sessions.proposeAuditPurge(sessionID)
+      const tampered = yield* sessions.purgeAudit({ ...stale, requestFingerprint: "0".repeat(64) }).pipe(Effect.exit)
+      expect(Exit.isFailure(tampered)).toBe(true)
+      if (Exit.isFailure(tampered)) {
+        expect(Cause.squash(tampered.cause)).toEqual(
+          new SessionDeletion.InvocationConflictError({ requestID: stale.requestID }),
+        )
+      }
+      const retained = yield* database.db.transaction((tx) => SessionDeletion.readProjection(tx, sessionID))
+      expect(retained).toMatchObject({ state: "deleted_minimal_audit", auditAvailable: true })
+
+      const consumed = yield* sessions.purgeAudit(stale).pipe(Effect.exit)
+      expect(Exit.isFailure(consumed)).toBe(true)
+      if (Exit.isFailure(consumed)) {
+        expect(Cause.squash(consumed.cause)).toEqual(
+          new SessionDeletion.InvocationConflictError({ requestID: stale.requestID }),
+        )
+      }
+
+      const fresh = yield* sessions.proposeAuditPurge(sessionID)
+      const applied = yield* sessions.purgeAudit(fresh)
+      expect(applied).toMatchObject({
+        type: "applied",
+        settlement: { deletionRequestID: deletion.requestID, requestID: fresh.requestID },
+      })
+      expect(yield* sessions.purgeAudit(fresh)).toMatchObject({
+        type: "replayed",
+        settlementBytes: applied.settlementBytes,
+      })
+      expect(yield* sessions.commitRemoval(deletion)).toMatchObject({
+        type: "replayed",
+        auditAvailable: false,
+        settlement: { rootSessionID: sessionID, mode: "minimal_audit" },
+      })
+      expect(yield* database.db.transaction((tx) => SessionDeletion.readProjection(tx, sessionID))).toMatchObject({
+        state: "deleted_minimal_audit_purged",
+        auditAvailable: false,
+      })
+      const unavailable = yield* sessions.proposeAuditPurge(sessionID).pipe(Effect.exit)
+      expect(Exit.isFailure(unavailable)).toBe(true)
+      if (Exit.isFailure(unavailable)) {
+        expect(Cause.squash(unavailable.cause)).toMatchObject({
+          _tag: "SessionDeletion.AuditNotAvailableError",
+          rootSessionID: sessionID,
+        })
+      }
+    }),
+  { config: cfg },
 )
 
 it.instance(

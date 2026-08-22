@@ -16,9 +16,59 @@ import { Spinner } from "./spinner"
 import { errorMessage } from "../util/error"
 import { useCommandShortcut } from "../keymap"
 import { useEvent } from "../context/event"
+import type { SessionDeleteProposalResponse } from "@opencode-ai/sdk/v2"
+
+type SessionDeletionCurrentResult = Extract<SessionDeleteProposalResponse, { type: string }>
+type SessionDeletionProposal = Exclude<SessionDeleteProposalResponse, SessionDeletionCurrentResult>
 
 type SessionListFilter = { scope?: "project"; path?: string }
 type LocatedSessionList<T> = { directory: string; data?: T[] }
+
+export const sessionDeletionModeOptions: {
+  title: string
+  value: "minimal_audit" | "full"
+  description: string
+}[] = [
+  {
+    title: "Delete bodies; keep minimal inspection lineage",
+    value: "minimal_audit" as const,
+    description: "Retains a body-free, non-causal audit until you purge it",
+  },
+  {
+    title: "Delete bodies and inspection lineage",
+    value: "full" as const,
+    description: "Only the immutable deletion-control receipt remains",
+  },
+]
+
+export function createSessionDeletionProposalView(proposal: {
+  rootSessionID: string
+  subtreeCount: number
+  subtreeFingerprint: string
+  mode: "minimal_audit" | "full"
+  targets: readonly { sessionID: string; parentSessionID?: string | null }[]
+}) {
+  const mode =
+    proposal.mode === "minimal_audit"
+      ? "delete bodies; keep minimal inspection lineage"
+      : "delete bodies and inspection lineage"
+  return {
+    title: `Confirm deletion of ${proposal.subtreeCount} Session${proposal.subtreeCount === 1 ? "" : "s"}`,
+    mode,
+    targets: proposal.targets.map((target) => ({
+      title: target.sessionID,
+      value: target.sessionID,
+      description: target.sessionID === proposal.rootSessionID ? "root" : "descendant",
+      details: [target.parentSessionID ? `parent ${target.parentSessionID}` : "no parent"],
+    })),
+    footer: [
+      `Mode: ${mode}`,
+      `Root: ${proposal.rootSessionID}`,
+      `Scope fingerprint: ${proposal.subtreeFingerprint}`,
+      "Local export files are outside this deletion and are not removed.",
+    ],
+  }
+}
 
 export function selectDialogSessionList<T>(input: {
   directory: string
@@ -69,10 +119,8 @@ export function DialogSessionList() {
   const event = useEvent()
   const local = useLocal()
   const toast = useToast()
-  const [toDelete, setToDelete] = createSignal<string>()
   const [deleted, setDeleted] = createSignal(new Set<string>())
   const [search, setSearch] = createDebouncedSignal("", 150)
-  const deleteHint = useCommandShortcut("session.delete")
   const quickSwitch1 = useCommandShortcut("session.quick_switch.1")
   const quickSwitch9 = useCommandShortcut("session.quick_switch.9")
 
@@ -175,7 +223,6 @@ export function DialogSessionList() {
       const footer =
         directory && directory !== project.data.project.mainDir ? Locale.truncate(path.basename(directory), 20) : ""
 
-      const isDeleting = toDelete() === x.id
       const status = sync.data.session_status?.[x.id]
       const isWorking = status?.type === "busy" || status?.type === "retry"
       const slot = slotByID.get(x.id)
@@ -185,8 +232,7 @@ export function DialogSessionList() {
           ? () => <text fg={theme.accent}>{slot}</text>
           : undefined
       return {
-        title: isDeleting ? `Press ${deleteHint()} again to confirm` : x.title,
-        bg: isDeleting ? theme.error : undefined,
+        title: x.title,
         value: x.id,
         category,
         footer,
@@ -219,9 +265,6 @@ export function DialogSessionList() {
       preserveSelection={true}
       current={currentSessionID()}
       onFilter={setSearch}
-      onMove={() => {
-        setToDelete(undefined)
-      }}
       onSelect={(option) => {
         route.navigate({
           type: "session",
@@ -240,36 +283,16 @@ export function DialogSessionList() {
         {
           command: "session.delete",
           title: "delete",
-          onTrigger: async (option) => {
-            if (toDelete() === option.value) {
-              try {
-                const result = await sdk.client.session.delete({
-                  sessionID: option.value,
-                })
-                if (result.error) {
-                  toast.show({
-                    variant: "error",
-                    title: "Failed to delete session",
-                    message: errorMessage(result.error),
-                  })
-                  setToDelete(undefined)
-                  return
-                }
-              } catch (err) {
-                toast.show({
-                  variant: "error",
-                  title: "Failed to delete session",
-                  message: errorMessage(err),
-                })
-                setToDelete(undefined)
-                return
-              }
-              await refetchBrowse()
-              if (search()) await refetch()
-              setToDelete(undefined)
-              return
-            }
-            setToDelete(option.value)
+          onTrigger: (option) => {
+            dialog.replace(() => (
+              <DialogSessionDelete
+                sessionID={option.value}
+                onDeleted={async () => {
+                  await refetchBrowse()
+                  if (search()) await refetch()
+                }}
+              />
+            ))
           },
         },
         {
@@ -281,6 +304,129 @@ export function DialogSessionList() {
         },
       ]}
       footerHints={quickSwitchFooterHints()}
+    />
+  )
+}
+
+function DialogSessionDelete(props: { sessionID: string; onDeleted: () => Promise<void> }) {
+  const dialog = useDialog()
+  const sdk = useSDK()
+  const toast = useToast()
+  const [loading, setLoading] = createSignal(false)
+
+  return (
+    <DialogSelect
+      title="Choose Session deletion behavior"
+      renderFilter={false}
+      locked={loading()}
+      options={sessionDeletionModeOptions}
+      onSelect={async (option) => {
+        if (loading()) return
+        setLoading(true)
+        const result = await sdk.client.session
+          .deleteProposal({
+            sessionID: props.sessionID,
+            mode: option.value,
+          })
+          .catch((error) => ({ error, data: undefined }))
+        setLoading(false)
+        if (result.error || !result.data) {
+          toast.show({
+            variant: "error",
+            title: "Could not prepare Session deletion",
+            message: errorMessage(result.error ?? "The server returned no deletion proposal"),
+          })
+          return
+        }
+        const prepared: SessionDeleteProposalResponse = result.data
+        if ("type" in prepared) {
+          toast.show({
+            variant: prepared.type === "deletion_mode_conflict" ? "error" : "success",
+            title:
+              prepared.type === "deletion_mode_conflict"
+                ? "Session was already deleted with another mode"
+                : "Session deletion was already committed",
+            message:
+              prepared.type === "deletion_mode_conflict"
+                ? `Original mode: ${prepared.settlement.mode}. Nothing was changed.`
+                : `Deleted at ${prepared.settlement.deletionTime}. Minimal audit ${prepared.auditAvailable ? "is available" : "is not retained"}.`,
+          })
+          dialog.clear()
+          return
+        }
+        dialog.replace(() => <DialogSessionDeleteProposal proposal={prepared} onDeleted={props.onDeleted} />)
+      }}
+    />
+  )
+}
+
+function DialogSessionDeleteProposal(props: {
+  proposal: SessionDeletionProposal
+  onDeleted: () => Promise<void>
+}) {
+  const dialog = useDialog()
+  const sdk = useSDK()
+  const toast = useToast()
+  const [submitting, setSubmitting] = createSignal(false)
+  const view = () => createSessionDeletionProposalView(props.proposal)
+
+  return (
+    <DialogSelect
+      title={view().title}
+      renderFilter={false}
+      locked={submitting()}
+      options={view().targets}
+      footer={
+        <box flexDirection="column">
+          {view().footer.map((line) => (
+            <text>{line}</text>
+          ))}
+        </box>
+      }
+      actions={[
+        {
+          command: "session.delete",
+          title: "confirm delete",
+          disabled: submitting(),
+          onTrigger: async () => {
+            if (submitting()) return
+            setSubmitting(true)
+            const result = await sdk.client.session
+              .delete({
+                sessionID: props.proposal.rootSessionID,
+                ...props.proposal,
+              })
+              .catch((error) => ({ error, data: undefined }))
+            if (result.error || !result.data) {
+              setSubmitting(false)
+              toast.show({
+                variant: "error",
+                title: "Session deletion was not committed",
+                message: errorMessage(result.error ?? "The server returned no deletion settlement"),
+              })
+              return
+            }
+
+            const resultType = result.data.type
+            const settlement = result.data.settlement
+            toast.show({
+              variant: resultType === "deletion_mode_conflict" ? "error" : "success",
+              title:
+                resultType === "applied"
+                  ? "Session deletion committed"
+                  : resultType === "deletion_mode_conflict"
+                    ? "Session was already deleted with another mode"
+                    : "Session deletion was already committed",
+              message:
+                resultType === "deletion_mode_conflict"
+                  ? `Original mode: ${settlement.mode}. Nothing was changed.`
+                  : `${settlement.subtreeCount} Session${settlement.subtreeCount === 1 ? "" : "s"} deleted. Minimal audit ${result.data.auditAvailable ? "is available" : "is not retained"}.`,
+            })
+            await props.onDeleted()
+            dialog.clear()
+          },
+        },
+      ]}
     />
   )
 }

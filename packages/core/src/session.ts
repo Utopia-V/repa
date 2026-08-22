@@ -37,6 +37,7 @@ import { SessionRevert } from "./session/revert"
 import { Revert } from "@opencode-ai/schema/revert"
 import { FSUtil } from "./fs-util"
 import { SessionDurable } from "@opencode-ai/schema/durable-event-manifest"
+import { SessionDeletion } from "./session-deletion"
 
 export const RevertState = Revert.State
 export type RevertState = Revert.State
@@ -112,7 +113,7 @@ export type Error = NotFoundError | MessageDecodeError | OperationUnavailableErr
 
 export interface Interface {
   readonly list: (input?: ListInput) => Effect.Effect<SessionSchema.Info[]>
-  readonly create: (input: CreateInput) => Effect.Effect<SessionSchema.Info>
+  readonly create: (input: CreateInput) => Effect.Effect<SessionSchema.Info, SessionDeletion.SessionIDRetiredError>
   readonly get: (sessionID: SessionSchema.ID) => Effect.Effect<SessionSchema.Info, NotFoundError>
   readonly messages: (input: {
     sessionID: SessionSchema.ID
@@ -210,12 +211,6 @@ const layer = Layer.effect(
         const recorded = yield* store.get(sessionID)
         if (recorded) return recorded
         const project = yield* projects.resolve(input.location.directory)
-        yield* db
-          .insert(ProjectTable)
-          .values({ id: project.id, worktree: project.directory, vcs: project.vcs?.type, sandboxes: [] })
-          .onConflictDoNothing()
-          .run()
-          .pipe(Effect.orDie)
         const now = Date.now()
         const info = SessionV1.SessionInfo.make({
           id: sessionID,
@@ -239,7 +234,25 @@ const layer = Layer.effect(
           time: { created: now, updated: now },
         })
         const projected = yield* events
-          .publish(SessionV1.Event.Created, { sessionID, info }, { location: input.location })
+          .transaction((tx) =>
+            Effect.gen(function* () {
+              yield* SessionDeletion.assertSessionIDAvailable(tx, sessionID)
+              yield* tx
+                .insert(ProjectTable)
+                .values({ id: project.id, worktree: project.directory, vcs: project.vcs?.type, sandboxes: [] })
+                .onConflictDoNothing()
+                .run()
+                .pipe(Effect.orDie)
+              return {
+                result: undefined,
+                event: {
+                  definition: SessionV1.Event.Created,
+                  data: { sessionID, info },
+                  options: { location: input.location },
+                },
+              }
+            }),
+          )
           .pipe(
             Effect.as({ type: "created" } as const),
             Effect.catchDefect((defect) => {

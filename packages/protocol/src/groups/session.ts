@@ -9,6 +9,7 @@ import {
   InvalidRequestError,
   MessageNotFoundError,
   SessionNotFoundError,
+  SessionIDRetiredError,
   UnknownError,
 } from "../errors"
 import { Agent } from "@opencode-ai/schema/agent"
@@ -125,6 +126,7 @@ export const makeSessionGroup = <I extends HttpApiMiddleware.AnyId, S>(sessionLo
       HttpApiEndpoint.post("session.create", "/api/session", {
         payload: SessionCreatePayload,
         success: Schema.Struct({ data: Session.Info }),
+        error: SessionIDRetiredError,
       }).annotateMerge(
         OpenApi.annotations({
           identifier: "v2.session.create",

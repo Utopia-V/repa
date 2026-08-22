@@ -21,6 +21,11 @@ import { EventV2Bridge } from "@/event-v2-bridge"
 import { LearnerAdmission, Occurrence } from "@opencode-ai/core/learning-command"
 import { LearnerOccurrenceTombstoneTable } from "@opencode-ai/core/learning-command/occurrence.sql"
 import { eq } from "drizzle-orm"
+import { Database } from "@opencode-ai/core/database/database"
+import { SessionPresentation } from "@opencode-ai/core/session-presentation"
+import { LearnerHomeIdentity } from "@opencode-ai/core/database/identity"
+import { SessionImportHistory } from "@/session/import-history"
+import { InstanceState } from "@/effect/instance-state"
 
 const it = testEffect(
   LayerNode.compile(
@@ -31,6 +36,7 @@ const it = testEffect(
       SessionProjector.node,
       CrossSpawnSpawner.node,
       EventV2Bridge.node,
+      Database.node,
     ]),
   ),
 )
@@ -108,6 +114,123 @@ const tokens = {
 }
 
 describe("revert + compact workflow", () => {
+  it.live(
+    "imported administrative history is visible but cannot be reverted or removed",
+    provideTmpdirInstance((dir) =>
+      Effect.gen(function* () {
+        const session = yield* Session.Service
+        const revert = yield* SessionRevert.Service
+        const database = yield* Database.Service
+        const context = yield* InstanceState.context
+        const targetDatabaseID = yield* database.db.transaction(LearnerHomeIdentity.read).pipe(Effect.orDie)
+        const importedSessionID = SessionID.make("ses_01J5Y5H0AH4Q4NXJ6P4C3P5V2M")
+        const importedMessageID = MessageID.make("msg_01J5Y5H0AH4Q4NXJ6P4C3P5V2N")
+        const importedTextPartID = PartID.make("prt_01J5Y5H0AH4Q4NXJ6P4C3P5V2P")
+        const importedPatchPartID = PartID.make("prt_01J5Y5H0AH4Q4NXJ6P4C3P5V2Q")
+        const decoded = yield* SessionImportHistory.decode(
+          JSON.stringify({
+            type: "repa_session_offline_history",
+            schemaVersion: 1,
+            sourceDatabaseID: targetDatabaseID === `lhm_${"1".repeat(32)}` ? `lhm_${"2".repeat(32)}` : `lhm_${"1".repeat(32)}`,
+            info: {
+              id: importedSessionID,
+              slug: "inert-imported-history",
+              projectID: "source-project",
+              directory: "/source/project",
+              title: "Inert imported history",
+              version: "1",
+              time: { created: 1, updated: 1 },
+            },
+            messages: [
+              {
+                info: {
+                  id: importedMessageID,
+                  sessionID: importedSessionID,
+                  role: "user",
+                  time: { created: 2 },
+                  agent: "repa",
+                  model: { providerID: "test", modelID: "test-model" },
+                },
+                parts: [
+                  {
+                    id: importedTextPartID,
+                    sessionID: importedSessionID,
+                    messageID: importedMessageID,
+                    type: "text",
+                    text: "sealed imported presentation",
+                  },
+                  {
+                    id: importedPatchPartID,
+                    sessionID: importedSessionID,
+                    messageID: importedMessageID,
+                    type: "patch",
+                    hash: "source-patch",
+                    files: ["imported-history-sentinel.txt"],
+                  },
+                ],
+              },
+            ],
+          }),
+        )
+        yield* SessionImportHistory.exactRestore({
+          decoded,
+          context,
+          sourceStillMatches: Effect.succeed(true),
+        })
+        const info = yield* session.get(importedSessionID)
+        const messages = yield* session.messages({ sessionID: info.id })
+        const imported = messages[0]
+        if (!imported) return yield* Effect.die("Expected imported-history fixture message")
+        const importedPart = imported.parts.find((part) => part.id === importedPatchPartID)
+        if (!importedPart) return yield* Effect.die("Expected imported-history fixture part")
+        const before = yield* session.messages({ sessionID: info.id })
+        const sentinel = path.join(dir, "imported-history-sentinel.txt")
+        yield* write(sentinel, "unchanged")
+
+        const reverted = yield* revert.revert({ sessionID: info.id, messageID: imported.info.id }).pipe(Effect.exit)
+        const revertedParts = yield* Effect.forEach(imported.parts, (part) =>
+          revert.revert({ sessionID: info.id, messageID: imported.info.id, partID: part.id }).pipe(Effect.exit),
+        )
+        const removedMessage = yield* session
+          .removeMessage({ sessionID: info.id, messageID: imported.info.id })
+          .pipe(Effect.exit)
+        const removedPart = yield* session
+          .removePart({ sessionID: info.id, messageID: imported.info.id, partID: importedPart.id })
+          .pipe(Effect.exit)
+
+        expect(Exit.isFailure(reverted)).toBe(true)
+        if (Exit.isFailure(reverted)) {
+          expect(Cause.squash(reverted.cause)).toBeInstanceOf(
+            SessionPresentation.HistoricalPresentationNotRevertibleError,
+          )
+        }
+        for (const revertedPart of revertedParts) {
+          expect(Exit.isFailure(revertedPart)).toBe(true)
+          if (Exit.isFailure(revertedPart)) {
+            expect(Cause.squash(revertedPart.cause)).toBeInstanceOf(
+              SessionPresentation.HistoricalPresentationNotRevertibleError,
+            )
+          }
+        }
+        expect(Exit.isFailure(removedMessage)).toBe(true)
+        if (Exit.isFailure(removedMessage)) {
+          expect(Cause.squash(removedMessage.cause)).toBeInstanceOf(
+            SessionPresentation.AdministrativeHistoryIntegrityError,
+          )
+        }
+        expect(Exit.isFailure(removedPart)).toBe(true)
+        if (Exit.isFailure(removedPart)) {
+          expect(Cause.squash(removedPart.cause)).toBeInstanceOf(
+            SessionPresentation.AdministrativeHistoryIntegrityError,
+          )
+        }
+        expect(yield* session.messages({ sessionID: info.id })).toEqual(before)
+        expect(yield* read(sentinel)).toBe("unchanged")
+        expect((yield* session.get(info.id)).revert).toBeUndefined()
+      }),
+    ),
+  )
+
   it.live(
     "should properly handle compact command after revert",
     provideTmpdirInstance(
@@ -653,6 +776,7 @@ describe("revert + compact workflow", () => {
         }),
       { git: true },
     ),
+    15_000,
   )
 
   it.live(
@@ -741,5 +865,6 @@ describe("revert + compact workflow", () => {
         }),
       { git: true },
     ),
+    15_000,
   )
 })

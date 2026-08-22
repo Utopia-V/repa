@@ -25,6 +25,33 @@ export type InvalidCursorError = { readonly _tag: "InvalidCursorError"; readonly
 export const isInvalidCursorError = (value: unknown): value is InvalidCursorError =>
   typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "InvalidCursorError"
 
+export type SessionIDRetiredError = {
+  readonly _tag: "SessionIDRetiredError"
+  readonly sessionID: string
+  readonly deletionRequestID: string
+  readonly mode: "full" | "minimal_audit"
+  readonly deletionTime: number
+  readonly settlement: {
+    readonly schemaVersion: 1
+    readonly requestID: string
+    readonly requestFingerprint: string
+    readonly rootSessionID: string
+    readonly subtreeCount: number
+    readonly subtreeFingerprint: string
+    readonly mode: "full" | "minimal_audit"
+    readonly permissionDecisionFingerprint: string
+    readonly proposalSchemaVersion: 1
+    readonly outcome: "applied"
+    readonly deletionTime: number
+    readonly sessionBodiesDeleted: true
+  }
+  readonly settlementBytes: string
+  readonly auditAvailable: boolean
+  readonly message: string
+}
+export const isSessionIDRetiredError = (value: unknown): value is SessionIDRetiredError =>
+  typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "SessionIDRetiredError"
+
 export type SessionNotFoundError = {
   readonly _tag: "SessionNotFoundError"
   readonly sessionID: string

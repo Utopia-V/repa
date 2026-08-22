@@ -37,6 +37,11 @@ import {
   SessionHistoricalPartPresentationTable,
   SessionTable,
 } from "@opencode-ai/core/session/sql"
+import { SessionPresentation } from "@opencode-ai/core/session-presentation"
+import {
+  SessionAdministrativeHistoryMessageTable,
+  SessionAdministrativeHistoryPartTable,
+} from "@opencode-ai/core/session-presentation/sql"
 import { ProviderError } from "@/provider/error"
 import { iife } from "@/util/iife"
 import { errorMessage } from "@/util/error"
@@ -110,13 +115,30 @@ function hydrate(db: Database.Interface["db"], rows: (typeof MessageTable.$infer
   const partByMessage = new Map<string, Part[]>()
   return Effect.gen(function* () {
     if (ids.length > 0) {
-      const partRows = yield* db
-        .select()
-        .from(PartTable)
-        .where(inArray(PartTable.message_id, ids))
-        .orderBy(PartTable.message_id, PartTable.id)
-        .all()
-        .pipe(Effect.orDie)
+      const [partRows, administrative] = yield* Effect.all([
+        db
+          .select()
+          .from(PartTable)
+          .where(inArray(PartTable.message_id, ids))
+          .all()
+          .pipe(Effect.orDie),
+        db
+          .select({ partID: SessionAdministrativeHistoryPartTable.part_id, ordinal: SessionAdministrativeHistoryPartTable.part_ordinal })
+          .from(SessionAdministrativeHistoryPartTable)
+          .where(inArray(SessionAdministrativeHistoryPartTable.message_id, ids))
+          .all()
+          .pipe(Effect.orDie),
+      ])
+      const administrativeOrdinal = new Map(administrative.map((row) => [row.partID, row.ordinal] as const))
+      partRows.sort((left, right) => {
+        if (left.message_id !== right.message_id) return left.message_id.localeCompare(right.message_id)
+        const leftOrdinal = administrativeOrdinal.get(left.id)
+        const rightOrdinal = administrativeOrdinal.get(right.id)
+        if (leftOrdinal !== undefined || rightOrdinal !== undefined) {
+          return (leftOrdinal ?? Number.MAX_SAFE_INTEGER) - (rightOrdinal ?? Number.MAX_SAFE_INTEGER)
+        }
+        return left.time_created - right.time_created || left.id.localeCompare(right.id)
+      })
       for (const row of partRows) {
         const next = part(row)
         const list = partByMessage.get(row.message_id)
@@ -438,6 +460,9 @@ export const page = Effect.fn("MessageV2.page")(function* (input: {
   before?: string
 }) {
   const { db } = yield* Database.Service
+  yield* db.transaction((tx) => SessionPresentation.assertAdministrativeHistoryIntegrity(tx, input.sessionID)).pipe(
+    Effect.catchTag("SqlError", Effect.die),
+  )
   const before = input.before ? cursor.decode(input.before) : undefined
   const where = before
     ? and(eq(MessageTable.session_id, input.sessionID), older(before))
@@ -502,19 +527,33 @@ export function stream(sessionID: SessionID) {
 export function parts(messageID: MessageID) {
   return Effect.gen(function* () {
     const { db } = yield* Database.Service
-    const rows = yield* db
-      .select()
-      .from(PartTable)
-      .where(eq(PartTable.message_id, messageID))
-      .orderBy(PartTable.id)
-      .all()
-      .pipe(Effect.orDie)
+    const [rows, administrative] = yield* Effect.all([
+      db.select().from(PartTable).where(eq(PartTable.message_id, messageID)).all().pipe(Effect.orDie),
+      db
+        .select({ partID: SessionAdministrativeHistoryPartTable.part_id, ordinal: SessionAdministrativeHistoryPartTable.part_ordinal })
+        .from(SessionAdministrativeHistoryPartTable)
+        .where(eq(SessionAdministrativeHistoryPartTable.message_id, messageID))
+        .all()
+        .pipe(Effect.orDie),
+    ])
+    const ordinal = new Map(administrative.map((row) => [row.partID, row.ordinal] as const))
+    rows.sort((left, right) => {
+      const leftOrdinal = ordinal.get(left.id)
+      const rightOrdinal = ordinal.get(right.id)
+      if (leftOrdinal !== undefined || rightOrdinal !== undefined) {
+        return (leftOrdinal ?? Number.MAX_SAFE_INTEGER) - (rightOrdinal ?? Number.MAX_SAFE_INTEGER)
+      }
+      return left.time_created - right.time_created || left.id.localeCompare(right.id)
+    })
     return rows.map(part)
   })
 }
 
 export const get = Effect.fn("MessageV2.get")(function* (input: { sessionID: SessionID; messageID: MessageID }) {
   const { db } = yield* Database.Service
+  yield* db.transaction((tx) => SessionPresentation.assertAdministrativeHistoryIntegrity(tx, input.sessionID)).pipe(
+    Effect.catchTag("SqlError", Effect.die),
+  )
   const row = yield* db
     .select()
     .from(MessageTable)
@@ -583,13 +622,21 @@ export function filterCompacted(msgs: Iterable<WithParts>) {
 
 export const filterCompactedEffect = Effect.fnUntraced(function* (sessionID: SessionID) {
   const database = yield* Database.Service
-  const historical = yield* database.db
-    .select({ partID: SessionHistoricalPartPresentationTable.part_id })
-    .from(SessionHistoricalPartPresentationTable)
-    .where(eq(SessionHistoricalPartPresentationTable.session_id, sessionID))
-    .all()
-    .pipe(Effect.orDie)
-  return filterHistoricalTasks(filterCompacted(yield* stream(sessionID)), new Set(historical.map((row) => row.partID)))
+  const historical = yield* Effect.all([
+    database.db
+      .select({ partID: SessionHistoricalPartPresentationTable.part_id })
+      .from(SessionHistoricalPartPresentationTable)
+      .where(eq(SessionHistoricalPartPresentationTable.session_id, sessionID))
+      .all()
+      .pipe(Effect.orDie),
+    database.db
+      .select({ partID: SessionAdministrativeHistoryPartTable.part_id })
+      .from(SessionAdministrativeHistoryPartTable)
+      .where(eq(SessionAdministrativeHistoryPartTable.session_id, sessionID))
+      .all()
+      .pipe(Effect.orDie),
+  ]).pipe(Effect.map((rows) => rows.flat()))
+  return filterCompacted(filterHistoricalTasks(yield* stream(sessionID), new Set(historical.map((row) => row.partID))))
 })
 
 export function filterHistoricalTasks(msgs: WithParts[], historicalPartIDs: ReadonlySet<string>) {
@@ -689,12 +736,23 @@ export const currentWorkEffect = Effect.fnUntraced(function* (input: {
   messages: WithParts[]
 }) {
   const database = yield* Database.Service
-  const historical = yield* database.db
-    .select({ messageID: SessionHistoricalMessagePresentationTable.message_id })
-    .from(SessionHistoricalMessagePresentationTable)
-    .where(eq(SessionHistoricalMessagePresentationTable.session_id, input.sessionID))
-    .all()
-    .pipe(Effect.orDie)
+  yield* database.db
+    .transaction((tx) => SessionPresentation.assertAdministrativeHistoryIntegrity(tx, input.sessionID))
+    .pipe(Effect.catchTag("SqlError", Effect.die))
+  const historical = yield* Effect.all([
+    database.db
+      .select({ messageID: SessionHistoricalMessagePresentationTable.message_id })
+      .from(SessionHistoricalMessagePresentationTable)
+      .where(eq(SessionHistoricalMessagePresentationTable.session_id, input.sessionID))
+      .all()
+      .pipe(Effect.orDie),
+    database.db
+      .select({ messageID: SessionAdministrativeHistoryMessageTable.message_id })
+      .from(SessionAdministrativeHistoryMessageTable)
+      .where(eq(SessionAdministrativeHistoryMessageTable.session_id, input.sessionID))
+      .all()
+      .pipe(Effect.orDie),
+  ]).pipe(Effect.map((rows) => rows.flat()))
   const historicalMessageIDs = new Set(historical.map((row) => row.messageID))
   if (historicalMessageIDs.has(input.currentInputMessageID)) {
     return yield* new Turn.IntegrityError({

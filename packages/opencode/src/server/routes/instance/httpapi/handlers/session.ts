@@ -1,5 +1,6 @@
 import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
+import { SessionDeletion } from "@opencode-ai/core/session-deletion"
 import { EventV2Bridge } from "@/event-v2-bridge"
 import { EventV2 } from "@opencode-ai/core/event"
 import { EventSequenceTable } from "@opencode-ai/core/event/sql"
@@ -27,13 +28,34 @@ import {
   MessagesQuery,
   PermissionResponsePayload,
   RevertPayload,
+  SessionDeletionModePayload,
+  SessionDeletionPurgeProposal,
+  SessionDeletionProposal,
   ShellPayload,
   StartPayload,
   SteerPayload,
   UpdatePayload,
 } from "../groups/session"
-import { PermissionNotFoundError } from "../errors"
-import { mapBusy, mapPrompt, mapStorageNotFound, mapTreeBusy, mapTurn } from "./session-errors"
+import {
+  PermissionNotFoundError,
+  SessionAdministrativeHistoryIntegrityError,
+  SessionHistoricalPresentationNotRevertibleError,
+  SessionDeletionAuditNotAvailableError,
+  SessionDeletionAuditProjectionError,
+  SessionDeletionInvocationConflictError,
+  TurnTreeChangedError,
+} from "../errors"
+import {
+  mapBusy,
+  mapHistoricalMutation,
+  mapPresentationMutation,
+  mapPrompt,
+  mapRevert,
+  mapSessionRead,
+  mapStorageNotFound,
+  mapTreeBusy,
+  mapTurn,
+} from "./session-errors"
 import { Turn } from "@opencode-ai/schema/turn"
 import { eq } from "drizzle-orm"
 
@@ -106,10 +128,10 @@ export const sessionHandlers = HttpApiBuilder.group(InstanceHttpApi, "session", 
       }
       yield* requireSession(ctx.params.sessionID)
       if (ctx.query.limit === undefined || ctx.query.limit === 0) {
-        return yield* mapStorageNotFound(session.messages({ sessionID: ctx.params.sessionID }))
+        return yield* mapSessionRead(session.messages({ sessionID: ctx.params.sessionID }))
       }
 
-      const page = yield* mapStorageNotFound(
+      const page = yield* mapSessionRead(
         MessageV2.page({
           sessionID: ctx.params.sessionID,
           limit: ctx.query.limit,
@@ -136,7 +158,7 @@ export const sessionHandlers = HttpApiBuilder.group(InstanceHttpApi, "session", 
     const message = Effect.fn("SessionHttpApi.message")(function* (ctx: {
       params: { sessionID: SessionID; messageID: MessageID }
     }) {
-      return yield* mapStorageNotFound(
+      return yield* mapSessionRead(
         MessageV2.get({ sessionID: ctx.params.sessionID, messageID: ctx.params.messageID }),
       )
     })
@@ -162,13 +184,106 @@ export const sessionHandlers = HttpApiBuilder.group(InstanceHttpApi, "session", 
       }
     })
 
-    const remove = Effect.fn("SessionHttpApi.remove")(function* (ctx: { params: { sessionID: SessionID } }) {
-      yield* session.remove(ctx.params.sessionID).pipe(
+    const proposeRemoval = Effect.fn("SessionHttpApi.proposeRemoval")(function* (ctx: {
+      params: { sessionID: SessionID }
+      payload: typeof SessionDeletionModePayload.Type
+    }) {
+      return yield* session.proposeRemoval({ sessionID: ctx.params.sessionID, mode: ctx.payload.mode }).pipe(
         Effect.catchTag("SessionBusyError", (error) => mapBusy(Effect.fail(error))),
         Effect.catchTag("SessionTreeBusyError", (error) => mapTreeBusy(Effect.fail(error))),
         Effect.catchTag("NotFoundError", (error) => mapStorageNotFound(Effect.fail(error))),
       )
-      return true
+    })
+
+    const remove = Effect.fn("SessionHttpApi.remove")(function* (ctx: {
+      params: { sessionID: SessionID }
+      payload: typeof SessionDeletionProposal.Type
+    }) {
+      if (ctx.payload.rootSessionID !== ctx.params.sessionID) return yield* new HttpApiError.BadRequest({})
+      const result = yield* session.commitRemoval(ctx.payload).pipe(
+        Effect.catchTag("SessionBusyError", (error) => mapBusy(Effect.fail(error))),
+        Effect.catchTag("SessionTreeBusyError", (error) => mapTreeBusy(Effect.fail(error))),
+        Effect.catchTag("SessionTreeChangedError", (error) => Effect.fail(new TurnTreeChangedError(error))),
+        Effect.catchTag("SessionDeletion.InvocationConflictError", (error) =>
+          Effect.fail(
+            new SessionDeletionInvocationConflictError({
+              ...error,
+              message: `Deletion request conflicts with its durable physical identity: ${error.requestID}`,
+            }),
+          ),
+        ),
+        Effect.catchTag("SessionDeletion.AuditProjectionError", (error) =>
+          Effect.fail(
+            new SessionDeletionAuditProjectionError({
+              ...error,
+              message: `Minimal Session audit could not be sealed: ${error.reason}`,
+            }),
+          ),
+        ),
+        Effect.catchTag("NotFoundError", (error) => mapStorageNotFound(Effect.fail(error))),
+      )
+      return {
+        type: result.type,
+        settlement: result.settlement,
+        settlementBytes: result.settlementBytes,
+        auditAvailable: result.auditAvailable,
+      }
+    })
+
+    const deletionProjection = Effect.fn("SessionHttpApi.deletionProjection")(function* (ctx: {
+      params: { sessionID: SessionID }
+    }) {
+      return yield* db.transaction((tx) => SessionDeletion.readProjection(tx, ctx.params.sessionID)).pipe(
+        Effect.catchTag("SessionDeletion.AuditProjectionError", (error) =>
+          Effect.fail(
+            new SessionDeletionAuditProjectionError({
+              ...error,
+              message: `Stored Session deletion projection is inconsistent: ${error.reason}`,
+            }),
+          ),
+        ),
+        Effect.catchTag("SqlError", (error) => Effect.die(error)),
+      )
+    })
+
+    const proposeAuditPurge = Effect.fn("SessionHttpApi.proposeAuditPurge")(function* (ctx: {
+      params: { sessionID: SessionID }
+    }) {
+      return yield* session.proposeAuditPurge(ctx.params.sessionID).pipe(
+          Effect.catchTag("SessionDeletion.AuditNotAvailableError", (error) =>
+            Effect.fail(
+              new SessionDeletionAuditNotAvailableError({
+                ...error,
+                message: `No retained Session deletion audit is available for ${error.rootSessionID}`,
+              }),
+            ),
+          ),
+        )
+    })
+
+    const purgeAudit = Effect.fn("SessionHttpApi.purgeAudit")(function* (ctx: {
+      params: { sessionID: SessionID }
+      payload: typeof SessionDeletionPurgeProposal.Type
+    }) {
+      if (ctx.payload.rootSessionID !== ctx.params.sessionID) return yield* new HttpApiError.BadRequest({})
+      return yield* session.purgeAudit(ctx.payload).pipe(
+          Effect.catchTag("SessionDeletion.InvocationConflictError", (error) =>
+            Effect.fail(
+              new SessionDeletionInvocationConflictError({
+                ...error,
+                message: `Audit-purge request conflicts with its durable physical identity: ${error.requestID}`,
+              }),
+            ),
+          ),
+          Effect.catchTag("SessionDeletion.AuditNotAvailableError", (error) =>
+            Effect.fail(
+              new SessionDeletionAuditNotAvailableError({
+                ...error,
+                message: `No matching retained Session deletion audit is available for ${error.rootSessionID}`,
+              }),
+            ),
+          ),
+        )
     })
 
     const update = Effect.fn("SessionHttpApi.update")(function* (ctx: {
@@ -277,12 +392,12 @@ export const sessionHandlers = HttpApiBuilder.group(InstanceHttpApi, "session", 
       payload: typeof RevertPayload.Type
     }) {
       yield* requireSession(ctx.params.sessionID)
-      return yield* mapBusy(revertSvc.revert({ sessionID: ctx.params.sessionID, ...ctx.payload }))
+      return yield* mapRevert(revertSvc.revert({ sessionID: ctx.params.sessionID, ...ctx.payload }))
     })
 
     const unrevert = Effect.fn("SessionHttpApi.unrevert")(function* (ctx: { params: { sessionID: SessionID } }) {
       yield* requireSession(ctx.params.sessionID)
-      return yield* mapBusy(revertSvc.unrevert({ sessionID: ctx.params.sessionID }))
+      return yield* mapRevert(revertSvc.unrevert({ sessionID: ctx.params.sessionID }))
     })
 
     const permissionRespond = Effect.fn("SessionHttpApi.permissionRespond")(function* (ctx: {
@@ -307,7 +422,7 @@ export const sessionHandlers = HttpApiBuilder.group(InstanceHttpApi, "session", 
       params: { sessionID: SessionID; messageID: MessageID }
     }) {
       yield* requireSession(ctx.params.sessionID)
-      yield* mapBusy(session.removeMessage(ctx.params))
+      yield* mapHistoricalMutation(session.removeMessage(ctx.params))
       return true
     })
 
@@ -315,7 +430,7 @@ export const sessionHandlers = HttpApiBuilder.group(InstanceHttpApi, "session", 
       params: { sessionID: SessionID; messageID: MessageID; partID: PartID }
     }) {
       yield* requireSession(ctx.params.sessionID)
-      yield* mapBusy(session.removePart(ctx.params))
+      yield* mapHistoricalMutation(session.removePart(ctx.params))
       return true
     })
 
@@ -332,7 +447,7 @@ export const sessionHandlers = HttpApiBuilder.group(InstanceHttpApi, "session", 
       ) {
         return yield* new HttpApiError.BadRequest({})
       }
-      return yield* mapBusy(runState.idle(ctx.params.sessionID, session.updatePart(payload)))
+      return yield* mapPresentationMutation(runState.idle(ctx.params.sessionID, session.updatePart(payload)))
     })
 
     return handlers
@@ -345,7 +460,11 @@ export const sessionHandlers = HttpApiBuilder.group(InstanceHttpApi, "session", 
       .handle("messages", messages)
       .handle("futureAttentionFinalizations", futureAttentionFinalizations)
       .handle("message", message)
+      .handle("proposeRemoval", proposeRemoval)
       .handle("remove", remove)
+      .handle("deletionProjection", deletionProjection)
+      .handle("proposeAuditPurge", proposeAuditPurge)
+      .handle("purgeAudit", purgeAudit)
       .handle("update", update)
       .handle("forkBasis", forkBasis)
       .handle("start", start)

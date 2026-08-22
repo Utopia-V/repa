@@ -5,6 +5,8 @@ import { MessageTable, PartTable } from "../session/sql"
 import {
   TurnHistoricalInputPresentationTable,
   TurnHistoricalModelPresentationTable,
+  TurnInputTable,
+  TurnModelOperationTable,
   TurnUnavailableModelTable,
   TurnUnavailableSourceTable,
 } from "../turn/sql"
@@ -432,6 +434,18 @@ export function garbageCollectOccurrences(tx: Transaction, occurrenceIDs: readon
             .select({ id: TurnHistoricalInputPresentationTable.message_id })
             .from(TurnHistoricalInputPresentationTable)
             .where(eq(TurnHistoricalInputPresentationTable.occurrence_id, occurrenceID))
+            .get()
+            .pipe(Effect.orDie),
+          tx
+            .select({ id: TurnInputTable.id })
+            .from(TurnInputTable)
+            .where(eq(TurnInputTable.occurrence_id, occurrenceID))
+            .get()
+            .pipe(Effect.orDie),
+          tx
+            .select({ id: TurnModelOperationTable.assistant_message_id })
+            .from(TurnModelOperationTable)
+            .where(eq(TurnModelOperationTable.causal_occurrence_id, occurrenceID))
             .get()
             .pipe(Effect.orDie),
           tx

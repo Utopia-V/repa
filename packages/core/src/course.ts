@@ -694,35 +694,47 @@ export interface Interface {
 
 export class Service extends Context.Service<Service, Interface>()("@repa/Course") {}
 
+export function readCourseInfoInTransaction(source: Queryable, courseID: CourseID) {
+  return Effect.gen(function* () {
+    const course = yield* requireCourse(source, courseID)
+    const selection = yield* requireSelection(source, courseID)
+    return courseInfo(course, selection)
+  })
+}
+
+export function readViewInfoInTransaction(source: Queryable, courseID: CourseID, viewID: ViewID) {
+  return Effect.gen(function* () {
+    const course = yield* requireCourse(source, courseID)
+    const view = yield* requireView(source, courseID, viewID)
+    return viewInfo(course, view)
+  })
+}
+
+export function readRevisionSummaryInTransaction(
+  source: Queryable,
+  courseID: CourseID,
+  viewID: ViewID,
+  revisionID: RevisionID,
+) {
+  return Effect.gen(function* () {
+    const course = yield* requireCourse(source, courseID)
+    const view = yield* requireView(source, courseID, viewID)
+    const revision = yield* requireRevision(source, courseID, viewID, revisionID)
+    const selection = yield* requireSelection(source, courseID)
+    const latest = yield* latestEligibleRevisionNumber(source, course, view)
+    return revisionSummary(course, view, revision, selection, latest)
+  })
+}
+
 const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const database = yield* Database.Service
     const db = database.db
 
-    const getCourseInfo = (source: Queryable, courseID: CourseID) =>
-      Effect.gen(function* () {
-        const course = yield* requireCourse(source, courseID)
-        const selection = yield* requireSelection(source, courseID)
-        return courseInfo(course, selection)
-      })
-
-    const getViewInfo = (source: Queryable, courseID: CourseID, viewID: ViewID) =>
-      Effect.gen(function* () {
-        const course = yield* requireCourse(source, courseID)
-        const view = yield* requireView(source, courseID, viewID)
-        return viewInfo(course, view)
-      })
-
-    const getRevisionSummary = (source: Queryable, courseID: CourseID, viewID: ViewID, revisionID: RevisionID) =>
-      Effect.gen(function* () {
-        const course = yield* requireCourse(source, courseID)
-        const view = yield* requireView(source, courseID, viewID)
-        const revision = yield* requireRevision(source, courseID, viewID, revisionID)
-        const selection = yield* requireSelection(source, courseID)
-        const latest = yield* latestEligibleRevisionNumber(source, course, view)
-        return revisionSummary(course, view, revision, selection, latest)
-      })
+    const getCourseInfo = readCourseInfoInTransaction
+    const getViewInfo = readViewInfoInTransaction
+    const getRevisionSummary = readRevisionSummaryInTransaction
 
     const readCourseInfo = (courseID: CourseID) => snapshot(db, (tx) => getCourseInfo(tx, courseID))
     const readViewInfo = (courseID: CourseID, viewID: ViewID) => snapshot(db, (tx) => getViewInfo(tx, courseID, viewID))

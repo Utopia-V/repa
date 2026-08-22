@@ -78,15 +78,7 @@ export function createFetch(override?: FetchHandler, events?: ReturnType<typeof 
     if (overridden) return overridden
     if (url.pathname === "/api/event" && events) return events.response()
 
-    if (
-      [
-        "/agent",
-        "/command",
-        "/formatter",
-        "/lsp",
-      ].includes(url.pathname)
-    )
-      return json([])
+    if (["/agent", "/command", "/formatter", "/lsp"].includes(url.pathname)) return json([])
     if (["/config", "/experimental/resource", "/mcp", "/provider/auth", "/session/status"].includes(url.pathname))
       return json({})
     if (url.pathname === "/config/providers") return json({ providers: {}, default: {} })
@@ -111,6 +103,7 @@ export function createFetch(override?: FetchHandler, events?: ReturnType<typeof 
     if (/^\/session\/[^/]+\/future-attention\/finalization$/.test(url.pathname)) {
       return json({ events: [], hasMore: false })
     }
+    if (/^\/session\/[^/]+\/turn$/.test(url.pathname)) return json([])
     if (url.pathname === "/vcs") return json({ branch: "main" })
     throw new Error(`unexpected request: ${url.pathname}`)
   }) as typeof globalThis.fetch

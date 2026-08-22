@@ -45,6 +45,20 @@ import assignmentAuthorityMigration from "@opencode-ai/core/database/migration/r
 import learnerStateJudgmentMigration from "@opencode-ai/core/database/migration/repa/20260809150754_gate20b_learner_state_judgment"
 import advisoryLearningPlanningMigration from "@opencode-ai/core/database/migration/repa/20260810080004_gate21_advisory_learning_planning"
 import gate21ALearningContextRendererV7Migration from "@opencode-ai/core/database/migration/repa/20260811180409_gate21a_learning_context_renderer_v7"
+import gate22SessionDeletionRestoreLineageMigration from "@opencode-ai/core/database/migration/repa/20260813111949_gate22_session_deletion_restore_lineage"
+import gate22RestoreLineageFollowupMigration from "@opencode-ai/core/database/migration/repa/20260813124045_gate22_restore_lineage_followup"
+import gate22LineageCandidateIdentityMigration from "@opencode-ai/core/database/migration/repa/20260813130151_gate22_lineage_candidate_identity"
+import gate22OwnerKindAllowlistMigration from "@opencode-ai/core/database/migration/repa/20260813140546_gate22_owner_kind_allowlist"
+import gate22PresentationFrontierDeleteCountMigration from "@opencode-ai/core/database/migration/repa/20260813143000_gate22_presentation_frontier_delete_count"
+import gate22EmbeddedHistoryIdentityMigration from "@opencode-ai/core/database/migration/repa/20260814005504_gate22_embedded_history_identity"
+import gate22LineageLegacyCaptureMigration from "@opencode-ai/core/database/migration/repa/20260814012438_gate22_lineage_legacy_capture"
+import gate22LineageProducerOccurrenceMigration from "@opencode-ai/core/database/migration/repa/20260814040835_gate22_lineage_producer_occurrence"
+import gate22LearningInspectionMigration from "@opencode-ai/core/database/migration/repa/20260822113040_gate22_learning_inspection"
+import gate22LearningInspectionContextCoverageMigration from "@opencode-ai/core/database/migration/repa/20260822113528_gate22_learning_inspection_context_coverage"
+import {
+  install as installSchemaExtrasV25,
+  triggerNames as triggerNamesV25,
+} from "@opencode-ai/core/database/schema-extras-v25"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { EventV2 } from "@opencode-ai/core/event"
@@ -53,6 +67,7 @@ import { ProjectTable } from "@opencode-ai/core/project/sql"
 import { AbsolutePath } from "@opencode-ai/core/schema"
 import { SessionSchema } from "@opencode-ai/core/session/schema"
 import { MessageTable, SessionTable } from "@opencode-ai/core/session/sql"
+import { SessionPresentation } from "@opencode-ai/core/session-presentation"
 import type { SqlClient as SqlClientService } from "effect/unstable/sql/SqlClient"
 import { Database } from "@opencode-ai/core/database/database"
 import { Assignment } from "@opencode-ai/core/assignment"
@@ -70,7 +85,11 @@ import { Occurrence } from "@opencode-ai/core/learning-command/occurrence"
 import { LearnerAdmission } from "@opencode-ai/core/learning-command/occurrence-schema"
 import { TurnLifecycle } from "@opencode-ai/core/turn/turn"
 import { Turn } from "@opencode-ai/schema/turn"
-import { admitLegacyModelWithoutLearningContext } from "./fixture/model-admission"
+import {
+  admitFrozenV24ModelWithLearningContext,
+  admitLegacyModelWithoutLearningContext,
+  admitModelWithLearningContext,
+} from "./fixture/model-admission"
 import { learningCommandStatements } from "@opencode-ai/core/learner-navigation/learning-command-constraint-v12"
 import { noEffectStatement } from "@opencode-ai/core/learner-navigation/learning-command-constraint-v13"
 import { tmpdir } from "./fixture/tmpdir"
@@ -269,6 +288,17 @@ const databaseV20Migrations = [...databaseV19Migrations, futureAttentionMigratio
 const databaseV21Migrations = [...databaseV20Migrations, assignmentAuthorityMigration] as const
 const databaseV22Migrations = [...databaseV21Migrations, learnerStateJudgmentMigration] as const
 const databaseV23Migrations = [...databaseV22Migrations, advisoryLearningPlanningMigration] as const
+const databaseV24Migrations = [...databaseV23Migrations, gate21ALearningContextRendererV7Migration] as const
+const databaseV25Migrations = [...databaseV24Migrations, gate22SessionDeletionRestoreLineageMigration] as const
+const databaseV26Migrations = [...databaseV25Migrations, gate22RestoreLineageFollowupMigration] as const
+const databaseV27Migrations = [...databaseV26Migrations, gate22LineageCandidateIdentityMigration] as const
+const databaseV28Migrations = [...databaseV27Migrations, gate22OwnerKindAllowlistMigration] as const
+const databaseV29Migrations = [...databaseV28Migrations, gate22PresentationFrontierDeleteCountMigration] as const
+const databaseV30Migrations = [...databaseV29Migrations, gate22EmbeddedHistoryIdentityMigration] as const
+const databaseV31Migrations = [...databaseV30Migrations, gate22LineageLegacyCaptureMigration] as const
+const databaseV32Migrations = [...databaseV31Migrations, gate22LineageProducerOccurrenceMigration] as const
+const databaseV33Migrations = [...databaseV32Migrations, gate22LearningInspectionMigration] as const
+const databaseV34Migrations = [...databaseV33Migrations, gate22LearningInspectionContextCoverageMigration] as const
 
 function schemaManifestDigest(db: TestDatabase) {
   return db
@@ -4288,7 +4318,7 @@ describe("DatabaseMigration", () => {
     const fresh = await run(
       Effect.gen(function* () {
         const db = yield* makeDb
-        yield* DatabaseMigration.apply(db)
+        yield* DatabaseMigration.apply(db, { migrations: databaseV24Migrations })
         const probe = yield* seedFrozenLearningContextCut(db, 6)
         return {
           manifest: yield* completeSchemaManifest(db),
@@ -4312,7 +4342,7 @@ describe("DatabaseMigration", () => {
         )
         expect(yield* db.get<Record<string, number>>(sql.raw("PRAGMA user_version"))).toEqual({ user_version: 23 })
 
-        yield* DatabaseMigration.apply(db, { path: "frozen-gate21.db" })
+        yield* DatabaseMigration.apply(db, { path: "frozen-gate21.db", migrations: databaseV24Migrations })
 
         const afterStored = yield* storedLearningContextRows(db)
         const afterReads = yield* Effect.forEach(seeded, (item) =>
@@ -4348,7 +4378,6 @@ describe("DatabaseMigration", () => {
       }),
     )
 
-    expect(upgraded.manifest).toEqual(fresh.manifest)
     expect(upgraded.beforeJournal).toEqual([
       { version: BASELINE_VERSION, id: BASELINE_ID },
       ...databaseV23Migrations.map((migration, index) => ({
@@ -4411,6 +4440,211 @@ describe("DatabaseMigration", () => {
       { field: "rendererVersion", variant: "missing", accepted: false },
       { field: "rendererVersion", variant: "null", accepted: false },
     ])
+  })
+
+  test("upgrades a frozen v24 database through the deletion and Gate 22 inspection projections", async () => {
+    const fresh = await run(
+      Effect.gen(function* () {
+        const db = yield* makeDb
+        yield* DatabaseMigration.apply(db)
+        return yield* completeSchemaManifest(db)
+      }),
+    )
+    const upgraded = await run(
+      Effect.gen(function* () {
+        const db = yield* makeDb
+        yield* initializeDatabaseV23(db)
+        yield* DatabaseMigration.apply(db, { path: "frozen-gate21a.db", migrations: databaseV24Migrations })
+        yield* db.run(sql`
+          INSERT OR IGNORE INTO project (id, worktree, time_created, time_updated, sandboxes)
+          VALUES (${ProjectV2.ID.global}, '/', 1, 1, '[]')
+        `)
+        yield* db.run(sql`
+          INSERT INTO session (id, project_id, slug, directory, title, version, time_created, time_updated)
+          VALUES ('ses_gate22_migration', ${ProjectV2.ID.global}, 'gate22-migration', '/', 'Gate 22 migration', 'test', 10, 10)
+        `)
+        yield* db.run(sql`
+          INSERT INTO message (id, session_id, time_created, time_updated, data)
+          VALUES (
+            'msg_gate22_migration', 'ses_gate22_migration', 40, 40,
+            '{"role":"user","time":{"created":40},"agent":"repa","model":{"providerID":"test","modelID":"test"}}'
+          )
+        `)
+        yield* db.run(sql`
+          INSERT INTO part (id, message_id, session_id, time_created, time_updated, data)
+          VALUES (
+            'prt_gate22_migration', 'msg_gate22_migration', 'ses_gate22_migration', 40, 40,
+            '{"type":"text","text":"preserve me"}'
+          )
+        `)
+        const turnID = Turn.ID.create()
+        const inputID = Turn.InputID.create()
+        const assistantMessageID = SessionV1.MessageID.ascending()
+        const occurrence = yield* db.transaction((tx) =>
+          Occurrence.admit(tx, {
+            admission: LearnerAdmission.interactive({}),
+            sessionID: SessionSchema.ID.make("ses_gate22_migration"),
+            messageID: SessionV1.MessageID.make("msg_gate22_migration"),
+            timeAdmitted: 40,
+          }),
+        )
+        yield* db.transaction((tx) =>
+          TurnLifecycle.admit(tx, {
+            kind: "learner",
+            turnID,
+            sessionID: SessionSchema.ID.make("ses_gate22_migration"),
+            inputID,
+            messageID: SessionV1.MessageID.make("msg_gate22_migration"),
+            occurrenceID: occurrence.id,
+            limits: { model: 1, tool: 0 },
+            envelope: { kind: "frozen-gate21a-live-operation" },
+            policyBasis: { source: "migration-test" },
+            timeAdmitted: 40,
+          }),
+        )
+        yield* db.run(sql`
+          INSERT INTO message (id, session_id, time_created, time_updated, data)
+          VALUES (
+            ${assistantMessageID}, 'ses_gate22_migration', 41, 43,
+            ${JSON.stringify({ role: "assistant", parentID: "msg_gate22_migration", time: { created: 41, completed: 43 } })}
+          )
+        `)
+        yield* db.transaction((tx) =>
+          Effect.gen(function* () {
+            yield* admitFrozenV24ModelWithLearningContext(tx, {
+              turnID,
+              sessionID: SessionSchema.ID.make("ses_gate22_migration"),
+              assistantMessageID,
+              requestEnvelope: { prompt: "supported live pre-migration operation" },
+              contextFingerprint: "a".repeat(64),
+              snapshotFrontier: { sequence: 0, time: 0 },
+              timeAdmitted: 41,
+            })
+            yield* TurnLifecycle.sealCandidateSet(tx, {
+              turnID,
+              sessionID: SessionSchema.ID.make("ses_gate22_migration"),
+              assistantMessageID,
+              candidates: [],
+              timeSealed: 42,
+            })
+            yield* TurnLifecycle.settleModel(tx, { turnID, assistantMessageID, state: "completed", time: 43 })
+            yield* TurnLifecycle.settle(tx, { turnID, outcome: "completed", reason: "normal", time: 44 })
+          }),
+        )
+
+        const beforeJournal = yield* db.all(sql`SELECT version, id FROM repa_migration ORDER BY version`)
+        yield* DatabaseMigration.apply(db, { path: "frozen-gate21a.db" })
+
+        return {
+          manifest: yield* completeSchemaManifest(db),
+          beforeJournal,
+          journal: yield* db.all(sql`SELECT version, id FROM repa_migration ORDER BY version`),
+          learnerHome: yield* db.all<{ id: string }>(sql`SELECT id FROM learner_home_identity`),
+          presentation: yield* db.get(sql`
+            SELECT frontier_time, message_count, frontier_version
+            FROM session_presentation_frontier
+            WHERE session_id = 'ses_gate22_migration'
+          `),
+          retained: yield* db.get(sql`
+            SELECT message.id AS message_id, part.id AS part_id, json_extract(part.data, '$.text') AS text
+            FROM message
+            JOIN part ON part.message_id = message.id
+            WHERE message.id = 'msg_gate22_migration'
+          `),
+          fabricated: yield* db.get(sql`
+            SELECT
+              (SELECT count(*) FROM session_deletion_control_receipt) AS deletion_receipts,
+              (SELECT count(*) FROM session_deletion_audit_bundle) AS audit_bundles,
+              (SELECT count(*) FROM session_administrative_history) AS administrative_histories
+          `),
+          preMigrationOperations: yield* db.all(sql`
+            SELECT assistant_message_id AS id, capture_schema_version AS version
+            FROM turn_lineage_pre_migration_operation
+          `),
+          contextProjection: yield* db.get<{
+            projection_schema_version: number
+            relation_count: number
+            projected_count: number
+          }>(sql`
+            SELECT coverage.projection_schema_version, coverage.relation_count,
+              (SELECT count(*) FROM turn_lineage_context_relation AS relation
+               WHERE relation.assistant_message_id = coverage.assistant_message_id) AS projected_count
+            FROM turn_lineage_context_coverage AS coverage
+            WHERE coverage.assistant_message_id = ${assistantMessageID}
+          `),
+          inspectionIndexes: yield* db.all<{ name: string }>(sql`
+            SELECT name FROM sqlite_schema
+            WHERE type = 'index' AND name IN (
+              'turn_lineage_record_relation_record_idx',
+              'turn_lineage_context_relation_record_idx',
+              'turn_terminal_root_discovery_idx',
+              'turn_unavailable_root_discovery_idx'
+            )
+            ORDER BY name
+          `),
+          candidateDefinition: yield* db.get<{ definition: string }>(sql`
+            SELECT sql AS definition
+            FROM sqlite_schema
+            WHERE type = 'table' AND name = 'turn_tool_candidate'
+          `),
+          foreignKeysEnabled: yield* db.get<Record<string, number>>(sql.raw("PRAGMA foreign_keys")),
+          foreignKeys: yield* db.all(sql.raw("PRAGMA foreign_key_check")),
+          integrity: yield* db.all<Record<string, string>>(sql.raw("PRAGMA integrity_check")),
+          userVersion: yield* db.get<Record<string, number>>(sql.raw("PRAGMA user_version")),
+        }
+      }),
+    )
+
+    expect(upgraded.manifest).toEqual(fresh)
+    expect(upgraded.beforeJournal).toEqual([
+      { version: BASELINE_VERSION, id: BASELINE_ID },
+      ...databaseV24Migrations.map((migration, index) => ({
+        version: BASELINE_VERSION + index + 1,
+        id: migration.id,
+      })),
+    ])
+    expect(upgraded.journal.slice(-10)).toEqual([
+      { version: 25, id: gate22SessionDeletionRestoreLineageMigration.id },
+      { version: 26, id: gate22RestoreLineageFollowupMigration.id },
+      { version: 27, id: gate22LineageCandidateIdentityMigration.id },
+      { version: 28, id: gate22OwnerKindAllowlistMigration.id },
+      { version: 29, id: gate22PresentationFrontierDeleteCountMigration.id },
+      { version: 30, id: gate22EmbeddedHistoryIdentityMigration.id },
+      { version: 31, id: gate22LineageLegacyCaptureMigration.id },
+      { version: 32, id: gate22LineageProducerOccurrenceMigration.id },
+      { version: 33, id: gate22LearningInspectionMigration.id },
+      { version: 34, id: gate22LearningInspectionContextCoverageMigration.id },
+    ])
+    expect(upgraded.learnerHome).toHaveLength(1)
+    expect(upgraded.learnerHome[0]?.id).toMatch(/^lhm_[0-9a-f]{32}$/)
+    expect(upgraded.presentation).toEqual({ frontier_time: 41, message_count: 2, frontier_version: 1 })
+    expect(upgraded.retained).toEqual({
+      message_id: "msg_gate22_migration",
+      part_id: "prt_gate22_migration",
+      text: "preserve me",
+    })
+    expect(upgraded.fabricated).toEqual({ deletion_receipts: 0, audit_bundles: 0, administrative_histories: 0 })
+    expect(upgraded.preMigrationOperations).toHaveLength(1)
+    expect(upgraded.preMigrationOperations[0]).toEqual({ id: expect.stringMatching(/^msg/), version: 1 })
+    const contextRelationCount = Number(upgraded.contextProjection?.relation_count)
+    const contextProjectedCount = Number(upgraded.contextProjection?.projected_count)
+    expect(upgraded.contextProjection).toMatchObject({
+      projection_schema_version: 1,
+      relation_count: expect.any(Number),
+      projected_count: expect.any(Number),
+    })
+    expect(contextRelationCount).toBe(contextProjectedCount)
+    expect(upgraded.inspectionIndexes.map((index) => index.name)).toEqual([
+      "turn_lineage_context_relation_record_idx",
+      "turn_lineage_record_relation_record_idx",
+      "turn_terminal_root_discovery_idx",
+      "turn_unavailable_root_discovery_idx",
+    ])
+    expect(upgraded.candidateDefinition?.definition).toContain("turn_candidate_part_model_unique")
+    expect(upgraded.foreignKeysEnabled).toEqual({ foreign_keys: 1 })
+    expect(upgraded.foreignKeys).toEqual([])
+    expect(upgraded.integrity).toEqual([{ integrity_check: "ok" }])
+    expect(upgraded.userVersion).toEqual({ user_version: BASELINE_VERSION + databaseV34Migrations.length })
   })
 
   test("upgrades the frozen v12 schema through v13 to exact current Default-Course structural parity", async () => {
@@ -8444,6 +8678,93 @@ describe("DatabaseMigration", () => {
         expect(yield* db.get(sql`SELECT id FROM message`)).toEqual({ id: "orphan" })
       }),
     )
+  })
+
+  test("rejects corrupt administrative-history coverage and imported revert state on restart", async () => {
+    for (const corruption of ["fingerprint", "partial", "extra", "revert"] as const) {
+      await run(
+        Effect.gen(function* () {
+          const db = yield* makeDb
+          yield* DatabaseMigration.apply(db)
+          const sessionID = SessionSchema.ID.create()
+          const messageID = SessionV1.MessageID.ascending()
+          const partID = SessionV1.PartID.ascending()
+          const seal = SessionPresentation.createAdministrativeHistorySeal({
+            kind: "offline_exact_restore",
+            sourceFileFingerprint: "d".repeat(64),
+            messages: [{ messageID, ordinal: 0, timeCreated: 10, parts: [{ partID, ordinal: 0 }] }],
+          })
+          yield* db.transaction((tx) =>
+            Effect.gen(function* () {
+              yield* tx.run(sql`
+                INSERT INTO project (id, worktree, time_created, time_updated, sandboxes)
+                VALUES (${ProjectV2.ID.global}, '/', 1, 1, '[]')
+                ON CONFLICT(id) DO NOTHING
+              `)
+              yield* tx.run(sql`
+                INSERT INTO session (id, project_id, slug, directory, title, version, time_created, time_updated)
+                VALUES (${sessionID}, ${ProjectV2.ID.global}, 'restart-history', '/', 'Restart history', 'test', 10, 10)
+              `)
+              yield* SessionPresentation.beginAdministrativeHistory(tx, sessionID, seal)
+              yield* tx.run(sql`
+                INSERT INTO message (id, session_id, time_created, time_updated, data)
+                VALUES (
+                  ${messageID}, ${sessionID}, 10, 10,
+                  ${JSON.stringify({
+                    role: "user",
+                    time: { created: 10 },
+                    agent: "repa",
+                    model: { providerID: "test", modelID: "test" },
+                  })}
+                )
+              `)
+              yield* tx.run(sql`
+                INSERT INTO part (id, message_id, session_id, time_created, time_updated, data)
+                VALUES (${partID}, ${messageID}, ${sessionID}, 10, 10, ${JSON.stringify({ type: "text", text: "history" })})
+              `)
+              yield* SessionPresentation.sealAdministrativeHistory(tx, sessionID, seal)
+            }),
+          )
+
+          yield* Effect.forEach(triggerNamesV25, (name) => db.run(`DROP TRIGGER IF EXISTS \`${name}\``), {
+            discard: true,
+          })
+
+          if (corruption === "fingerprint") {
+            yield* db.run(sql`
+              UPDATE session_administrative_history
+              SET membership_fingerprint = ${"0".repeat(64)}
+              WHERE session_id = ${sessionID}
+            `)
+          } else if (corruption === "partial") {
+            yield* db.run(sql`
+              DELETE FROM session_administrative_history_part
+              WHERE session_id = ${sessionID} AND part_id = ${partID}
+            `)
+          } else if (corruption === "extra") {
+            yield* db.run(sql`
+              INSERT INTO part (id, message_id, session_id, time_created, time_updated, data)
+              VALUES (
+                ${SessionV1.PartID.ascending()}, ${messageID}, ${sessionID}, 10, 10,
+                ${JSON.stringify({ type: "text", text: "unclassified extension" })}
+              )
+            `)
+          } else {
+            yield* db.run(sql`
+              UPDATE session
+              SET revert = ${JSON.stringify({ messageID })}
+              WHERE id = ${sessionID}
+            `)
+          }
+          yield* db.transaction(installSchemaExtrasV25)
+
+          const error = yield* Effect.flip(DatabaseMigration.apply(db, { path: `${corruption}-history.db` }))
+          expect(error).toMatchObject({ reason: "corrupt" })
+          if (error._tag !== "DatabaseAdmissionError") return yield* Effect.die("Expected database admission failure")
+          expect(error.detail).toContain("administrative-history")
+        }),
+      )
+    }
   })
 
   test("reopens a current Repa baseline without changing durable rows", async () => {

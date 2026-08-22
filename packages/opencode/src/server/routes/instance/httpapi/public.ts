@@ -107,16 +107,23 @@ function matchLegacyOpenApi(input: Record<string, unknown>) {
       const operation = item[method]
       if (!operation) continue
       const isV2Api = isV2ApiPath(path)
+      const isExactSessionDeletion = isExactSessionDeletionRoute(method, path)
       if (operation.requestBody) {
         // The legacy OpenAPI surface never marked request bodies as required.
-        // Keep that SDK surface stable while the HttpApi spec is tightened.
-        if (!isV2Api) delete operation.requestBody.required
+        // Keep that SDK surface stable while the HttpApi spec is tightened,
+        // except for the new deletion lifecycle whose exact displayed proposal
+        // is mandatory on every retained carrier.
+        if (!isV2Api && !isExactSessionDeletion) delete operation.requestBody.required
         const body = operation.requestBody.content?.["application/json"]
-        if (body?.schema) body.schema = stripOptionalNull(structuredClone(body.schema))
+        if (body?.schema) body.schema = stripOptionalNull(structuredClone(body.schema), isExactSessionDeletion)
       }
-      for (const response of Object.values(operation.responses ?? {})) {
+      for (const [status, response] of Object.entries(operation.responses ?? {})) {
         for (const content of Object.values(response.content ?? {})) {
-          if (content.schema) content.schema = stripOptionalNull(structuredClone(content.schema))
+          if (content.schema)
+            content.schema = stripOptionalNull(
+              structuredClone(content.schema),
+              isExactSessionDeletion && status === "200",
+            )
         }
       }
       if (!isV2Api) {
@@ -154,6 +161,10 @@ function matchLegacyOpenApi(input: Record<string, unknown>) {
 
 function isV2ApiPath(path: string) {
   return path === "/api" || path.startsWith("/api/")
+}
+
+function isExactSessionDeletionRoute(method: string, path: string) {
+  return (method === "delete" && path === "/session/{sessionID}") || path.startsWith("/session/{sessionID}/deletion")
 }
 
 function addLegacyErrorSchemas(spec: OpenApiSpec) {
@@ -415,22 +426,22 @@ function fixSelfReferencingComponents(spec: OpenApiSpec) {
 }
 
 /** Strip `{type:"null"}` arms that Effect's `Schema.optional` adds to OpenAPI unions. */
-function stripOptionalNull(schema: OpenApiSchema): OpenApiSchema {
+function stripOptionalNull(schema: OpenApiSchema, preserveRequiredNull = false, preserveNull = false): OpenApiSchema {
   if (schema.allOf?.length === 1) {
     const [constraint] = schema.allOf
     delete schema.allOf
-    return stripOptionalNull({ ...schema, ...constraint })
+    return stripOptionalNull({ ...schema, ...constraint }, preserveRequiredNull, preserveNull)
   }
   if (isEmptyObjectUnion(schema)) return { type: "object", properties: {} }
   const options = flattenOptions(schema.anyOf ?? schema.oneOf)
   if (options) {
-    const withoutNull = options.filter((item) => item.type !== "null")
-    if (withoutNull.length === 1) return stripOptionalNull(withoutNull[0])
-    if (schema.anyOf) schema.anyOf = withoutNull.map(stripOptionalNull)
-    if (schema.oneOf) schema.oneOf = withoutNull.map(stripOptionalNull)
+    const retained = preserveNull ? options : options.filter((item) => item.type !== "null")
+    if (retained.length === 1) return stripOptionalNull(retained[0], preserveRequiredNull)
+    if (schema.anyOf) schema.anyOf = retained.map((item) => stripOptionalNull(item, preserveRequiredNull))
+    if (schema.oneOf) schema.oneOf = retained.map((item) => stripOptionalNull(item, preserveRequiredNull))
   }
   if (schema.allOf) {
-    const allOf = schema.allOf.map(stripOptionalNull)
+    const allOf = schema.allOf.map((item) => stripOptionalNull(item, preserveRequiredNull))
     if (schema.type) {
       delete schema.allOf
       for (const item of allOf) Object.assign(schema, item)
@@ -439,14 +450,15 @@ function stripOptionalNull(schema: OpenApiSchema): OpenApiSchema {
     }
   }
   if (schema.prefixItems && schema.items) delete schema.prefixItems
-  if (schema.items) schema.items = stripOptionalNull(schema.items)
+  if (schema.items) schema.items = stripOptionalNull(schema.items, preserveRequiredNull)
   if (schema.properties) {
+    const required = new Set(schema.required ?? [])
     for (const [key, value] of Object.entries(schema.properties)) {
-      schema.properties[key] = stripOptionalNull(value)
+      schema.properties[key] = stripOptionalNull(value, preserveRequiredNull, preserveRequiredNull && required.has(key))
     }
   }
   if (schema.additionalProperties && typeof schema.additionalProperties === "object") {
-    schema.additionalProperties = stripOptionalNull(schema.additionalProperties)
+    schema.additionalProperties = stripOptionalNull(schema.additionalProperties, preserveRequiredNull)
   }
   return schema
 }

@@ -44,6 +44,24 @@ implementation/evidence is integrated at
 `c5ea10b8ab0f573fef03b5066bbcb117a9e0a502`.
 Current disposition is owned by `docs/README.md`.
 
+The 2026-08-13 maintainer decision bounded-reopens only this Gate's Session-
+deletion/retention subsection, the admission check for a root Session ID
+occupied by the new mandatory deletion receipt, and the local-import
+composition, imported-revert safety, and all-transcript-writer Session
+presentation frontier needed to distinguish an administrative exact restore
+from a genuine new-copy root Turn, through the contract/theory-accepted
+[Gates 5/8/12/18 deletion-choice and local-restore correction](repa-gate-05-08-12-18-session-deletion-choice-correction-2026-08-13.md).
+The accepted Turn, terminal, recovery, child-lineage, and busy-input behavior
+above remains closed. The exact current implementation/evidence successor is
+independently accepted under Whole-Gate run
+`G22-WG-20260813-019ff8e2-01` but is not integrated. Gate 22 review temporarily
+reopened only Gate 18's material exact-read relation feeding optional audit
+coverage; the retained reviewer accepted its action-complete successor at
+manifest `334CDCAEEA573A8257E8F3B67A8A4AE9550F06522B3E85645B974CE126C4CBE6`.
+Turn lifecycle, deletion finality, restore/copy, administrative-history, and
+presentation-frontier behavior were unchanged. The current integrated runtime
+still reflects the earlier deletion contract.
+
 Date: 2026-07-18
 
 Parent roadmap: [Roadmap 09](../roadmap/09-one-time-opencode-fork-baseline.md)
@@ -381,6 +399,16 @@ The current fork supplies useful mechanisms but not the owned invariant:
   physical suffix cleanup. They are the present seams that must preserve a
   sealed candidate set and complete Turn/item aggregates rather than creating
   parallel projection or deletion paths.
+- `packages/opencode/src/session/revert.ts` also consumes `Session.revert`
+  snapshot/diff state and Patch Parts, while `packages/opencode/src/snapshot`
+  can restore or remove target-worktree files. Imported history must therefore
+  be rejected as active revert state and excluded as a later revert target, not
+  merely hidden from current-work discovery.
+- `packages/opencode/src/session/prompt.ts` currently timestamps direct-shell
+  synthetic User/Assistant/Tool presentation from raw `Date.now()`, while
+  transcript paging orders all Messages by creation time and ID. That mature
+  non-Turn utility must be adapted to the Session presentation frontier rather
+  than excluded or promoted into a Turn.
 - The current HTTP API exposes Session-scoped prompt and abort operations. It
   does not require an expected active Turn ID and cannot express the accepted
   race contract.
@@ -431,7 +459,9 @@ authority or a learner-visible product loop to be legitimate.
 
 | Meaning                       | Durable identity and carrier                                                                             | Gate 12 rule                                                                                                                                    |
 | ----------------------------- | -------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| Session                       | existing Repa Session ID                                                                                 | Long-lived transcript container; no new durable Session without its first admitted Turn.                                                        |
+| Session                       | existing Repa Session ID                                                                                 | Long-lived transcript container; no new interactive or imported-copy Session without its first admitted Turn. A separately governed exact administrative restore may reconstitute a pre-existing transcript in another LearnerHome/database without fabricating a Turn. |
+| administrative history       | one sealed Session manifest plus complete Message/Part membership, canonical ordinals, and validated absence of imported `Session.revert` | Every offline-restored or imported-copy row is durable read-only history, belongs to no Turn/current-work/revert relation, and is consumed as such by continuation, recovery, paging, Context, and transcript writers. Empty, unusable, unsafe, active-revert, or partially classified history is rejected. |
+| Session presentation frontier | the imported manifest's immutable `history_frontier_time` seed plus the current greatest committed Message presentation | Every Turn and non-Turn transcript writer reserves strict-successor Message order through the same Session mutation boundary. Import alone is not a Turn, Event, learning transition, or activity observation; raw wall time and fresh IDs are not order authority. |
 | Turn admission                | Turn ID generated before first dispatch                                                                  | Idempotency identity for one normalized root or delegated request, never a text hash.                                                           |
 | root causal input             | stable User Message ID plus Gate 8 learner-occurrence ID                                                 | Created with the root Turn; repeated context retains this identity.                                                                             |
 | accepted steer                | stable steer/input ID plus a typed User presentation and, for learner-authored input, its own occurrence | Joins one exact running Turn after durable promotion; does not create or reset a Turn.                                                          |
@@ -510,7 +540,12 @@ The database must enforce, rather than merely assume:
   each local Tool Part/call;
 - valid child parent/task/depth shape;
 - `exhausted` only with its exact receipt, and no receipt for another outcome;
-- nondecreasing Turn causal time and later-Turn Session admission time.
+- nondecreasing Turn causal time and later-Turn Session admission time;
+- complete administrative-history membership with no imported `Session.revert`
+  or current-work/revert-target overlap; and
+- every committed Message order strictly after the Session presentation
+  frontier it observed, with the frontier advance and insert in one serialized
+  mutation.
 
 Stored counters are admission authorities, not cached analytics. Their
 transactional increment and the corresponding membership insert succeed or
@@ -526,9 +561,43 @@ Gate 12 carries all three accepted ADR-0005 ordering scopes:
 
 1. a Turn-local frontier for every model admission, tool admission/settlement,
    terminal transition, and recovery event;
-2. a same-Session frontier for later Turn/input admission;
+2. a same-Session presentation/causal frontier for every transcript writer and
+   later Turn/input admission;
 3. the native database-wide shared-learning-state frontier, advanced by every
    committed shared domain transition regardless of originating Session.
+
+A sealed offline administrative-history manifest seeds the second scope without
+creating a Turn or Event. Exact restore uses the maximum validated timestamp in
+the supported imported graph. A same-home copy normalizes a fresh strictly
+monotonic historical Message order under the new Session and uses the final
+normalized presentation time. The imported value is the immutable seed for a
+Session presentation frontier that then advances with every committed Message,
+whether written by a Turn or a non-Turn Session utility.
+
+Every transcript writer reserves one representable strict successor per new
+Message under the shared Session mutation boundary. Direct shell/admin,
+compaction, processor, plan, and other program-owned presentation writers may
+not bypass this path with raw wall time; their Tool start/end and Assistant
+completion times are also floored nondecreasingly through their operation
+envelope. A direct shell/admin path must reserve and commit its initial ordered
+presentation block before the external command starts. The copy's genuine root
+Turn, or the first later Turn after exact restore or an intervening utility,
+must use one representable time strictly greater than the current presentation
+frontier and at least the other ordinary floors. That exact value also binds the
+learner occurrence and current User Message, so message paging and causal
+admission cannot disagree. Imported history and utility ordering do not advance
+the third, shared-learning-state frontier and do not prove target-database
+activity.
+
+If import cannot leave a representable successor, restore/copy fails before
+Session materialization. If a later writer cannot reserve its complete block,
+it returns typed `session_presentation_frontier_unrepresentable` before any
+transcript, shell, snapshot, worktree, model, Tool, or Event effect. Restart
+reconstructs or reads the exact current frontier from the sealed seed and
+committed Messages before admitting another writer. A path's already-owned
+physical replay retains its original Message order; a genuinely new utility
+request reserves later order. The frontier adds no generic utility replay owner
+and never authorizes re-executing an external effect merely to repair time.
 
 Before a model operation is dispatched, context construction produces one
 immutable provider-request snapshot together with the highest shared-state
@@ -600,7 +669,12 @@ coordinator owns an interruption-safe handoff around the admission transaction:
 
 1. Under the exact Session admission guard, reserve the stable Session/Turn ID
    in a process-local `admitting` owner slot before database commit. Reserving a
-   new stable Session ID is legal even though its row does not yet exist.
+   new stable Session ID is legal even though its row does not yet exist only
+   after unavailable/retired identity checks. If the 2026-08-13 correction is
+   accepted and implemented, an applied deletion control receipt permanently
+   occupies its exact root Session ID within the same database, so root, child,
+   and fork-target materialization must return typed `session_id_retired`
+   before installing this owner slot.
 2. Execute the complete root or child admission transaction while that owner
    reservation and its cancellation/finalizer remain installed.
 3. After commit, use an interruption-masked handoff to promote the same
@@ -690,6 +764,72 @@ no supported route may persist a fork target without its first genuine root
 Turn. A follow-up to an existing child continues to use exact child Session
 reuse, not fork materialization.
 
+### Local restore and imported-copy composition
+
+The contract/theory-accepted 2026-08-13 Gates 5/8/12/18 correction keeps two
+import meanings separate. An exact identity-preserving local JSON restore
+is an administrative reconstitution of a pre-existing Session/Message/Part
+graph and is legal only into another LearnerHome/database with no identity
+conflict. It creates no Turn, occurrence, model/tool operation, Context,
+command/domain record, deletion receipt, or Event sequence. It is not an
+exception that permits an empty raw Session: the supported bundle must contain
+at least one Message and one usable learner-visible historical presentation,
+have complete reference and canonical-order closure, and contain no
+pending/running Tool, nonterminal Assistant, unmatched step, or unresolved
+compaction/subtask state, and the Session must carry no nonempty `revert`
+target, snapshot, or diff. That control state is rejected as typed
+`import_history_unsafe`; it is neither restored nor silently cleared.
+
+The restore transaction writes the Session/Message/Part graph together with one
+complete sealed `offline_exact_restore` administrative-history manifest and
+exact Message/Part membership. Every imported row is read-only, belongs to no
+Turn/input/model/tool/current-work/revert relation, and is excluded by startup/
+orphan recovery, pending-work discovery, interruption, task/compaction
+execution, and snapshot/Patch application.
+Paging and bounded Context may consume it only as historical conversation
+presentation before current input. A missing, partial, corrupt, or executable-
+looking classification is integrity failure, not permission to infer or recover
+a Turn. The first later learner interaction uses ordinary existing-Session Turn
+admission at a strict successor of the manifest's imported-history frontier.
+
+Importing the same backup into the original LearnerHome cannot revive a root ID
+occupied by a deletion control receipt. Exact import returns
+`session_id_retired`. A separately and explicitly chosen import-as-copy reuses
+the fork-start invariant above: it validates and remaps the complete supported
+Session/Message/Part graph, retains the imported transcript only as read-only
+`local_import_copy` historical presentation, normalizes a fresh monotonic target
+presentation order from the sealed source ordinals, and atomically materializes
+a fresh root Session with one genuine strict-successor learner input, Turn,
+occurrence, and new Message/Part identity graph. The same transaction writes
+the complete administrative-history manifest/membership. The normalized root-
+start envelope binds the backup fingerprint, classifier/order and mapping
+versions, and history frontier so exact replay cannot allocate another copy.
+Imported presentations belong to no old or new executed Turn, consume no target
+budget, provide no old replay key, and reconnect no old deletion, Context,
+command, domain, task-result, or Event lineage. Source timestamps retained for
+display are imported metadata, not target causal time.
+
+The copy mapping never maps or drops `Session.revert`; the safety decoder must
+prove it absent before allocation. For either import kind, a later revert naming
+an imported Message or Part returns typed
+`historical_presentation_not_revertible` with no snapshot, worktree, Session,
+transcript, or frontier mutation. Imported Patch Parts remain inert. A newly
+created `Session.revert` may target only a local presentation after the imported
+frontier, and its unrevert/cleanup path may affect only the local snapshot/
+worktree and local transcript suffix. Revert scanning and cleanup derive that
+suffix from canonical Session presentation order rather than raw Message-ID
+comparison. Any overlap between a revert target and administrative-history
+membership is an integrity failure, including after restart.
+
+Continuation, restart, Context construction, current-work resolution, pending-
+task filtering, revert/unrevert/cleanup, exact replay, and every Turn and
+non-Turn transcript writer all consume the same sealed classification and
+Session presentation frontier. A future source timestamp or regressed target
+clock cannot place direct shell/admin, compaction/program-owned presentation,
+or the first local User Message/Turn before imported history. If no
+representable strict successor exists, the complete restore/copy or later
+writer fails before its first mutation or external effect.
+
 ### Historical data is not reverse-engineered into Turns
 
 Migration must not infer Turn boundaries from old Message order, finish
@@ -704,6 +844,12 @@ domain, or other durable reference. A referenced anomaly fails with a bounded
 diagnostic rather than cascading or synthesizing a request. Repa has no
 OpenCode user-data compatibility promise, but migration still preserves
 truthful state.
+
+Offline restore does not weaken that rule. A zero-Message, zero-Part,
+non-renderable, unsafe, active-revert, or incompletely classified import bundle
+is refused before Session materialization. A valid exact restore is nonempty sealed
+administrative history, not an empty inherited Session and not a fabricated
+Turn.
 
 ## Strict start, steer, and interrupt commands
 
@@ -1225,6 +1371,17 @@ projection across fresh and resumed Sessions.
 
 ### Transcript ownership and minimal unavailable-source receipts
 
+Current correction notice (2026-08-13): the learner may additionally choose an
+allowlisted body-free Session audit, and a local backup may be restored exactly
+only into another LearnerHome/database or explicitly imported into the original
+LearnerHome as a fully reidentified new copy with a genuine root Turn. Every
+imported Message/Part is covered by a complete Session-owned administrative-
+history seal and ordering frontier; none becomes a Turn or current-work row. The
+paragraphs below remain the accepted owner of independently required
+unavailable-source receipts and the current runtime behavior; they no longer
+prohibit those narrowly specified projections/compositions once the separate
+correction passes review and implementation/evidence.
+
 Complete Session, Message, Part, Turn input/model/tool-candidate/invocation
 membership, budget detail, and child presentation rows are Interaction
 transcript state. Ordinary whole-Session deletion removes them. Gate 12 does
@@ -1265,7 +1422,32 @@ same sense as Gate 8 releases a deleted no-effect invocation key. Destructive
 deletion therefore ends exact replay for that unreferenced no-effect history;
 it does not retain a universal ID graveyard.
 
+The contract/theory-accepted 2026-08-13 correction deliberately differs for the
+one root Session ID already retained as the semantic address of its
+mandatory deletion control receipt. That ID remains occupied and returns typed
+`session_id_retired` across every root, child, first-Turn, and fork-target
+materialization path; optional-audit purge does not release it. This adds no
+descendant-ID graveyard and does not change the existing release rule for
+unreferenced transcript-owned Turn/operation identities.
+
+Exact restore in another LearnerHome/database is not reuse of this database-
+scoped semantic address. Same-home copy uses a fresh root ID and the genuine-
+Turn composition above; it cannot release, supersede, or reconnect the old
+receipt. Neither path creates a Session incarnation at the retired address.
+
 ### Revert cleanup
+
+A valid administrative restore/copy never imports a live `Session.revert`
+target, snapshot, or diff. Imported Message, Part, and Patch presentations are
+not legal revert targets and are never input to target-worktree snapshot/Patch
+execution. Such a request returns
+`historical_presentation_not_revertible` before setting the Session projection.
+A later local revert target must be strictly after the administrative-history
+frontier; `withCleanAdmission`, unrevert, and cleanup validate that boundary and
+derive its suffix from canonical Session presentation order, not Message-ID
+comparison. They may never delete imported membership or restore source-derived
+snapshot state. An overlapping/corrupt target is integrity failure rather than
+cleanup work.
 
 A running Turn cannot be reverted around. Revert does not reopen, retry, or
 change a terminal Turn. Before cleanup, the existing reversible Session
@@ -1384,7 +1566,14 @@ Title, compaction, representation, project-copy naming, shell/admin work, and
 recovery remain inspectable through their current owners. If they mutate the
 same Session transcript, they share the Session mutation boundary and cannot
 race Turn admission or terminal settlement. They do not acquire Turn
-membership merely for serialization.
+membership merely for serialization. After administrative-history restore or
+copy, every such writer also reserves strict-successor Message order from the
+Session presentation frontier. In particular, direct shell may not create its
+synthetic User/Assistant/Tool presentation from raw wall time before future-
+dated imported history, and it may not begin the external command until its
+ordered initial block commits. Completion times remain nondecreasing, restart
+preserves the block, and an unrepresentable frontier refuses the utility before
+any transcript or external-effect mutation.
 
 ## Implementation ownership
 
@@ -1493,13 +1682,40 @@ oracles are not.
   registration failure after commit but before owner promotion settle the root
   Turn interrupted without starting provider work.
 - An existing idle Session admits a Turn without duplicating Session identity.
-- New Session creation without a root/child Turn is impossible through every
-  supported TUI, HTTP, SDK, command, and internal entrypoint.
+- New interactive or imported-copy Session creation without a root/child Turn
+  is impossible through every supported TUI, HTTP, SDK, command, and internal
+  entrypoint. The separately governed exact administrative restore into another
+  LearnerHome/database must instead prove a nonempty usable bundle, atomic
+  Session/Message/Part plus complete historical-classification/frontier
+  restoration, exclusion from every current-work/recovery path, and the absence
+  of any fabricated Turn or occurrence.
 - New child Session/Turn/task input admission is atomic under the same fault
   pressure, including post-commit child-owner promotion failure.
 - Standalone fork preparation creates no durable target. Fork-start fault
   injection across source snapshot, clone presentation, root input, occurrence,
   Turn, and event creation leaves none of the target aggregate behind.
+- Exact restore rejects empty/non-renderable and executable-looking unfinished
+  bundles plus every nonempty `Session.revert` target/snapshot/diff shape; fault
+  injection before its complete administrative-history seal leaves no Session,
+  snapshot/worktree effect, or transcript deletion. Restart preserves
+  historical-only classification, and the first later Turn under a regressed
+  clock or future imported timestamp is a strict successor in both causal and
+  message order.
+- Import-as-copy normalizes fresh historical-presentation order, seals complete
+  coverage, and admits the genuine root occurrence/User Message/Turn at its
+  strict successor in one transaction; exact replay creates no second copy.
+- Revert targeting imported Message/Part/Patch presentation returns typed
+  historical-only no-effect before snapshot tracking/restoration, Patch/worktree
+  mutation, `Session.revert` mutation, transcript deletion, or frontier change;
+  a later local revert/unrevert/cleanup trace with imported IDs sorting before
+  and after local IDs derives its range from presentation order and remains
+  confined to the local post-frontier suffix across restart.
+- Under future imported time and target clock regression, direct shell/admin
+  plus representative compaction/program-owned and ordinary Turn/model writers
+  all reserve strict-successor Message blocks. Paging and Context retain one
+  order, Tool/Assistant times are nondecreasing, replay retains the original
+  block, new work receives a later block, and an unrepresentable reservation
+  starts no transcript, shell, snapshot, worktree, model, Tool, or Event effect.
 - Two concurrent new starts for one Session yield one running Turn and one
   typed busy result.
 - Database constraints reject a second running Turn, malformed terminal shape,
@@ -1520,6 +1736,10 @@ oracles are not.
 - Same text with new identities creates new input/Turn where otherwise legal.
 - Compaction replay, fork presentation, title/representation sample, and
   provider transport retry create no Turn or learner occurrence.
+- A retained non-Turn transcript utility keeps its already-owned replay/
+  recovery meaning, but any replayed physical operation keeps the exact
+  reserved Message block and any genuinely new utility request reserves a later
+  block after restart; ordering never authorizes blind external re-execution.
 - A configuration-default change cannot silently reinterpret an exact replay's
   already admitted limits.
 - Every counted Assistant operation resolves to one exact current Turn input
@@ -1628,6 +1848,11 @@ oracles are not.
   suffix atomically retains no-content item/Turn truth and a later prompt starts
   a new Turn; cleanup crossing an applied Gate 8 Part or partial candidate/
   invocation aggregate rejects without mutation.
+- Exact restore/copy rejects every imported live-revert shape. Imported
+  Message/Part/Patch targets return historical-only no-effect with no snapshot,
+  worktree, Session, transcript, or frontier mutation; a fresh local revert and
+  unrevert/cleanup remain confined to the post-frontier local suffix across
+  restart.
 - Fork-start atomically materializes historical presentations plus one genuine
   root Turn. Clones consume no budget and remain historical after source
   deletion through available-or-unavailable receipt lookup.

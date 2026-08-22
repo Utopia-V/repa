@@ -1,10 +1,14 @@
 import { describe, expect, test } from "bun:test"
+import path from "path"
 import { admitModelWithLearningContext } from "./fixture/model-admission"
 import { SqliteClient } from "@effect/sql-sqlite-bun"
 import { EffectDrizzleSqlite } from "@opencode-ai/effect-drizzle-sqlite"
 import { CourseSchema } from "@opencode-ai/core/course/schema"
 import { LearningFrontier } from "@opencode-ai/core/learning-frontier"
 import { LearningContext } from "@opencode-ai/core/learning-context"
+import { LearningInspection } from "@opencode-ai/core/learning-inspection"
+import { LearningInspectionOwner } from "@opencode-ai/core/learning-inspection-owner"
+import { LearningInspectionCursor } from "@opencode-ai/core/learning-inspection-cursor-schema"
 import { LearningCommand } from "@opencode-ai/core/learning-command"
 import { Occurrence } from "@opencode-ai/core/learning-command/occurrence"
 import { LearnerAdmission } from "@opencode-ai/core/learning-command/occurrence-schema"
@@ -15,14 +19,24 @@ import {
 } from "@opencode-ai/core/learning-command"
 import { ProjectV2 } from "@opencode-ai/core/project"
 import { SessionSchema } from "@opencode-ai/core/session/schema"
+import { MessageTable, PartTable, SessionTable } from "@opencode-ai/core/session/sql"
+import { SessionDeletion } from "@opencode-ai/core/session-deletion"
+import {
+  TurnLineageCandidateCoverageTable,
+  TurnLineageContextCoverageTable,
+  TurnLineagePreMigrationOperationTable,
+} from "@opencode-ai/core/session-deletion/sql"
+import { TurnLineage } from "@opencode-ai/core/turn-lineage"
 import { TurnLifecycle } from "@opencode-ai/core/turn/turn"
 import { TurnLearningContext } from "@opencode-ai/core/turn/learning-context"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
 import { DatabaseMigration } from "@opencode-ai/core/database/migration"
+import { Database } from "@opencode-ai/core/database/database"
 import { Turn } from "@opencode-ai/schema/turn"
 import { Cause, DateTime, Effect, Exit } from "effect"
-import { sql } from "drizzle-orm"
+import { eq, sql } from "drizzle-orm"
 import type { SqlClient as SqlClientService } from "effect/unstable/sql/SqlClient"
+import { tmpdir } from "./fixture/tmpdir"
 
 const makeDb = EffectDrizzleSqlite.makeWithDefaults()
 type TestDatabase = Effect.Success<typeof makeDb>
@@ -101,6 +115,1073 @@ describe("TurnLifecycle", () => {
           learningCuts: { count: 0 },
           modelCount: { count: 0 },
         })
+      }),
+    )
+  })
+
+  test("decodes each action-specific learning-material exact-read identity without collapsing alignment into selector", () => {
+    const cases = [
+      {
+        value: {
+          lineageKind: "artifact_revision",
+          artifactID: "art_material_lineage",
+          revisionID: "arv_material_lineage",
+          version: 0,
+        },
+        recordID: "art_material_lineage",
+        revisionID: "arv_material_lineage",
+        revisionVersion: 0,
+      },
+      {
+        value: {
+          lineageKind: "representation_revision",
+          representationID: "rpr_material_lineage",
+          revisionID: "rpr_material_lineage",
+          version: 0,
+        },
+        recordID: "rpr_material_lineage",
+        revisionID: "rpr_material_lineage",
+        revisionVersion: 0,
+      },
+      {
+        value: {
+          lineageKind: "material_map",
+          mapID: "mmp_material_lineage",
+          revisionID: "mmp_material_lineage",
+          version: 2,
+        },
+        recordID: "mmp_material_lineage",
+        revisionID: "mmp_material_lineage",
+        revisionVersion: 2,
+      },
+      {
+        value: {
+          lineageKind: "material_selector",
+          mapID: "mmp_material_lineage",
+          selectorID: "msl_material_lineage",
+          version: 0,
+        },
+        recordID: "mmp_material_lineage",
+        revisionID: "msl_material_lineage",
+        revisionVersion: 0,
+      },
+      {
+        value: {
+          lineageKind: "material_outline_node",
+          mapID: "mmp_material_lineage",
+          nodeID: "mon_material_lineage",
+          version: 0,
+        },
+        recordID: "mmp_material_lineage",
+        revisionID: "mon_material_lineage",
+        revisionVersion: 0,
+      },
+      {
+        value: {
+          lineageKind: "material_alignment",
+          mapID: "mmp_material_lineage",
+          selectorID: "msl_must_not_win",
+          alignmentID: "mca_material_lineage",
+          version: 4,
+        },
+        recordID: "mca_material_lineage",
+        revisionID: "mca_material_lineage",
+        revisionVersion: 4,
+      },
+    ] as const
+
+    cases.forEach((item) => {
+      expect(TurnLineage.readProjection("learning_material_query", item.value).records).toEqual([
+        {
+          ownerKind: "learning_material",
+          recordID: item.recordID,
+          revisionID: item.revisionID,
+          revisionVersion: item.revisionVersion,
+        },
+      ])
+    })
+  })
+
+  test("proves finite live negatives only with complete Context/operation seals and keeps an earlier Tool-only operation intermediate", async () => {
+    await withDatabase((db) =>
+      Effect.gen(function* () {
+        const root = yield* createRoot(db, { limits: { model: 2, tool: 1 }, time: 10 })
+        const goal = { goalID: "gol_gate22", revisionID: "glr_gate22", version: 1 }
+        const readProjection = TurnLineage.readProjection("learner_goal_query", goal)
+        const firstAssistant = yield* addAssistantMessage(db, root.sessionID, root.messageID, 11)
+        yield* db.transaction((tx) =>
+          admitModelWithLearningContext(tx, {
+            turnID: root.turnID,
+            sessionID: root.sessionID,
+            assistantMessageID: firstAssistant,
+            requestEnvelope: { prompt: "read one exact Goal" },
+            contextFingerprint: fingerprint("gate22-first"),
+            snapshotFrontier: { sequence: 0, time: 0 },
+            timeAdmitted: 11,
+          }),
+        )
+        const candidate = yield* addExactReadCandidate(
+          db,
+          root.sessionID,
+          firstAssistant,
+          "learner_goal_query",
+          goal,
+          12,
+        )
+        yield* db.transaction((tx) =>
+          TurnLifecycle.sealCandidateSet(tx, {
+            turnID: root.turnID,
+            sessionID: root.sessionID,
+            assistantMessageID: firstAssistant,
+            candidates: [candidate],
+            timeSealed: 12,
+          }),
+        )
+        yield* db.transaction((tx) =>
+          TurnLifecycle.settleModel(tx, {
+            turnID: root.turnID,
+            assistantMessageID: firstAssistant,
+            state: "completed",
+            time: 13,
+          }),
+        )
+        yield* db.transaction((tx) =>
+          TurnLifecycle.admitTool(tx, {
+            turnID: root.turnID,
+            sessionID: root.sessionID,
+            assistantMessageID: firstAssistant,
+            partID: candidate.partID,
+            timeAdmitted: 14,
+          }),
+        )
+        yield* db
+          .update(PartTable)
+          .set({
+            data: {
+              type: "tool",
+              callID: candidate.callID,
+              tool: candidate.tool,
+              state: {
+                status: "completed",
+                input: goal,
+                output: JSON.stringify(goal),
+                title: "Exact Goal",
+                metadata: { repaLineage: readProjection },
+                time: { start: 14, end: 15 },
+              },
+            } as typeof PartTable.$inferSelect.data,
+          })
+          .where(eq(PartTable.id, candidate.partID))
+          .run()
+          .pipe(Effect.orDie)
+        yield* db.run(
+          sql`UPDATE turn_tool_candidate SET future_attention_service_source = 'learner_usable' WHERE part_id = ${candidate.partID}`,
+        )
+        yield* db.transaction((tx) =>
+          Effect.gen(function* () {
+            yield* TurnLifecycle.settleTool(tx, {
+              turnID: root.turnID,
+              partID: candidate.partID,
+              state: "completed",
+              time: 15,
+            })
+            yield* TurnLineage.coverTerminalCandidate(tx, candidate.partID, 15)
+            yield* TurnLineage.trySealOperation(tx, firstAssistant, 15)
+          }),
+        )
+
+        const secondAssistant = yield* addAssistantMessage(db, root.sessionID, root.messageID, 16)
+        yield* db.run(sql`UPDATE message SET data = json_set(data, '$.finish', 'stop') WHERE id = ${secondAssistant}`)
+        yield* db.transaction((tx) =>
+          admitModelWithLearningContext(tx, {
+            turnID: root.turnID,
+            sessionID: root.sessionID,
+            assistantMessageID: secondAssistant,
+            requestEnvelope: { prompt: "learner-visible answer" },
+            contextFingerprint: fingerprint("gate22-second"),
+            snapshotFrontier: { sequence: 0, time: 0 },
+            timeAdmitted: 16,
+          }),
+        )
+        yield* db.transaction((tx) =>
+          Effect.gen(function* () {
+            yield* TurnLifecycle.sealCandidateSet(tx, {
+              turnID: root.turnID,
+              sessionID: root.sessionID,
+              assistantMessageID: secondAssistant,
+              candidates: [],
+              timeSealed: 17,
+            })
+            yield* TurnLifecycle.settleModel(tx, {
+              turnID: root.turnID,
+              assistantMessageID: secondAssistant,
+              state: "completed",
+              time: 18,
+            })
+            yield* TurnLineage.trySealOperation(tx, secondAssistant, 18)
+            yield* TurnLifecycle.settle(tx, { turnID: root.turnID, outcome: "completed", reason: "normal", time: 19 })
+          }),
+        )
+
+        const inspect = (projection = readProjection) =>
+          db.transaction((tx) =>
+            LearningInspection.composeRead(tx, {
+              source: {
+                partID: SessionV1.PartID.ascending(),
+                tool: "learner_goal_query",
+                action: "get",
+                assistantMessageID: SessionV1.MessageID.ascending(),
+                turnID: root.turnID,
+                inputID: root.inputID,
+              },
+              readProjection: projection,
+              limit: 16,
+              owner: LearningInspectionOwner.inspectionOwner("learner_goal", "exact current Goal head"),
+            }),
+          )
+        const positive = yield* inspect()
+        expect(positive.lineage.scope).toEqual({ status: "complete", operationCount: 2, terminalSealedCount: 2 })
+        expect(positive.lineage.contextCoverage).toHaveLength(2)
+        expect(positive.lineage.items).toHaveLength(1)
+        expect(positive.lineage.items[0]).toMatchObject({
+          assistantMessageID: firstAssistant,
+          exactRead: true,
+          actionState: "intermediate",
+        })
+
+        const missing = TurnLineage.readProjection("learner_goal_query", {
+          goalID: "gol_missing",
+          revisionID: "glr_missing",
+          version: 1,
+        })
+        const negative = yield* inspect(missing)
+        expect(negative.lineage.coverage).toBe("complete_negative")
+        expect(negative.lineage.contextCoverage.every((item) => item.targetRecordCount === 0)).toBeTrue()
+        expect(negative.deletionAudit.status).toBe("unknown")
+
+        yield* db
+          .delete(TurnLineageContextCoverageTable)
+          .where(eq(TurnLineageContextCoverageTable.assistant_message_id, firstAssistant))
+          .run()
+          .pipe(Effect.orDie)
+        const unsafeNegative = yield* inspect(missing)
+        expect(unsafeNegative.lineage).toMatchObject({
+          coverage: "integrity_validation_unavailable",
+          scope: { status: "integrity_unavailable" },
+          items: [],
+        })
+      }),
+    )
+  })
+
+  test("derives model exhaustion from the exact latest database predecessor even when an older pending ancestor survives", async () => {
+    await withDatabase((db) =>
+      Effect.gen(function* () {
+        const root = yield* createRoot(db, { limits: { model: 2, tool: 2 }, time: 10 })
+        const queryFingerprint = LearningInspectionCursor.queryFingerprint({ kind: "terminal_root_directory" })
+        const first = yield* completeInteractionSearch(db, root, root.messageID, 11, queryFingerprint)
+        const second = yield* completeInteractionSearch(
+          db,
+          root,
+          root.messageID,
+          20,
+          queryFingerprint,
+          first.continuation,
+        )
+        const rejectedAssistant = yield* addAssistantMessage(db, root.sessionID, root.messageID, 30)
+        const exhausted = yield* db.transaction((tx) =>
+          admitModelWithLearningContext(tx, {
+            turnID: root.turnID,
+            sessionID: root.sessionID,
+            assistantMessageID: rejectedAssistant,
+            requestEnvelope: { prompt: "continue search" },
+            contextFingerprint: fingerprint("gate22-model-limit"),
+            snapshotFrontier: { sequence: 0, time: 0 },
+            timeAdmitted: 30,
+          }),
+        )
+        expect(exhausted).toMatchObject({
+          type: "exhausted",
+          turn: {
+            terminal: { reason: "model_limit" },
+            inspectionExhaustion: {
+              type: "predecessor_continuation_exhausted",
+              counter: "model",
+              predecessorPartID: second.continuation.source.partID,
+              outputFingerprint: second.continuation.outputFingerprint,
+              continuationPending: true,
+            },
+          },
+        })
+        expect(first.continuation.continuationPending).toBeTrue()
+        expect(first.continuation.source.partID).not.toBe(second.continuation.source.partID)
+        expect(yield* db.transaction((tx) => TurnLifecycle.info(tx, root.turnID))).toMatchObject({
+          inspectionExhaustion: {
+            predecessorPartID: second.continuation.source.partID,
+            outputFingerprint: second.continuation.outputFingerprint,
+          },
+        })
+      }),
+    )
+  })
+
+  test("keeps model exhaustion generic when two independent pending Interaction searches compete", async () => {
+    await withDatabase((db) =>
+      Effect.gen(function* () {
+        const root = yield* createRoot(db, { limits: { model: 2, tool: 2 }, time: 10 })
+        const queryFingerprint = LearningInspectionCursor.queryFingerprint({ kind: "terminal_root_directory" })
+        const first = yield* completeInteractionSearch(db, root, root.messageID, 11, queryFingerprint)
+        const second = yield* completeInteractionSearch(db, root, root.messageID, 20, queryFingerprint)
+        const rejectedAssistant = yield* addAssistantMessage(db, root.sessionID, root.messageID, 30)
+        const exhausted = yield* db.transaction((tx) =>
+          admitModelWithLearningContext(tx, {
+            turnID: root.turnID,
+            sessionID: root.sessionID,
+            assistantMessageID: rejectedAssistant,
+            requestEnvelope: { prompt: "ambiguous search continuation" },
+            contextFingerprint: fingerprint("gate22-ambiguous-model-limit"),
+            snapshotFrontier: { sequence: 0, time: 0 },
+            timeAdmitted: 30,
+          }),
+        )
+        expect(first.continuation.parentOutputFingerprint).toBeUndefined()
+        expect(second.continuation.parentOutputFingerprint).toBeUndefined()
+        expect(exhausted).toMatchObject({
+          type: "exhausted",
+          turn: {
+            terminal: { reason: "model_limit" },
+            inspectionExhaustion: {
+              type: "generic",
+              counter: "model",
+              reason: "no_unique_immediate_database_predecessor",
+            },
+          },
+        })
+      }),
+    )
+  })
+
+  test("keeps model exhaustion generic when legal Tool capacity exceeds the bounded ancestry proof", async () => {
+    await withDatabase((db) =>
+      Effect.gen(function* () {
+        const root = yield* createRoot(db, { limits: { model: 1, tool: 258 }, time: 10 })
+        const assistantMessageID = yield* addAssistantMessage(db, root.sessionID, root.messageID, 11)
+        yield* db.transaction((tx) =>
+          admitModelWithLearningContext(tx, {
+            turnID: root.turnID,
+            sessionID: root.sessionID,
+            assistantMessageID,
+            requestEnvelope: { prompt: "admit high-capacity Tool set" },
+            contextFingerprint: fingerprint("gate22-high-capacity-tools"),
+            snapshotFrontier: { sequence: 0, time: 0 },
+            timeAdmitted: 11,
+          }),
+        )
+        const candidates = yield* addToolCandidates(
+          db,
+          root.sessionID,
+          assistantMessageID,
+          Array.from({ length: 258 }, (_, index) => `high-capacity-${index}`),
+          12,
+        )
+        yield* db.transaction((tx) =>
+          Effect.gen(function* () {
+            yield* TurnLifecycle.sealCandidateSet(tx, {
+              turnID: root.turnID,
+              sessionID: root.sessionID,
+              assistantMessageID,
+              candidates,
+              timeSealed: 13,
+            })
+            yield* TurnLifecycle.settleModel(tx, {
+              turnID: root.turnID,
+              assistantMessageID,
+              state: "completed",
+              time: 14,
+            })
+            yield* Effect.forEach(
+              candidates,
+              (candidate, index) =>
+                Effect.gen(function* () {
+                  const admitted = yield* TurnLifecycle.admitTool(tx, {
+                    turnID: root.turnID,
+                    sessionID: root.sessionID,
+                    assistantMessageID,
+                    partID: candidate.partID,
+                    timeAdmitted: 15 + index * 2,
+                  })
+                  if (admitted.type !== "admitted") return yield* Effect.die("Expected admitted high-capacity Tool")
+                  yield* TurnLifecycle.settleTool(tx, {
+                    turnID: root.turnID,
+                    partID: candidate.partID,
+                    state: "completed",
+                    time: 16 + index * 2,
+                  })
+                }),
+              { concurrency: 1, discard: true },
+            )
+          }),
+        )
+        const rejectedAssistant = yield* addAssistantMessage(db, root.sessionID, root.messageID, 600)
+        expect(
+          yield* db.transaction((tx) =>
+            admitModelWithLearningContext(tx, {
+              turnID: root.turnID,
+              sessionID: root.sessionID,
+              assistantMessageID: rejectedAssistant,
+              requestEnvelope: { prompt: "over-budget ancestry" },
+              contextFingerprint: fingerprint("gate22-over-budget-ancestry"),
+              snapshotFrontier: { sequence: 0, time: 0 },
+              timeAdmitted: 600,
+            }),
+          ),
+        ).toMatchObject({
+          type: "exhausted",
+          turn: {
+            terminal: { reason: "model_limit", counters: { model: 1, tool: 258 } },
+            inspectionExhaustion: {
+              type: "generic",
+              counter: "model",
+              reason: "inspection_ancestry_over_budget",
+            },
+          },
+        })
+      }),
+    )
+  })
+
+  test("reconstructs the exact Interaction exhaustion predecessor after a file-database restart", async () => {
+    await using temporary = await tmpdir()
+    const filename = path.join(temporary.path, "gate22-exhaustion-restart.sqlite")
+    const written = await Effect.runPromise(
+      Effect.gen(function* () {
+        const { db } = yield* Database.Service
+        yield* db.run(sql`
+          INSERT OR IGNORE INTO project (id, worktree, time_created, time_updated, sandboxes)
+          VALUES (${ProjectV2.ID.global}, '/', 1, 1, '[]')
+        `)
+        const root = yield* createRoot(db, { limits: { model: 2, tool: 2 }, time: 10 })
+        const queryFingerprint = LearningInspectionCursor.queryFingerprint({ kind: "terminal_root_directory" })
+        const first = yield* completeInteractionSearch(db, root, root.messageID, 11, queryFingerprint)
+        const second = yield* completeInteractionSearch(
+          db,
+          root,
+          root.messageID,
+          20,
+          queryFingerprint,
+          first.continuation,
+        )
+        const rejectedAssistant = yield* addAssistantMessage(db, root.sessionID, root.messageID, 30)
+        yield* db.transaction((tx) =>
+          admitModelWithLearningContext(tx, {
+            turnID: root.turnID,
+            sessionID: root.sessionID,
+            assistantMessageID: rejectedAssistant,
+            requestEnvelope: { prompt: "continue after restart" },
+            contextFingerprint: fingerprint("gate22-restart-model-limit"),
+            snapshotFrontier: { sequence: 0, time: 0 },
+            timeAdmitted: 30,
+          }),
+        )
+        return { turnID: root.turnID, predecessor: second.continuation }
+      }).pipe(Effect.provide(Database.layerFromPath(filename)), Effect.scoped),
+    )
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const { db } = yield* Database.Service
+        expect(yield* db.transaction((tx) => TurnLifecycle.info(tx, written.turnID))).toMatchObject({
+          state: "exhausted",
+          inspectionExhaustion: {
+            type: "predecessor_continuation_exhausted",
+            counter: "model",
+            predecessorPartID: written.predecessor.source.partID,
+            outputFingerprint: written.predecessor.outputFingerprint,
+            continuationPending: true,
+          },
+        })
+      }).pipe(Effect.provide(Database.layerFromPath(filename)), Effect.scoped),
+    )
+  })
+
+  test("binds tool exhaustion to the persisted rejected envelope instead of copied Part metadata", async () => {
+    await withDatabase((db) =>
+      Effect.gen(function* () {
+        const root = yield* createRoot(db, { limits: { model: 2, tool: 1 }, time: 10 })
+        const queryFingerprint = LearningInspectionCursor.queryFingerprint({ kind: "terminal_root_directory" })
+        const predecessor = yield* completeInteractionSearch(db, root, root.messageID, 11, queryFingerprint)
+        const assistantMessageID = yield* addAssistantMessage(db, root.sessionID, root.messageID, 20)
+        const model = yield* db.transaction((tx) =>
+          admitModelWithLearningContext(tx, {
+            turnID: root.turnID,
+            sessionID: root.sessionID,
+            assistantMessageID,
+            requestEnvelope: { prompt: "next page" },
+            contextFingerprint: fingerprint("gate22-tool-limit"),
+            snapshotFrontier: { sequence: 0, time: 0 },
+            timeAdmitted: 20,
+          }),
+        )
+        if (model.type !== "admitted") return yield* Effect.die("Expected admitted second model operation")
+        const input = { action: "list_terminal_roots" as const, predecessor: predecessor.continuation }
+        const rejected = yield* addExactReadCandidate(
+          db,
+          root.sessionID,
+          assistantMessageID,
+          "learning_interaction_read",
+          input,
+          21,
+        )
+        yield* db.transaction((tx) =>
+          Effect.gen(function* () {
+            yield* TurnLifecycle.sealCandidateSet(tx, {
+              turnID: root.turnID,
+              sessionID: root.sessionID,
+              assistantMessageID,
+              candidates: [rejected],
+              timeSealed: 21,
+            })
+            yield* TurnLifecycle.settleModel(tx, {
+              turnID: root.turnID,
+              assistantMessageID,
+              state: "completed",
+              time: 22,
+            })
+          }),
+        )
+        expect(
+          yield* db.transaction((tx) =>
+            TurnLifecycle.admitTool(tx, {
+              turnID: root.turnID,
+              sessionID: root.sessionID,
+              assistantMessageID,
+              partID: rejected.partID,
+              timeAdmitted: 23,
+            }),
+          ),
+        ).toMatchObject({ type: "not_started", candidate: { state: "not_started_limit" } })
+        yield* db
+          .update(PartTable)
+          .set({
+            data: {
+              type: "tool",
+              callID: rejected.callID,
+              tool: rejected.tool,
+              state: {
+                status: "error",
+                input,
+                error: "Tool not started: tool limit",
+                metadata: { repaTurnExhaustion: { envelopeFingerprint: "copied-from-another-candidate" } },
+                time: { start: 23, end: 23 },
+              },
+            } as typeof PartTable.$inferSelect.data,
+          })
+          .where(eq(PartTable.id, rejected.partID))
+          .run()
+          .pipe(Effect.orDie)
+        expect(yield* db.transaction((tx) => TurnLifecycle.info(tx, root.turnID))).toMatchObject({
+          inspectionExhaustion: {
+            type: "rejected_tool_continuation_exhausted",
+            predecessorPartID: predecessor.continuation.source.partID,
+          },
+        })
+
+        yield* db.run(
+          sql`UPDATE part SET data = json_set(data, '$.state.input.predecessor.source.partID', 'prt_wrong') WHERE id = ${rejected.partID}`,
+        )
+        expect(yield* db.transaction((tx) => TurnLifecycle.info(tx, root.turnID))).toMatchObject({
+          inspectionExhaustion: { type: "generic", reason: "rejected_tool_envelope_not_exact" },
+        })
+      }),
+    )
+  })
+
+  test("projects exact lazy-read lineage into the purgeable body-free deletion audit", async () => {
+    await withDatabase((db) =>
+      Effect.gen(function* () {
+        const root = yield* createRoot(db, { limits: { model: 1, tool: 1 }, time: 10 })
+        const assistantMessageID = yield* addAssistantMessage(db, root.sessionID, root.messageID, 11)
+        yield* db.transaction((tx) =>
+          admitModelWithLearningContext(tx, {
+            turnID: root.turnID,
+            sessionID: root.sessionID,
+            assistantMessageID,
+            requestEnvelope: { prompt: "inspect exact lazy-read lineage" },
+            contextFingerprint: fingerprint("gate22-lineage-context"),
+            snapshotFrontier: { sequence: 0, time: 0 },
+            timeAdmitted: 11,
+          }),
+        )
+
+        const partID = SessionV1.PartID.ascending()
+        const callID = "call-gate22-material-read"
+        const tool = "learning_material_query"
+        const envelope = { callID, tool, input: { action: "get_alignment", alignmentID: "mca-gate22" } }
+        yield* db.run(sql`
+          INSERT INTO part (id, message_id, session_id, time_created, time_updated, data)
+          VALUES (
+            ${partID}, ${assistantMessageID}, ${root.sessionID}, 12, 12,
+            ${JSON.stringify({ type: "tool", callID, tool, state: { status: "pending", input: envelope.input, raw: "" } })}
+          )
+        `)
+        yield* db.transaction((tx) =>
+          TurnLifecycle.sealCandidateSet(tx, {
+            turnID: root.turnID,
+            sessionID: root.sessionID,
+            assistantMessageID,
+            candidates: [{ partID, callID, tool, envelope }],
+            timeSealed: 12,
+          }),
+        )
+        yield* db.transaction((tx) =>
+          TurnLifecycle.settleModel(tx, {
+            turnID: root.turnID,
+            assistantMessageID,
+            state: "completed",
+            time: 13,
+          }),
+        )
+        yield* db.transaction((tx) =>
+          TurnLifecycle.admitTool(tx, {
+            turnID: root.turnID,
+            sessionID: root.sessionID,
+            assistantMessageID,
+            partID,
+            timeAdmitted: 14,
+          }),
+        )
+        yield* db.transaction((tx) =>
+          TurnLifecycle.settleTool(tx, { turnID: root.turnID, partID, state: "completed", time: 15 }),
+        )
+        const lineage = TurnLineage.readProjection(tool, {
+          schemaVersion: 2,
+          capabilityID: tool,
+          action: "get_alignment",
+          records: [
+            {
+              lineageKind: "material_alignment",
+              mapID: "mmp-gate22",
+              alignmentID: "mca-gate22",
+              version: 3,
+            },
+          ],
+        })
+        expect(lineage.resultSchemaVersion).toBe(2)
+        const forgedRecords = lineage.records.map((record) => ({ ...record, ownerKind: "unregistered_owner" }))
+        yield* db
+          .update(PartTable)
+          .set({
+            data: {
+              type: "tool",
+              callID,
+              tool,
+              state: {
+                status: "completed",
+                input: envelope.input,
+                output: "body that must not survive",
+                title: "Material read",
+                metadata: {
+                  repaLineage: {
+                    ...lineage,
+                    records: forgedRecords,
+                    relationFingerprint: LearningContext.canonicalFingerprint(
+                      LearningContext.toJsonValue(forgedRecords),
+                    ),
+                  },
+                },
+                time: { start: 14, end: 15 },
+              },
+            } as (typeof PartTable.$inferInsert)["data"],
+          })
+          .where(eq(PartTable.id, partID))
+          .run()
+          .pipe(Effect.orDie)
+        expect(yield* db.transaction((tx) => TurnLineage.trySealOperation(tx, assistantMessageID, 16))).toBe(false)
+        yield* db
+          .update(PartTable)
+          .set({
+            data: {
+              type: "tool",
+              callID,
+              tool,
+              state: {
+                status: "completed",
+                input: envelope.input,
+                output: "body that must not survive",
+                title: "Material read",
+                metadata: { repaLineage: lineage },
+                time: { start: 14, end: 15 },
+              },
+            } as (typeof PartTable.$inferInsert)["data"],
+          })
+          .where(eq(PartTable.id, partID))
+          .run()
+          .pipe(Effect.orDie)
+        expect(yield* db.transaction((tx) => TurnLineage.trySealOperation(tx, assistantMessageID, 16))).toBe(true)
+        yield* db.transaction((tx) =>
+          TurnLifecycle.settle(tx, { turnID: root.turnID, outcome: "completed", reason: "normal", time: 17 }),
+        )
+
+        const proposal = yield* db.transaction((tx) =>
+          SessionDeletion.prepareProposal(tx, {
+            requestID: SessionDeletion.createRequestID(),
+            rootSessionID: root.sessionID,
+            mode: "minimal_audit",
+          }),
+        )
+        yield* db
+          .update(TurnLineageCandidateCoverageTable)
+          .set({ result_schema_version: 1 })
+          .where(eq(TurnLineageCandidateCoverageTable.part_id, partID))
+          .run()
+          .pipe(Effect.orDie)
+        const legacyMaterialCoverage = yield* db
+          .transaction((tx) =>
+            SessionDeletion.commit(
+              tx,
+              {
+                proposal,
+                permissionDecisionFingerprint: SessionDeletion.permissionDecisionFingerprint(proposal),
+                deletionTime: 18,
+              },
+              () =>
+                tx
+                  .delete(SessionTable)
+                  .where(eq(SessionTable.id, root.sessionID))
+                  .run()
+                  .pipe(Effect.orDie, Effect.asVoid),
+            ),
+          )
+          .pipe(Effect.exit)
+        expect(Exit.isFailure(legacyMaterialCoverage)).toBe(true)
+        expect(yield* db.get(sql`SELECT id FROM session WHERE id = ${root.sessionID}`)).toEqual({ id: root.sessionID })
+        expect(yield* db.all(sql`SELECT request_id FROM session_deletion_control_receipt`)).toEqual([])
+        yield* db
+          .update(TurnLineageCandidateCoverageTable)
+          .set({ result_schema_version: 2 })
+          .where(eq(TurnLineageCandidateCoverageTable.part_id, partID))
+          .run()
+          .pipe(Effect.orDie)
+        yield* db
+          .update(TurnLineageCandidateCoverageTable)
+          .set({ catalog_version: 999 })
+          .where(eq(TurnLineageCandidateCoverageTable.part_id, partID))
+          .run()
+          .pipe(Effect.orDie)
+        const staleCoverage = yield* db
+          .transaction((tx) =>
+            SessionDeletion.commit(
+              tx,
+              {
+                proposal,
+                permissionDecisionFingerprint: SessionDeletion.permissionDecisionFingerprint(proposal),
+                deletionTime: 18,
+              },
+              () =>
+                tx
+                  .delete(SessionTable)
+                  .where(eq(SessionTable.id, root.sessionID))
+                  .run()
+                  .pipe(Effect.orDie, Effect.asVoid),
+            ),
+          )
+          .pipe(Effect.exit)
+        expect(Exit.isFailure(staleCoverage)).toBe(true)
+        if (Exit.isFailure(staleCoverage)) {
+          expect(Cause.squash(staleCoverage.cause)).toBeInstanceOf(SessionDeletion.AuditProjectionError)
+        }
+        expect(yield* db.get(sql`SELECT id FROM session WHERE id = ${root.sessionID}`)).toEqual({ id: root.sessionID })
+        expect(yield* db.all(sql`SELECT request_id FROM session_deletion_control_receipt`)).toEqual([])
+        yield* db
+          .update(TurnLineageCandidateCoverageTable)
+          .set({ catalog_version: LearningContext.CAPABILITY_CATALOG_VERSION })
+          .where(eq(TurnLineageCandidateCoverageTable.part_id, partID))
+          .run()
+          .pipe(Effect.orDie)
+        const result = yield* db.transaction((tx) =>
+          SessionDeletion.commit(
+            tx,
+            {
+              proposal,
+              permissionDecisionFingerprint: SessionDeletion.permissionDecisionFingerprint(proposal),
+              deletionTime: 18,
+            },
+            () =>
+              tx
+                .delete(SessionTable)
+                .where(eq(SessionTable.id, root.sessionID))
+                .run()
+                .pipe(Effect.orDie, Effect.asVoid),
+          ),
+        )
+        expect(result).toMatchObject({ type: "applied", auditAvailable: true })
+
+        const projection = yield* db.transaction((tx) => SessionDeletion.readProjection(tx, root.sessionID))
+        expect(projection).toMatchObject({
+          state: "deleted_minimal_audit",
+          audit: {
+            operationCount: 1,
+            relationCount: 1,
+            operations: [
+              {
+                ordinal: 0,
+                terminalStatus: "completed",
+                records: [
+                  {
+                    ownerKind: "learning_material",
+                    recordID: "mca-gate22",
+                    revisionID: "mca-gate22",
+                    revisionVersion: 3,
+                    contextClassification: "not_entered",
+                    exactRead: true,
+                    typedCitation: false,
+                  },
+                ],
+              },
+            ],
+          },
+        })
+        const retained = JSON.stringify(projection)
+        expect(retained).not.toContain(assistantMessageID)
+        expect(retained).not.toContain(partID)
+        expect(retained).not.toContain("body that must not survive")
+        expect(yield* db.all(sql`SELECT id FROM ${MessageTable} WHERE session_id = ${root.sessionID}`)).toEqual([])
+      }),
+    )
+  })
+
+  test("projects semantic and locator Context lineage for every pre-migration model terminal status", async () => {
+    await withDatabase((db) =>
+      Effect.gen(function* () {
+        const semanticSource = yield* createRoot(db, { limits: { model: 0, tool: 0 }, time: 10 })
+        yield* db.transaction((tx) =>
+          TurnLifecycle.settle(tx, {
+            turnID: semanticSource.turnID,
+            outcome: "interrupted",
+            reason: "learner_interrupt",
+            time: 11,
+          }),
+        )
+
+        const locatorSource = yield* createRoot(db, { limits: { model: 0, tool: 0 }, time: 20 })
+        yield* db
+          .update(SessionTable)
+          .set({ title: "x".repeat(40_000) })
+          .where(eq(SessionTable.id, locatorSource.sessionID))
+          .run()
+          .pipe(Effect.orDie)
+        yield* db.transaction((tx) =>
+          TurnLifecycle.settle(tx, {
+            turnID: locatorSource.turnID,
+            outcome: "interrupted",
+            reason: "learner_interrupt",
+            time: 21,
+          }),
+        )
+
+        const target = yield* createRoot(db, { limits: { model: 3, tool: 0 }, time: 30 })
+        const basis = {
+          ...LearningContext.unavailableCapabilityBasis(),
+          policyFingerprint: fingerprint("gate22-context-classification"),
+          effectiveAutomaticContext: true,
+        }
+        const terminalStates = ["completed", "failed", "interrupted"] as const
+        for (const [ordinal, state] of terminalStates.entries()) {
+          const assistantMessageID = yield* addAssistantMessage(
+            db,
+            target.sessionID,
+            target.messageID,
+            31 + ordinal * 3,
+          )
+          yield* db.transaction((tx) =>
+            admitModelWithLearningContext(tx, {
+              turnID: target.turnID,
+              sessionID: target.sessionID,
+              assistantMessageID,
+              requestEnvelope: { prompt: `project ${state} Context lineage` },
+              contextFingerprint: fingerprint(`gate22-${state}-context`),
+              snapshotFrontier: { sequence: 0, time: 0 },
+              timeAdmitted: 31 + ordinal * 3,
+              learningContextBasis: basis,
+            }),
+          )
+          yield* db.transaction((tx) =>
+            TurnLifecycle.sealCandidateSet(tx, {
+              turnID: target.turnID,
+              sessionID: target.sessionID,
+              assistantMessageID,
+              candidates: [],
+              timeSealed: 32 + ordinal * 3,
+            }),
+          )
+          yield* db.transaction((tx) =>
+            TurnLifecycle.settleModel(tx, {
+              turnID: target.turnID,
+              assistantMessageID,
+              state,
+              time: 33 + ordinal * 3,
+            }),
+          )
+          yield* db
+            .insert(TurnLineagePreMigrationOperationTable)
+            .values({ assistant_message_id: assistantMessageID, capture_schema_version: 1 })
+            .run()
+            .pipe(Effect.orDie)
+        }
+        yield* db.transaction((tx) =>
+          TurnLifecycle.settle(tx, {
+            turnID: target.turnID,
+            outcome: "interrupted",
+            reason: "learner_interrupt",
+            time: 40,
+          }),
+        )
+        expect(yield* db.get(sql`SELECT count(*) AS count FROM turn_lineage_pre_migration_operation`)).toEqual({
+          count: 3,
+        })
+
+        const deletion = yield* db.transaction((tx) =>
+          SessionDeletion.prepareProposal(tx, {
+            requestID: SessionDeletion.createRequestID(),
+            rootSessionID: target.sessionID,
+            mode: "minimal_audit",
+          }),
+        )
+        yield* db.transaction((tx) =>
+          SessionDeletion.commit(
+            tx,
+            {
+              proposal: deletion,
+              permissionDecisionFingerprint: SessionDeletion.permissionDecisionFingerprint(deletion),
+              deletionTime: 41,
+            },
+            () =>
+              TurnLifecycle.deleteSessionTree(tx, {
+                rootSessionID: target.sessionID,
+                sessionIDs: [target.sessionID],
+                timeDeleted: 41,
+              }).pipe(Effect.asVoid),
+          ),
+        )
+
+        const projection = yield* db.transaction((tx) => SessionDeletion.readProjection(tx, target.sessionID))
+        if (projection.state !== "deleted_minimal_audit") {
+          return yield* Effect.die("Expected a retained minimal deletion audit")
+        }
+        expect(yield* db.get(sql`SELECT count(*) AS count FROM turn_lineage_pre_migration_operation`)).toEqual({
+          count: 0,
+        })
+        expect(projection.audit.operations.map((operation) => operation.terminalStatus).sort()).toEqual([
+          "completed",
+          "failed",
+          "interrupted",
+        ])
+        for (const operation of projection.audit.operations) {
+          expect(operation.records).toEqual(
+            expect.arrayContaining([
+              expect.objectContaining({
+                ownerKind: "learning_interaction",
+                recordID: semanticSource.sessionID,
+                revisionID: semanticSource.turnID,
+                revisionVersion: 0,
+                contextClassification: "semantic_full",
+                exactRead: false,
+                typedCitation: false,
+              }),
+              expect.objectContaining({
+                ownerKind: "learning_interaction",
+                recordID: locatorSource.sessionID,
+                revisionID: locatorSource.turnID,
+                revisionVersion: 0,
+                contextClassification: "locator_only",
+                exactRead: false,
+                typedCitation: false,
+              }),
+            ]),
+          )
+        }
+      }),
+    )
+  })
+
+  test("refuses minimal-audit deletion atomically when admitted operation coverage is incomplete", async () => {
+    await withDatabase((db) =>
+      Effect.gen(function* () {
+        const root = yield* createRoot(db, { limits: { model: 1, tool: 1 }, time: 30 })
+        const assistantMessageID = yield* addAssistantMessage(db, root.sessionID, root.messageID, 31)
+        yield* db.transaction((tx) =>
+          admitModelWithLearningContext(tx, {
+            turnID: root.turnID,
+            sessionID: root.sessionID,
+            assistantMessageID,
+            requestEnvelope: { prompt: "leave one admitted candidate incomplete" },
+            contextFingerprint: fingerprint("gate22-incomplete-lineage-context"),
+            snapshotFrontier: { sequence: 0, time: 0 },
+            timeAdmitted: 31,
+          }),
+        )
+        const partID = SessionV1.PartID.ascending()
+        const envelope = { callID: "call-incomplete", tool: "learner_goal_query", input: { goalID: "goal-open" } }
+        yield* db.run(sql`
+          INSERT INTO part (id, message_id, session_id, time_created, time_updated, data)
+          VALUES (
+            ${partID}, ${assistantMessageID}, ${root.sessionID}, 32, 32,
+            ${JSON.stringify({ type: "tool", callID: envelope.callID, tool: envelope.tool, state: { status: "pending", input: envelope.input, raw: "" } })}
+          )
+        `)
+        yield* db.transaction((tx) =>
+          TurnLifecycle.sealCandidateSet(tx, {
+            turnID: root.turnID,
+            sessionID: root.sessionID,
+            assistantMessageID,
+            candidates: [{ partID, callID: envelope.callID, tool: envelope.tool, envelope }],
+            timeSealed: 32,
+          }),
+        )
+        yield* db.transaction((tx) =>
+          TurnLifecycle.settleModel(tx, {
+            turnID: root.turnID,
+            assistantMessageID,
+            state: "completed",
+            time: 33,
+          }),
+        )
+        const proposal = yield* db.transaction((tx) =>
+          SessionDeletion.prepareProposal(tx, {
+            requestID: SessionDeletion.createRequestID(),
+            rootSessionID: root.sessionID,
+            mode: "minimal_audit",
+          }),
+        )
+
+        const failed = yield* db
+          .transaction((tx) =>
+            SessionDeletion.commit(
+              tx,
+              {
+                proposal,
+                permissionDecisionFingerprint: SessionDeletion.permissionDecisionFingerprint(proposal),
+                deletionTime: 34,
+              },
+              () =>
+                tx
+                  .delete(SessionTable)
+                  .where(eq(SessionTable.id, root.sessionID))
+                  .run()
+                  .pipe(Effect.orDie, Effect.asVoid),
+            ),
+          )
+          .pipe(Effect.exit)
+
+        expect(Exit.isFailure(failed)).toBe(true)
+        if (Exit.isFailure(failed))
+          expect(Cause.squash(failed.cause)).toBeInstanceOf(SessionDeletion.AuditProjectionError)
+        expect(yield* db.get(sql`SELECT id FROM session WHERE id = ${root.sessionID}`)).toEqual({ id: root.sessionID })
+        expect(yield* db.get(sql`SELECT id FROM message WHERE id = ${assistantMessageID}`)).toEqual({
+          id: assistantMessageID,
+        })
+        expect(yield* db.get(sql`SELECT id FROM part WHERE id = ${partID}`)).toEqual({ id: partID })
+        expect(yield* db.all(sql`SELECT request_id FROM session_deletion_control_receipt`)).toEqual([])
+        expect(yield* db.all(sql`SELECT id FROM session_deletion_audit_bundle`)).toEqual([])
       }),
     )
   })
@@ -1033,6 +2114,43 @@ describe("TurnLifecycle", () => {
           historicalMessageOrPart: false,
         })
         expect(entry.locator.messageRange?.count).toBe(4)
+        const directory = yield* db.transaction((tx) => TurnLearningContext.listTerminalRoots(tx, { limit: 4 }))
+        const descriptor = directory.items.find((item) => item.turnID === root.turnID)
+        if (!descriptor) return yield* Effect.die("Expected the terminal Turn in bounded discovery")
+        const overBudget = yield* db.transaction((tx) =>
+          TurnLearningContext.materializeInteractionLocator(tx, { descriptor, maxRows: 3, maxBytes: 32_768 }),
+        )
+        expect(overBudget).toMatchObject({
+          type: "interaction_locator_over_budget",
+          reason: "row_limit",
+          visitedRows: 4,
+          decodedBytes: 0,
+        })
+        const materialized = yield* db.transaction((tx) =>
+          TurnLearningContext.materializeInteractionLocator(tx, { descriptor, maxRows: 32, maxBytes: 32_768 }),
+        )
+        if (materialized.type !== "available" || materialized.locator.status !== "available") {
+          return yield* Effect.die("Expected one bounded exact Interaction locator")
+        }
+        expect(materialized.visitedRows).toBeLessThanOrEqual(32)
+        expect(materialized.decodedBytes).toBeLessThanOrEqual(32_768)
+        const firstPage = yield* db.transaction((tx) =>
+          TurnLearningContext.readExactRange(tx, {
+            locator: materialized.locator,
+            maxItems: 1,
+            maxBytes: 32_768,
+          }),
+        )
+        expect(firstPage).toMatchObject({
+          type: "available",
+          offset: 0,
+          returned: 1,
+          nextOffset: 1,
+          work: {
+            databaseRowsUpperBound: 58,
+            boundBasis: "exact_turn_membership_v1",
+          },
+        })
         const exact = yield* db.transaction((tx) =>
           TurnLearningContext.readExactRange(tx, {
             locator: entry.locator,
@@ -1045,6 +2163,8 @@ describe("TurnLifecycle", () => {
         const exactIDs = new Set(exact.items.map((item) => item.id))
         expect(exactIDs.has(replayMessageID)).toBeTrue()
         expect(exactIDs.has(replayPartID)).toBeTrue()
+        const replayOffset = exact.items.findIndex((item) => item.id === replayPartID)
+        expect(replayOffset).toBeGreaterThan(0)
 
         yield* db.run(sql`
           UPDATE part
@@ -1054,12 +2174,139 @@ describe("TurnLifecycle", () => {
         expect(
           yield* db.transaction((tx) =>
             TurnLearningContext.readExactRange(tx, {
+              locator: materialized.locator,
+              offset: replayOffset,
+              maxItems: 1,
+              maxBytes: 32_768,
+            }),
+          ),
+        ).toMatchObject({ type: "stale", reason: "presentation_range_changed", items: [] })
+        expect(
+          yield* db.transaction((tx) =>
+            TurnLearningContext.readExactRange(tx, {
               locator: entry.locator,
               maxItems: 64,
               maxBytes: 32_768,
             }),
           ),
         ).toMatchObject({ type: "stale", reason: "presentation_range_changed", items: [] })
+      }),
+    )
+  })
+
+  test("bounds a late exact range by Turn membership despite unrelated same-Session transcript rows", async () => {
+    await withDatabase((db) =>
+      Effect.gen(function* () {
+        const root = yield* createRoot(db, { limits: { model: 1, tool: 0 }, time: 10, text: "range root" })
+        yield* db.transaction((tx) =>
+          Effect.forEach(
+            Array.from({ length: 260 }, (_, index) => index),
+            (index) => {
+              const partID = SessionV1.PartID.make(`prt_e${index.toString().padStart(4, "0")}`)
+              return tx.run(sql`
+                INSERT INTO part (id, message_id, session_id, time_created, time_updated, data)
+                VALUES (
+                  ${partID}, ${root.messageID}, ${root.sessionID}, 10, 10,
+                  ${JSON.stringify({ type: "text", text: `exact ${index}` })}
+                )
+              `)
+            },
+            { concurrency: 1, discard: true },
+          ),
+        )
+        const assistantMessageID = yield* addAssistantMessage(db, root.sessionID, root.messageID, 11)
+        yield* db.transaction((tx) =>
+          Effect.gen(function* () {
+            yield* admitModelWithLearningContext(tx, {
+              turnID: root.turnID,
+              sessionID: root.sessionID,
+              assistantMessageID,
+              requestEnvelope: { prompt: "late exact range" },
+              contextFingerprint: fingerprint("late-exact-range"),
+              snapshotFrontier: { sequence: 0, time: 0 },
+              timeAdmitted: 11,
+            })
+            yield* TurnLifecycle.sealCandidateSet(tx, {
+              turnID: root.turnID,
+              sessionID: root.sessionID,
+              assistantMessageID,
+              candidates: [],
+              timeSealed: 12,
+            })
+            yield* TurnLifecycle.settleModel(tx, {
+              turnID: root.turnID,
+              assistantMessageID,
+              state: "completed",
+              time: 13,
+            })
+            yield* TurnLifecycle.settle(tx, {
+              turnID: root.turnID,
+              outcome: "completed",
+              reason: "normal",
+              time: 14,
+            })
+          }),
+        )
+        yield* db.transaction((tx) =>
+          Effect.forEach(
+            Array.from({ length: 500 }, (_, index) => index),
+            (index) => {
+              const messageID = SessionV1.MessageID.make(`msg_noise_${index.toString().padStart(20, "0")}`)
+              const partID = SessionV1.PartID.make(`prt_noise_${index.toString().padStart(20, "0")}`)
+              return Effect.gen(function* () {
+                yield* tx.run(sql`
+                  INSERT INTO message (id, session_id, time_created, time_updated, data)
+                  VALUES (
+                    ${messageID}, ${root.sessionID}, ${20 + index}, ${20 + index},
+                    ${JSON.stringify({ role: "user", time: { created: 20 + index } })}
+                  )
+                `)
+                yield* tx.run(sql`
+                  INSERT INTO part (id, message_id, session_id, time_created, time_updated, data)
+                  VALUES (
+                    ${partID}, ${messageID}, ${root.sessionID}, ${20 + index}, ${20 + index},
+                    ${JSON.stringify({ type: "text", text: `noise ${index}` })}
+                  )
+                `)
+              })
+            },
+            { concurrency: 1, discard: true },
+          ),
+        )
+        const directory = yield* db.transaction((tx) => TurnLearningContext.listTerminalRoots(tx, { limit: 4 }))
+        const descriptor = directory.items.find((item) => item.turnID === root.turnID)
+        if (!descriptor) return yield* Effect.die("Expected late-range terminal Turn")
+        const materialized = yield* db.transaction((tx) =>
+          TurnLearningContext.materializeInteractionLocator(tx, {
+            descriptor,
+            maxRows: 512,
+            maxBytes: 32_768,
+          }),
+        )
+        if (materialized.type !== "available" || materialized.locator.status !== "available") {
+          return yield* Effect.die(`Expected bounded late-range locator: ${JSON.stringify(materialized)}`)
+        }
+        const exactLocator = materialized.locator
+        if (!("messageRange" in exactLocator) || !("partRange" in exactLocator)) {
+          return yield* Effect.die("Expected exact late-range identity")
+        }
+        expect(exactLocator.partRange.count).toBe(261)
+        const page = yield* db.transaction((tx) =>
+          TurnLearningContext.readExactRange(tx, {
+            locator: exactLocator,
+            offset: exactLocator.messageRange.count + 250,
+            maxItems: 1,
+            maxBytes: 32_768,
+          }),
+        )
+        expect(page).toMatchObject({
+          type: "available",
+          returned: 1,
+          work: {
+            databaseRowsUpperBound: 1086,
+            boundBasis: "exact_turn_membership_v1",
+          },
+        })
       }),
     )
   })
@@ -4351,8 +5598,9 @@ describe("Gate 15 retained learning steering", () => {
         ).toBe(true)
         const reusedMessageID = SessionV1.MessageID.ascending()
         const reusedPartID = SessionV1.PartID.ascending()
+        const reusedTime = orphanTime + 2
         yield* db.transaction((tx) =>
-          insertUserMessage(tx, root.sessionID, reusedMessageID, reusedPartID, orphanTime, "reused source"),
+          insertUserMessage(tx, root.sessionID, reusedMessageID, reusedPartID, reusedTime, "reused source"),
         )
         expect(
           Exit.isFailure(
@@ -4364,7 +5612,7 @@ describe("Gate 15 retained learning steering", () => {
                   source_temporal_state, source_timezone, source_utc_offset_minutes,
                   source_temporal_unavailable_reason
                 ) VALUES (
-                  ${LearningCommand.createOccurrenceID()}, ${root.sessionID}, ${reusedMessageID}, ${orphanTime},
+                  ${LearningCommand.createOccurrenceID()}, ${root.sessionID}, ${reusedMessageID}, ${reusedTime},
                   ${orphan.sourceOrder}, 'resolved', 'UTC', 0, NULL
                 )
               `,
@@ -4661,6 +5909,142 @@ function addToolCandidates(
       return { partID, callID, tool, envelope }
     }),
   )
+}
+
+function addExactReadCandidate(
+  db: TestDatabase,
+  sessionID: SessionSchema.ID,
+  assistantMessageID: SessionV1.MessageID,
+  tool: string,
+  input: Record<string, unknown>,
+  time: number,
+) {
+  return Effect.gen(function* () {
+    const partID = SessionV1.PartID.ascending()
+    const callID = `call-${partID}`
+    const envelope = { input }
+    yield* db.run(sql`
+      INSERT INTO part (id, message_id, session_id, time_created, time_updated, data)
+      VALUES (
+        ${partID}, ${assistantMessageID}, ${sessionID}, ${time}, ${time},
+        ${JSON.stringify({ type: "tool", callID, tool, state: { status: "pending", input, raw: "" } })}
+      )
+    `)
+    return { partID, callID, tool, envelope }
+  })
+}
+
+function completeInteractionSearch(
+  db: TestDatabase,
+  root: RootTurn,
+  parentMessageID: SessionV1.MessageID,
+  time: number,
+  queryFingerprint: string,
+  predecessor?: LearningInspectionCursor.Continuation,
+) {
+  return Effect.gen(function* () {
+    const assistantMessageID = yield* addAssistantMessage(db, root.sessionID, parentMessageID, time)
+    const model = yield* db.transaction((tx) =>
+      admitModelWithLearningContext(tx, {
+        turnID: root.turnID,
+        sessionID: root.sessionID,
+        assistantMessageID,
+        requestEnvelope: { prompt: "Gate 22 page" },
+        contextFingerprint: fingerprint(`gate22-page-${time}`),
+        snapshotFrontier: { sequence: 0, time: 0 },
+        timeAdmitted: time,
+      }),
+    )
+    if (model.type !== "admitted") return yield* Effect.die("Expected admitted Gate 22 model operation")
+    const input = {
+      action: "list_terminal_roots" as const,
+      ...(predecessor ? { predecessor } : {}),
+    }
+    const candidate = yield* addExactReadCandidate(
+      db,
+      root.sessionID,
+      assistantMessageID,
+      "learning_interaction_read",
+      input,
+      time + 1,
+    )
+    yield* db.transaction((tx) =>
+      Effect.gen(function* () {
+        yield* TurnLifecycle.sealCandidateSet(tx, {
+          turnID: root.turnID,
+          sessionID: root.sessionID,
+          assistantMessageID,
+          candidates: [candidate],
+          timeSealed: time + 1,
+        })
+        yield* TurnLifecycle.settleModel(tx, {
+          turnID: root.turnID,
+          assistantMessageID,
+          state: "completed",
+          time: time + 2,
+        })
+      }),
+    )
+    const admitted = yield* db.transaction((tx) =>
+      TurnLifecycle.admitTool(tx, {
+        turnID: root.turnID,
+        sessionID: root.sessionID,
+        assistantMessageID,
+        partID: candidate.partID,
+        timeAdmitted: time + 3,
+      }),
+    )
+    if (admitted.type !== "admitted") return yield* Effect.die("Expected admitted Gate 22 Tool")
+    const search = LearningInspectionCursor.signSearch(
+      {
+        schemaVersion: 1,
+        queryFingerprint,
+        source: {
+          sessionID: root.sessionID,
+          turnID: root.turnID,
+          inputID: root.inputID,
+          partID: candidate.partID,
+          modelOrdinal: model.operation.ordinal,
+          toolOrdinal: admitted.invocation.ordinal,
+        },
+        ...(predecessor ? { parentOutputFingerprint: predecessor.outputFingerprint } : {}),
+        completeSoFar: predecessor?.completeSoFar ?? true,
+        gapCounts: predecessor?.gapCounts ?? { oversizedCandidateSkipped: 0, rangeItemsSkipped: 0 },
+        gapFingerprint: predecessor?.gapFingerprint ?? "0".repeat(64),
+        continuationPending: true,
+      },
+      { status: "continuation_pending", items: [] },
+    )
+    yield* db
+      .update(PartTable)
+      .set({
+        data: {
+          type: "tool",
+          callID: candidate.callID,
+          tool: candidate.tool,
+          state: {
+            status: "completed",
+            input,
+            output: JSON.stringify({ search }),
+            title: "Interaction discovery",
+            metadata: {},
+            time: { start: time + 3, end: time + 4 },
+          },
+        } as typeof PartTable.$inferSelect.data,
+      })
+      .where(eq(PartTable.id, candidate.partID))
+      .run()
+      .pipe(Effect.orDie)
+    yield* db.transaction((tx) =>
+      TurnLifecycle.settleTool(tx, {
+        turnID: root.turnID,
+        partID: candidate.partID,
+        state: "completed",
+        time: time + 4,
+      }),
+    )
+    return search
+  })
 }
 
 type RootTurn = Effect.Success<ReturnType<typeof createRoot>>

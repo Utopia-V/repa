@@ -134,6 +134,81 @@ export class SessionTreeBusyError extends Schema.TaggedErrorClass<SessionTreeBus
   { httpApiStatus: 409 },
 ) {}
 
+export class SessionIDRetiredError extends Schema.TaggedErrorClass<SessionIDRetiredError>()(
+  "SessionIDRetiredError",
+  {
+    sessionID: Schema.String,
+    deletionRequestID: Schema.String,
+    mode: Schema.Literals(["full", "minimal_audit"]),
+    deletionTime: Schema.Number,
+    settlement: Schema.Struct({
+      schemaVersion: Schema.Literal(1),
+      requestID: Schema.String,
+      requestFingerprint: Schema.String,
+      rootSessionID: Schema.String,
+      subtreeCount: Schema.Number,
+      subtreeFingerprint: Schema.String,
+      mode: Schema.Literals(["full", "minimal_audit"]),
+      permissionDecisionFingerprint: Schema.String,
+      proposalSchemaVersion: Schema.Literal(1),
+      outcome: Schema.Literal("applied"),
+      deletionTime: Schema.Number,
+      sessionBodiesDeleted: Schema.Literal(true),
+    }),
+    settlementBytes: Schema.String,
+    auditAvailable: Schema.Boolean,
+    message: Schema.String,
+  },
+  { httpApiStatus: 409 },
+) {}
+
+export class SessionDeletionInvocationConflictError extends Schema.TaggedErrorClass<SessionDeletionInvocationConflictError>()(
+  "SessionDeletion.InvocationConflictError",
+  { requestID: Schema.String, message: Schema.String },
+  { httpApiStatus: 409 },
+) {}
+
+export class SessionDeletionAuditProjectionError extends Schema.TaggedErrorClass<SessionDeletionAuditProjectionError>()(
+  "SessionDeletion.AuditProjectionError",
+  { rootSessionID: Schema.String, reason: Schema.String, message: Schema.String },
+  { httpApiStatus: 409 },
+) {}
+
+export class SessionDeletionAuditNotAvailableError extends Schema.TaggedErrorClass<SessionDeletionAuditNotAvailableError>()(
+  "SessionDeletion.AuditNotAvailableError",
+  { rootSessionID: Schema.String, message: Schema.String },
+  { httpApiStatus: 409 },
+) {}
+
+export class SessionAdministrativeHistoryIntegrityError extends Schema.TaggedErrorClass<SessionAdministrativeHistoryIntegrityError>()(
+  "SessionPresentation.AdministrativeHistoryIntegrityError",
+  {
+    sessionID: Schema.String,
+    reason: Schema.String,
+    message: Schema.String,
+  },
+  { httpApiStatus: 409 },
+) {}
+
+export class SessionPresentationFrontierUnrepresentableError extends Schema.TaggedErrorClass<SessionPresentationFrontierUnrepresentableError>()(
+  "SessionPresentation.FrontierUnrepresentableError",
+  {
+    sessionID: Schema.String,
+    message: Schema.String,
+  },
+  { httpApiStatus: 409 },
+) {}
+
+export class SessionHistoricalPresentationNotRevertibleError extends Schema.TaggedErrorClass<SessionHistoricalPresentationNotRevertibleError>()(
+  "SessionPresentation.HistoricalPresentationNotRevertibleError",
+  {
+    sessionID: Schema.String,
+    presentationID: Schema.String,
+    message: Schema.String,
+  },
+  { httpApiStatus: 409 },
+) {}
+
 export class TurnAdmissionConflictError extends Schema.TaggedErrorClass<TurnAdmissionConflictError>()(
   "TurnAdmissionConflictError",
   { turnID: Turn.ID },

@@ -1,9 +1,9 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "dd841c54-8ecc-4ea2-99f6-11606d2f3987",
+  "id": "9e08100d-2f9a-459f-ac5e-d991e30668f0",
   "prevIds": [
-    "1fea2282-65bb-4c29-8f97-edc40f8d7f1d"
+    "e913c432-6ae5-457a-9016-c1e99ed2c35a"
   ],
   "ddl": [
     {
@@ -12,6 +12,10 @@
     },
     {
       "name": "data_migration",
+      "entityType": "tables"
+    },
+    {
+      "name": "learner_home_identity",
       "entityType": "tables"
     },
     {
@@ -627,6 +631,70 @@
       "entityType": "tables"
     },
     {
+      "name": "session_deletion_audit_bundle",
+      "entityType": "tables"
+    },
+    {
+      "name": "session_deletion_audit_operation",
+      "entityType": "tables"
+    },
+    {
+      "name": "session_deletion_audit_record",
+      "entityType": "tables"
+    },
+    {
+      "name": "session_deletion_control_receipt",
+      "entityType": "tables"
+    },
+    {
+      "name": "session_deletion_purge_receipt",
+      "entityType": "tables"
+    },
+    {
+      "name": "turn_lineage_candidate_coverage",
+      "entityType": "tables"
+    },
+    {
+      "name": "turn_lineage_context_coverage",
+      "entityType": "tables"
+    },
+    {
+      "name": "turn_lineage_context_relation",
+      "entityType": "tables"
+    },
+    {
+      "name": "turn_lineage_operation_coverage",
+      "entityType": "tables"
+    },
+    {
+      "name": "turn_lineage_pre_migration_operation",
+      "entityType": "tables"
+    },
+    {
+      "name": "turn_lineage_record_relation",
+      "entityType": "tables"
+    },
+    {
+      "name": "session_administrative_history_embedded_part",
+      "entityType": "tables"
+    },
+    {
+      "name": "session_administrative_history_message",
+      "entityType": "tables"
+    },
+    {
+      "name": "session_administrative_history_part",
+      "entityType": "tables"
+    },
+    {
+      "name": "session_administrative_history",
+      "entityType": "tables"
+    },
+    {
+      "name": "session_presentation_frontier",
+      "entityType": "tables"
+    },
+    {
       "name": "message",
       "entityType": "tables"
     },
@@ -841,6 +909,26 @@
       "name": "time_completed",
       "entityType": "columns",
       "table": "data_migration"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "singleton",
+      "entityType": "columns",
+      "table": "learner_home_identity"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "learner_home_identity"
     },
     {
       "type": "text",
@@ -15950,6 +16038,1146 @@
       "generated": null,
       "name": "id",
       "entityType": "columns",
+      "table": "session_deletion_audit_bundle"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "deletion_request_id",
+      "entityType": "columns",
+      "table": "session_deletion_audit_bundle"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "projection_schema_version",
+      "entityType": "columns",
+      "table": "session_deletion_audit_bundle"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "operation_count",
+      "entityType": "columns",
+      "table": "session_deletion_audit_bundle"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "operation_fingerprint",
+      "entityType": "columns",
+      "table": "session_deletion_audit_bundle"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "relation_count",
+      "entityType": "columns",
+      "table": "session_deletion_audit_bundle"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "relation_fingerprint",
+      "entityType": "columns",
+      "table": "session_deletion_audit_bundle"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "deletion_time",
+      "entityType": "columns",
+      "table": "session_deletion_audit_bundle"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "session_bodies_deleted",
+      "entityType": "columns",
+      "table": "session_deletion_audit_bundle"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "bundle_id",
+      "entityType": "columns",
+      "table": "session_deletion_audit_operation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "operation_id",
+      "entityType": "columns",
+      "table": "session_deletion_audit_operation"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "ordinal",
+      "entityType": "columns",
+      "table": "session_deletion_audit_operation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "terminal_status",
+      "entityType": "columns",
+      "table": "session_deletion_audit_operation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "bundle_id",
+      "entityType": "columns",
+      "table": "session_deletion_audit_record"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "operation_id",
+      "entityType": "columns",
+      "table": "session_deletion_audit_record"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "owner_kind",
+      "entityType": "columns",
+      "table": "session_deletion_audit_record"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "record_id",
+      "entityType": "columns",
+      "table": "session_deletion_audit_record"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "revision_id",
+      "entityType": "columns",
+      "table": "session_deletion_audit_record"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "revision_version",
+      "entityType": "columns",
+      "table": "session_deletion_audit_record"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "context_classification",
+      "entityType": "columns",
+      "table": "session_deletion_audit_record"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "exact_read",
+      "entityType": "columns",
+      "table": "session_deletion_audit_record"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "typed_citation",
+      "entityType": "columns",
+      "table": "session_deletion_audit_record"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "request_id",
+      "entityType": "columns",
+      "table": "session_deletion_control_receipt"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "request_fingerprint",
+      "entityType": "columns",
+      "table": "session_deletion_control_receipt"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "settlement_schema_version",
+      "entityType": "columns",
+      "table": "session_deletion_control_receipt"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "root_session_id",
+      "entityType": "columns",
+      "table": "session_deletion_control_receipt"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "subtree_count",
+      "entityType": "columns",
+      "table": "session_deletion_control_receipt"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "subtree_fingerprint",
+      "entityType": "columns",
+      "table": "session_deletion_control_receipt"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "mode",
+      "entityType": "columns",
+      "table": "session_deletion_control_receipt"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "permission_decision_fingerprint",
+      "entityType": "columns",
+      "table": "session_deletion_control_receipt"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "proposal_schema_version",
+      "entityType": "columns",
+      "table": "session_deletion_control_receipt"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "outcome",
+      "entityType": "columns",
+      "table": "session_deletion_control_receipt"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "deletion_time",
+      "entityType": "columns",
+      "table": "session_deletion_control_receipt"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "session_bodies_deleted",
+      "entityType": "columns",
+      "table": "session_deletion_control_receipt"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "settlement",
+      "entityType": "columns",
+      "table": "session_deletion_control_receipt"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "settlement_fingerprint",
+      "entityType": "columns",
+      "table": "session_deletion_control_receipt"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "request_id",
+      "entityType": "columns",
+      "table": "session_deletion_purge_receipt"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "request_fingerprint",
+      "entityType": "columns",
+      "table": "session_deletion_purge_receipt"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "settlement_schema_version",
+      "entityType": "columns",
+      "table": "session_deletion_purge_receipt"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "deletion_request_id",
+      "entityType": "columns",
+      "table": "session_deletion_purge_receipt"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "outcome",
+      "entityType": "columns",
+      "table": "session_deletion_purge_receipt"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "purge_time",
+      "entityType": "columns",
+      "table": "session_deletion_purge_receipt"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "settlement",
+      "entityType": "columns",
+      "table": "session_deletion_purge_receipt"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "settlement_fingerprint",
+      "entityType": "columns",
+      "table": "session_deletion_purge_receipt"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "part_id",
+      "entityType": "columns",
+      "table": "turn_lineage_candidate_coverage"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "assistant_message_id",
+      "entityType": "columns",
+      "table": "turn_lineage_candidate_coverage"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "producer_kind",
+      "entityType": "columns",
+      "table": "turn_lineage_candidate_coverage"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "outcome",
+      "entityType": "columns",
+      "table": "turn_lineage_candidate_coverage"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "catalog_version",
+      "entityType": "columns",
+      "table": "turn_lineage_candidate_coverage"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "result_schema_version",
+      "entityType": "columns",
+      "table": "turn_lineage_candidate_coverage"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "relation_count",
+      "entityType": "columns",
+      "table": "turn_lineage_candidate_coverage"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "relation_fingerprint",
+      "entityType": "columns",
+      "table": "turn_lineage_candidate_coverage"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_covered",
+      "entityType": "columns",
+      "table": "turn_lineage_candidate_coverage"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "assistant_message_id",
+      "entityType": "columns",
+      "table": "turn_lineage_context_coverage"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "projection_schema_version",
+      "entityType": "columns",
+      "table": "turn_lineage_context_coverage"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "relation_count",
+      "entityType": "columns",
+      "table": "turn_lineage_context_coverage"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "relation_fingerprint",
+      "entityType": "columns",
+      "table": "turn_lineage_context_coverage"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "assistant_message_id",
+      "entityType": "columns",
+      "table": "turn_lineage_context_relation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "owner_kind",
+      "entityType": "columns",
+      "table": "turn_lineage_context_relation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "record_id",
+      "entityType": "columns",
+      "table": "turn_lineage_context_relation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "revision_id",
+      "entityType": "columns",
+      "table": "turn_lineage_context_relation"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "revision_version",
+      "entityType": "columns",
+      "table": "turn_lineage_context_relation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "context_classification",
+      "entityType": "columns",
+      "table": "turn_lineage_context_relation"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "assistant_message_id",
+      "entityType": "columns",
+      "table": "turn_lineage_operation_coverage"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "coverage_schema_version",
+      "entityType": "columns",
+      "table": "turn_lineage_operation_coverage"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "catalog_version",
+      "entityType": "columns",
+      "table": "turn_lineage_operation_coverage"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "candidate_count",
+      "entityType": "columns",
+      "table": "turn_lineage_operation_coverage"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "covered_candidate_count",
+      "entityType": "columns",
+      "table": "turn_lineage_operation_coverage"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "relation_count",
+      "entityType": "columns",
+      "table": "turn_lineage_operation_coverage"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "relation_fingerprint",
+      "entityType": "columns",
+      "table": "turn_lineage_operation_coverage"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_sealed",
+      "entityType": "columns",
+      "table": "turn_lineage_operation_coverage"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "assistant_message_id",
+      "entityType": "columns",
+      "table": "turn_lineage_pre_migration_operation"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "capture_schema_version",
+      "entityType": "columns",
+      "table": "turn_lineage_pre_migration_operation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "assistant_message_id",
+      "entityType": "columns",
+      "table": "turn_lineage_record_relation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "relation_kind",
+      "entityType": "columns",
+      "table": "turn_lineage_record_relation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "owner_kind",
+      "entityType": "columns",
+      "table": "turn_lineage_record_relation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "record_id",
+      "entityType": "columns",
+      "table": "turn_lineage_record_relation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "revision_id",
+      "entityType": "columns",
+      "table": "turn_lineage_record_relation"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "revision_version",
+      "entityType": "columns",
+      "table": "turn_lineage_record_relation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "producer_part_id",
+      "entityType": "columns",
+      "table": "turn_lineage_record_relation"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "producer_version",
+      "entityType": "columns",
+      "table": "turn_lineage_record_relation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "session_id",
+      "entityType": "columns",
+      "table": "session_administrative_history_embedded_part"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "message_id",
+      "entityType": "columns",
+      "table": "session_administrative_history_embedded_part"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "parent_part_id",
+      "entityType": "columns",
+      "table": "session_administrative_history_embedded_part"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "part_id",
+      "entityType": "columns",
+      "table": "session_administrative_history_embedded_part"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "message_ordinal",
+      "entityType": "columns",
+      "table": "session_administrative_history_embedded_part"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "part_ordinal",
+      "entityType": "columns",
+      "table": "session_administrative_history_embedded_part"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "embedded_ordinal",
+      "entityType": "columns",
+      "table": "session_administrative_history_embedded_part"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "session_id",
+      "entityType": "columns",
+      "table": "session_administrative_history_message"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "message_id",
+      "entityType": "columns",
+      "table": "session_administrative_history_message"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "ordinal",
+      "entityType": "columns",
+      "table": "session_administrative_history_message"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_created",
+      "entityType": "columns",
+      "table": "session_administrative_history_message"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_time_created",
+      "entityType": "columns",
+      "table": "session_administrative_history_message"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "session_id",
+      "entityType": "columns",
+      "table": "session_administrative_history_part"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "message_id",
+      "entityType": "columns",
+      "table": "session_administrative_history_part"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "part_id",
+      "entityType": "columns",
+      "table": "session_administrative_history_part"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "message_ordinal",
+      "entityType": "columns",
+      "table": "session_administrative_history_part"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "part_ordinal",
+      "entityType": "columns",
+      "table": "session_administrative_history_part"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "session_id",
+      "entityType": "columns",
+      "table": "session_administrative_history"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "kind",
+      "entityType": "columns",
+      "table": "session_administrative_history"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "bundle_version",
+      "entityType": "columns",
+      "table": "session_administrative_history"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "classifier_version",
+      "entityType": "columns",
+      "table": "session_administrative_history"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "order_version",
+      "entityType": "columns",
+      "table": "session_administrative_history"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_file_fingerprint",
+      "entityType": "columns",
+      "table": "session_administrative_history"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "message_count",
+      "entityType": "columns",
+      "table": "session_administrative_history"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "part_count",
+      "entityType": "columns",
+      "table": "session_administrative_history"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "membership_fingerprint",
+      "entityType": "columns",
+      "table": "session_administrative_history"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "order_fingerprint",
+      "entityType": "columns",
+      "table": "session_administrative_history"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "history_frontier_time",
+      "entityType": "columns",
+      "table": "session_administrative_history"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "imported_revert_absent",
+      "entityType": "columns",
+      "table": "session_administrative_history"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "session_id",
+      "entityType": "columns",
+      "table": "session_presentation_frontier"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "frontier_time",
+      "entityType": "columns",
+      "table": "session_presentation_frontier"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "message_count",
+      "entityType": "columns",
+      "table": "session_presentation_frontier"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "frontier_version",
+      "entityType": "columns",
+      "table": "session_presentation_frontier"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
       "table": "message"
     },
     {
@@ -23926,6 +25154,297 @@
     },
     {
       "columns": [
+        "deletion_request_id"
+      ],
+      "tableTo": "session_deletion_control_receipt",
+      "columnsTo": [
+        "request_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_session_deletion_audit_bundle_deletion_request_id_session_deletion_control_receipt_request_id_fk",
+      "entityType": "fks",
+      "table": "session_deletion_audit_bundle"
+    },
+    {
+      "columns": [
+        "bundle_id"
+      ],
+      "tableTo": "session_deletion_audit_bundle",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_session_deletion_audit_operation_bundle_id_session_deletion_audit_bundle_id_fk",
+      "entityType": "fks",
+      "table": "session_deletion_audit_operation"
+    },
+    {
+      "columns": [
+        "bundle_id",
+        "operation_id"
+      ],
+      "tableTo": "session_deletion_audit_operation",
+      "columnsTo": [
+        "bundle_id",
+        "operation_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_session_deletion_audit_record_bundle_id_operation_id_session_deletion_audit_operation_bundle_id_operation_id_fk",
+      "entityType": "fks",
+      "table": "session_deletion_audit_record"
+    },
+    {
+      "columns": [
+        "deletion_request_id"
+      ],
+      "tableTo": "session_deletion_control_receipt",
+      "columnsTo": [
+        "request_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_session_deletion_purge_receipt_deletion_request_id_session_deletion_control_receipt_request_id_fk",
+      "entityType": "fks",
+      "table": "session_deletion_purge_receipt"
+    },
+    {
+      "columns": [
+        "part_id"
+      ],
+      "tableTo": "turn_tool_candidate",
+      "columnsTo": [
+        "part_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_turn_lineage_candidate_coverage_part_id_turn_tool_candidate_part_id_fk",
+      "entityType": "fks",
+      "table": "turn_lineage_candidate_coverage"
+    },
+    {
+      "columns": [
+        "part_id",
+        "assistant_message_id"
+      ],
+      "tableTo": "turn_tool_candidate",
+      "columnsTo": [
+        "part_id",
+        "assistant_message_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_turn_lineage_candidate_coverage_part_id_assistant_message_id_turn_tool_candidate_part_id_assistant_message_id_fk",
+      "entityType": "fks",
+      "table": "turn_lineage_candidate_coverage"
+    },
+    {
+      "columns": [
+        "assistant_message_id"
+      ],
+      "tableTo": "turn_model_operation",
+      "columnsTo": [
+        "assistant_message_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_turn_lineage_context_coverage_assistant_message_id_turn_model_operation_assistant_message_id_fk",
+      "entityType": "fks",
+      "table": "turn_lineage_context_coverage"
+    },
+    {
+      "columns": [
+        "assistant_message_id"
+      ],
+      "tableTo": "turn_model_operation",
+      "columnsTo": [
+        "assistant_message_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_turn_lineage_context_relation_assistant_message_id_turn_model_operation_assistant_message_id_fk",
+      "entityType": "fks",
+      "table": "turn_lineage_context_relation"
+    },
+    {
+      "columns": [
+        "assistant_message_id"
+      ],
+      "tableTo": "turn_model_operation",
+      "columnsTo": [
+        "assistant_message_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_turn_lineage_operation_coverage_assistant_message_id_turn_model_operation_assistant_message_id_fk",
+      "entityType": "fks",
+      "table": "turn_lineage_operation_coverage"
+    },
+    {
+      "columns": [
+        "assistant_message_id"
+      ],
+      "tableTo": "turn_model_operation",
+      "columnsTo": [
+        "assistant_message_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_turn_lineage_pre_migration_operation_assistant_message_id_turn_model_operation_assistant_message_id_fk",
+      "entityType": "fks",
+      "table": "turn_lineage_pre_migration_operation"
+    },
+    {
+      "columns": [
+        "assistant_message_id"
+      ],
+      "tableTo": "turn_model_operation",
+      "columnsTo": [
+        "assistant_message_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_turn_lineage_record_relation_assistant_message_id_turn_model_operation_assistant_message_id_fk",
+      "entityType": "fks",
+      "table": "turn_lineage_record_relation"
+    },
+    {
+      "columns": [
+        "producer_part_id",
+        "assistant_message_id"
+      ],
+      "tableTo": "turn_tool_candidate",
+      "columnsTo": [
+        "part_id",
+        "assistant_message_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_turn_lineage_record_relation_producer_part_id_assistant_message_id_turn_tool_candidate_part_id_assistant_message_id_fk",
+      "entityType": "fks",
+      "table": "turn_lineage_record_relation"
+    },
+    {
+      "columns": [
+        "parent_part_id"
+      ],
+      "tableTo": "session_administrative_history_part",
+      "columnsTo": [
+        "part_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_session_administrative_history_embedded_part_parent_part_id_session_administrative_history_part_part_id_fk",
+      "entityType": "fks",
+      "table": "session_administrative_history_embedded_part"
+    },
+    {
+      "columns": [
+        "message_id"
+      ],
+      "tableTo": "message",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_session_administrative_history_message_message_id_message_id_fk",
+      "entityType": "fks",
+      "table": "session_administrative_history_message"
+    },
+    {
+      "columns": [
+        "session_id"
+      ],
+      "tableTo": "session_administrative_history",
+      "columnsTo": [
+        "session_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_session_administrative_history_message_session_id_session_administrative_history_session_id_fk",
+      "entityType": "fks",
+      "table": "session_administrative_history_message"
+    },
+    {
+      "columns": [
+        "part_id"
+      ],
+      "tableTo": "part",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_session_administrative_history_part_part_id_part_id_fk",
+      "entityType": "fks",
+      "table": "session_administrative_history_part"
+    },
+    {
+      "columns": [
+        "message_id"
+      ],
+      "tableTo": "session_administrative_history_message",
+      "columnsTo": [
+        "message_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_session_administrative_history_part_message_id_session_administrative_history_message_message_id_fk",
+      "entityType": "fks",
+      "table": "session_administrative_history_part"
+    },
+    {
+      "columns": [
+        "session_id"
+      ],
+      "tableTo": "session",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_session_administrative_history_session_id_session_id_fk",
+      "entityType": "fks",
+      "table": "session_administrative_history"
+    },
+    {
+      "columns": [
+        "session_id"
+      ],
+      "tableTo": "session",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_session_presentation_frontier_session_id_session_id_fk",
+      "entityType": "fks",
+      "table": "session_presentation_frontier"
+    },
+    {
+      "columns": [
         "session_id"
       ],
       "tableTo": "session",
@@ -24833,6 +26352,58 @@
     },
     {
       "columns": [
+        "bundle_id",
+        "operation_id"
+      ],
+      "nameExplicit": false,
+      "name": "session_deletion_audit_operation_pk",
+      "entityType": "pks",
+      "table": "session_deletion_audit_operation"
+    },
+    {
+      "columns": [
+        "bundle_id",
+        "operation_id",
+        "owner_kind",
+        "record_id",
+        "revision_id",
+        "revision_version"
+      ],
+      "nameExplicit": false,
+      "name": "session_deletion_audit_record_pk",
+      "entityType": "pks",
+      "table": "session_deletion_audit_record"
+    },
+    {
+      "columns": [
+        "assistant_message_id",
+        "owner_kind",
+        "record_id",
+        "revision_id",
+        "revision_version"
+      ],
+      "nameExplicit": false,
+      "name": "turn_lineage_context_relation_pk",
+      "entityType": "pks",
+      "table": "turn_lineage_context_relation"
+    },
+    {
+      "columns": [
+        "assistant_message_id",
+        "relation_kind",
+        "owner_kind",
+        "record_id",
+        "revision_id",
+        "revision_version",
+        "producer_part_id"
+      ],
+      "nameExplicit": false,
+      "name": "turn_lineage_record_relation_pk",
+      "entityType": "pks",
+      "table": "turn_lineage_record_relation"
+    },
+    {
+      "columns": [
         "session_id",
         "position"
       ],
@@ -24867,6 +26438,15 @@
       "nameExplicit": false,
       "name": "data_migration_pk",
       "table": "data_migration",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "singleton"
+      ],
+      "nameExplicit": false,
+      "name": "learner_home_identity_pk",
+      "table": "learner_home_identity",
       "entityType": "pks"
     },
     {
@@ -26064,6 +27644,114 @@
       "nameExplicit": false,
       "name": "retained_steering_transition_pk",
       "table": "retained_steering_transition",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "session_deletion_audit_bundle_pk",
+      "table": "session_deletion_audit_bundle",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "request_id"
+      ],
+      "nameExplicit": false,
+      "name": "session_deletion_control_receipt_pk",
+      "table": "session_deletion_control_receipt",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "request_id"
+      ],
+      "nameExplicit": false,
+      "name": "session_deletion_purge_receipt_pk",
+      "table": "session_deletion_purge_receipt",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "part_id"
+      ],
+      "nameExplicit": false,
+      "name": "turn_lineage_candidate_coverage_pk",
+      "table": "turn_lineage_candidate_coverage",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "assistant_message_id"
+      ],
+      "nameExplicit": false,
+      "name": "turn_lineage_context_coverage_pk",
+      "table": "turn_lineage_context_coverage",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "assistant_message_id"
+      ],
+      "nameExplicit": false,
+      "name": "turn_lineage_operation_coverage_pk",
+      "table": "turn_lineage_operation_coverage",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "assistant_message_id"
+      ],
+      "nameExplicit": false,
+      "name": "turn_lineage_pre_migration_operation_pk",
+      "table": "turn_lineage_pre_migration_operation",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "part_id"
+      ],
+      "nameExplicit": false,
+      "name": "session_administrative_history_embedded_part_pk",
+      "table": "session_administrative_history_embedded_part",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "message_id"
+      ],
+      "nameExplicit": false,
+      "name": "session_administrative_history_message_pk",
+      "table": "session_administrative_history_message",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "part_id"
+      ],
+      "nameExplicit": false,
+      "name": "session_administrative_history_part_pk",
+      "table": "session_administrative_history_part",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "session_id"
+      ],
+      "nameExplicit": false,
+      "name": "session_administrative_history_pk",
+      "table": "session_administrative_history",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "session_id"
+      ],
+      "nameExplicit": false,
+      "name": "session_presentation_frontier_pk",
+      "table": "session_presentation_frontier",
       "entityType": "pks"
     },
     {
@@ -28592,6 +30280,96 @@
     {
       "columns": [
         {
+          "value": "owner_kind",
+          "isExpression": false
+        },
+        {
+          "value": "record_id",
+          "isExpression": false
+        },
+        {
+          "value": "revision_id",
+          "isExpression": false
+        },
+        {
+          "value": "revision_version",
+          "isExpression": false
+        },
+        {
+          "value": "bundle_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "session_deletion_audit_record_lookup_idx",
+      "entityType": "indexes",
+      "table": "session_deletion_audit_record"
+    },
+    {
+      "columns": [
+        {
+          "value": "owner_kind",
+          "isExpression": false
+        },
+        {
+          "value": "record_id",
+          "isExpression": false
+        },
+        {
+          "value": "revision_id",
+          "isExpression": false
+        },
+        {
+          "value": "revision_version",
+          "isExpression": false
+        },
+        {
+          "value": "assistant_message_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "turn_lineage_context_relation_record_idx",
+      "entityType": "indexes",
+      "table": "turn_lineage_context_relation"
+    },
+    {
+      "columns": [
+        {
+          "value": "owner_kind",
+          "isExpression": false
+        },
+        {
+          "value": "record_id",
+          "isExpression": false
+        },
+        {
+          "value": "revision_id",
+          "isExpression": false
+        },
+        {
+          "value": "revision_version",
+          "isExpression": false
+        },
+        {
+          "value": "assistant_message_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "turn_lineage_record_relation_record_idx",
+      "entityType": "indexes",
+      "table": "turn_lineage_record_relation"
+    },
+    {
+      "columns": [
+        {
           "value": "session_id",
           "isExpression": false
         },
@@ -29084,6 +30862,24 @@
     {
       "columns": [
         {
+          "value": "time_terminal",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": "\"turn\".\"depth\" = 0 AND \"turn\".\"state\" <> 'running'",
+      "origin": "manual",
+      "name": "turn_terminal_root_discovery_idx",
+      "entityType": "indexes",
+      "table": "turn"
+    },
+    {
+      "columns": [
+        {
           "value": "assistant_message_id",
           "isExpression": false
         },
@@ -29164,6 +30960,24 @@
       "where": null,
       "origin": "manual",
       "name": "turn_unavailable_parent_idx",
+      "entityType": "indexes",
+      "table": "turn_unavailable_source"
+    },
+    {
+      "columns": [
+        {
+          "value": "time_terminal",
+          "isExpression": false
+        },
+        {
+          "value": "turn_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": "\"turn_unavailable_source\".\"depth\" = 0",
+      "origin": "manual",
+      "name": "turn_unavailable_root_discovery_idx",
       "entityType": "indexes",
       "table": "turn_unavailable_source"
     },
@@ -30308,6 +32122,58 @@
     },
     {
       "columns": [
+        "bundle_id",
+        "ordinal"
+      ],
+      "nameExplicit": true,
+      "name": "session_deletion_audit_operation_ordinal_unique",
+      "entityType": "uniques",
+      "table": "session_deletion_audit_operation"
+    },
+    {
+      "columns": [
+        "deletion_request_id"
+      ],
+      "nameExplicit": true,
+      "name": "session_deletion_purge_receipt_deletion_unique",
+      "entityType": "uniques",
+      "table": "session_deletion_purge_receipt"
+    },
+    {
+      "columns": [
+        "session_id",
+        "message_ordinal",
+        "part_ordinal",
+        "embedded_ordinal"
+      ],
+      "nameExplicit": true,
+      "name": "session_administrative_history_embedded_part_ordinal_unique",
+      "entityType": "uniques",
+      "table": "session_administrative_history_embedded_part"
+    },
+    {
+      "columns": [
+        "session_id",
+        "ordinal"
+      ],
+      "nameExplicit": true,
+      "name": "session_administrative_history_message_ordinal_unique",
+      "entityType": "uniques",
+      "table": "session_administrative_history_message"
+    },
+    {
+      "columns": [
+        "session_id",
+        "message_ordinal",
+        "part_ordinal"
+      ],
+      "nameExplicit": true,
+      "name": "session_administrative_history_part_ordinal_unique",
+      "entityType": "uniques",
+      "table": "session_administrative_history_part"
+    },
+    {
+      "columns": [
         "child_turn_id",
         "child_session_id"
       ],
@@ -30399,6 +32265,16 @@
     },
     {
       "columns": [
+        "part_id",
+        "assistant_message_id"
+      ],
+      "nameExplicit": true,
+      "name": "turn_candidate_part_model_unique",
+      "entityType": "uniques",
+      "table": "turn_tool_candidate"
+    },
+    {
+      "columns": [
         "turn_id",
         "part_id",
         "assistant_message_id"
@@ -30466,6 +32342,15 @@
       "name": "turn_unavailable_tool_part_unique",
       "entityType": "uniques",
       "table": "turn_unavailable_tool"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "learner_home_identity_id_unique",
+      "entityType": "uniques",
+      "table": "learner_home_identity"
     },
     {
       "columns": [
@@ -30964,12 +32849,42 @@
     },
     {
       "columns": [
+        "deletion_request_id"
+      ],
+      "nameExplicit": false,
+      "name": "session_deletion_audit_bundle_deletion_request_id_unique",
+      "entityType": "uniques",
+      "table": "session_deletion_audit_bundle"
+    },
+    {
+      "columns": [
+        "root_session_id"
+      ],
+      "nameExplicit": false,
+      "name": "session_deletion_control_receipt_root_session_id_unique",
+      "entityType": "uniques",
+      "table": "session_deletion_control_receipt"
+    },
+    {
+      "columns": [
         "message_id"
       ],
       "nameExplicit": false,
       "name": "turn_input_presentation_message_id_unique",
       "entityType": "uniques",
       "table": "turn_input_presentation"
+    },
+    {
+      "value": "\"singleton\" = 1",
+      "name": "learner_home_identity_singleton",
+      "entityType": "checks",
+      "table": "learner_home_identity"
+    },
+    {
+      "value": "length(\"id\") = 36 AND substr(\"id\", 1, 4) = 'lhm_'\n        AND substr(\"id\", 5) NOT GLOB '*[^0-9a-f]*'",
+      "name": "learner_home_identity_shape",
+      "entityType": "checks",
+      "table": "learner_home_identity"
     },
     {
       "value": "\"time_admitted\" >= 0",
@@ -33088,6 +35003,144 @@
       "name": "retained_steering_acknowledgement",
       "entityType": "checks",
       "table": "retained_steering_transition"
+    },
+    {
+      "value": "length(\"id\") = 30 AND substr(\"id\", 1, 4) = 'sda_'\n        AND substr(\"id\", 5) NOT GLOB '*[^0-9A-Za-z]*'",
+      "name": "session_deletion_audit_bundle_identity",
+      "entityType": "checks",
+      "table": "session_deletion_audit_bundle"
+    },
+    {
+      "value": "\"projection_schema_version\" = 1 AND \"operation_count\" >= 0\n        AND \"relation_count\" >= 0 AND \"deletion_time\" >= 0\n        AND \"session_bodies_deleted\" = 1\n        AND length(\"operation_fingerprint\") = 64\n        AND \"operation_fingerprint\" NOT GLOB '*[^0-9a-f]*'\n        AND length(\"relation_fingerprint\") = 64\n        AND \"relation_fingerprint\" NOT GLOB '*[^0-9a-f]*'",
+      "name": "session_deletion_audit_bundle_shape",
+      "entityType": "checks",
+      "table": "session_deletion_audit_bundle"
+    },
+    {
+      "value": "length(\"operation_id\") = 30 AND substr(\"operation_id\", 1, 4) = 'sdo_'\n        AND substr(\"operation_id\", 5) NOT GLOB '*[^0-9A-Za-z]*'",
+      "name": "session_deletion_audit_operation_identity",
+      "entityType": "checks",
+      "table": "session_deletion_audit_operation"
+    },
+    {
+      "value": "\"ordinal\" >= 0 AND \"terminal_status\" IN ('completed', 'failed', 'interrupted')",
+      "name": "session_deletion_audit_operation_shape",
+      "entityType": "checks",
+      "table": "session_deletion_audit_operation"
+    },
+    {
+      "value": "\"owner_kind\" IN (\n          'course', 'learning_navigation', 'learner_goal', 'learning_material', 'learning_interaction',\n          'learner_response_evidence', 'future_attention', 'assignment', 'learner_state_judgment',\n          'advisory_plan_suggestion'\n        )\n        AND length(\"record_id\") > 0 AND length(\"revision_id\") > 0 AND \"revision_version\" >= 0\n        AND \"context_classification\" IN ('not_entered', 'locator_only', 'semantic_full')\n        AND \"exact_read\" IN (0, 1) AND \"typed_citation\" IN (0, 1)\n        AND (\"context_classification\" <> 'not_entered' OR \"exact_read\" = 1 OR \"typed_citation\" = 1)",
+      "name": "session_deletion_audit_record_shape",
+      "entityType": "checks",
+      "table": "session_deletion_audit_record"
+    },
+    {
+      "value": "length(\"request_id\") = 30 AND substr(\"request_id\", 1, 4) = 'sdr_'\n        AND substr(\"request_id\", 5) NOT GLOB '*[^0-9A-Za-z]*'",
+      "name": "session_deletion_control_receipt_identity",
+      "entityType": "checks",
+      "table": "session_deletion_control_receipt"
+    },
+    {
+      "value": "length(\"request_fingerprint\") = 64 AND \"request_fingerprint\" NOT GLOB '*[^0-9a-f]*'\n        AND length(\"subtree_fingerprint\") = 64 AND \"subtree_fingerprint\" NOT GLOB '*[^0-9a-f]*'\n        AND length(\"permission_decision_fingerprint\") = 64\n        AND \"permission_decision_fingerprint\" NOT GLOB '*[^0-9a-f]*'\n        AND length(\"settlement_fingerprint\") = 64\n        AND \"settlement_fingerprint\" NOT GLOB '*[^0-9a-f]*'",
+      "name": "session_deletion_control_receipt_fingerprints",
+      "entityType": "checks",
+      "table": "session_deletion_control_receipt"
+    },
+    {
+      "value": "\"settlement_schema_version\" = 1 AND \"proposal_schema_version\" = 1\n        AND \"subtree_count\" >= 1 AND \"mode\" IN ('full', 'minimal_audit')\n        AND \"outcome\" = 'applied' AND \"deletion_time\" >= 0\n        AND \"session_bodies_deleted\" = 1 AND json_valid(\"settlement\")\n        AND json_extract(\"settlement\", '$.schemaVersion') = 1\n        AND json_extract(\"settlement\", '$.requestID') = \"request_id\"\n        AND json_extract(\"settlement\", '$.requestFingerprint') = \"request_fingerprint\"\n        AND json_extract(\"settlement\", '$.rootSessionID') = \"root_session_id\"\n        AND json_extract(\"settlement\", '$.subtreeCount') = \"subtree_count\"\n        AND json_extract(\"settlement\", '$.subtreeFingerprint') = \"subtree_fingerprint\"\n        AND json_extract(\"settlement\", '$.mode') = \"mode\"\n        AND json_extract(\"settlement\", '$.permissionDecisionFingerprint') = \"permission_decision_fingerprint\"\n        AND json_extract(\"settlement\", '$.proposalSchemaVersion') = 1\n        AND json_extract(\"settlement\", '$.outcome') = 'applied'\n        AND json_extract(\"settlement\", '$.deletionTime') = \"deletion_time\"\n        AND json_extract(\"settlement\", '$.sessionBodiesDeleted') = 1",
+      "name": "session_deletion_control_receipt_shape",
+      "entityType": "checks",
+      "table": "session_deletion_control_receipt"
+    },
+    {
+      "value": "length(\"request_id\") = 30 AND substr(\"request_id\", 1, 4) = 'spr_'\n        AND substr(\"request_id\", 5) NOT GLOB '*[^0-9A-Za-z]*'",
+      "name": "session_deletion_purge_receipt_identity",
+      "entityType": "checks",
+      "table": "session_deletion_purge_receipt"
+    },
+    {
+      "value": "length(\"request_fingerprint\") = 64 AND \"request_fingerprint\" NOT GLOB '*[^0-9a-f]*'\n        AND length(\"settlement_fingerprint\") = 64\n        AND \"settlement_fingerprint\" NOT GLOB '*[^0-9a-f]*'",
+      "name": "session_deletion_purge_receipt_fingerprints",
+      "entityType": "checks",
+      "table": "session_deletion_purge_receipt"
+    },
+    {
+      "value": "\"settlement_schema_version\" = 1 AND \"outcome\" = 'applied' AND \"purge_time\" >= 0\n        AND json_valid(\"settlement\")\n        AND json_extract(\"settlement\", '$.schemaVersion') = 1\n        AND json_extract(\"settlement\", '$.requestID') = \"request_id\"\n        AND json_extract(\"settlement\", '$.requestFingerprint') = \"request_fingerprint\"\n        AND json_extract(\"settlement\", '$.deletionRequestID') = \"deletion_request_id\"\n        AND json_extract(\"settlement\", '$.outcome') = 'applied'\n        AND json_extract(\"settlement\", '$.purgeTime') = \"purge_time\"",
+      "name": "session_deletion_purge_receipt_shape",
+      "entityType": "checks",
+      "table": "session_deletion_purge_receipt"
+    },
+    {
+      "value": "\"producer_kind\" IN ('lazy_read', 'typed_citation', 'not_eligible')\n        AND \"outcome\" IN ('positive_projected', 'no_positive_relation', 'not_started', 'not_eligible')\n        AND \"catalog_version\" >= 1 AND \"result_schema_version\" >= 1\n        AND \"relation_count\" >= 0 AND length(\"relation_fingerprint\") = 64\n        AND \"relation_fingerprint\" NOT GLOB '*[^0-9a-f]*' AND \"time_covered\" >= 0\n        AND ((\"outcome\" = 'positive_projected' AND \"relation_count\" > 0)\n          OR (\"outcome\" <> 'positive_projected' AND \"relation_count\" = 0))",
+      "name": "turn_lineage_candidate_coverage_shape",
+      "entityType": "checks",
+      "table": "turn_lineage_candidate_coverage"
+    },
+    {
+      "value": "\"projection_schema_version\" = 1 AND \"relation_count\" >= 0\n        AND length(\"relation_fingerprint\") = 64\n        AND \"relation_fingerprint\" NOT GLOB '*[^0-9a-f]*'",
+      "name": "turn_lineage_context_coverage_shape",
+      "entityType": "checks",
+      "table": "turn_lineage_context_coverage"
+    },
+    {
+      "value": "\"owner_kind\" IN (\n          'course', 'learning_navigation', 'learner_goal', 'learning_material', 'learning_interaction',\n          'learner_response_evidence', 'future_attention', 'assignment', 'learner_state_judgment',\n          'advisory_plan_suggestion'\n        )\n        AND length(\"record_id\") > 0\n        AND length(\"revision_id\") > 0 AND \"revision_version\" >= 0\n        AND \"context_classification\" IN ('locator_only', 'semantic_full')",
+      "name": "turn_lineage_context_relation_shape",
+      "entityType": "checks",
+      "table": "turn_lineage_context_relation"
+    },
+    {
+      "value": "\"coverage_schema_version\" = 1 AND \"catalog_version\" >= 1\n        AND \"candidate_count\" >= 0 AND \"covered_candidate_count\" = \"candidate_count\"\n        AND \"relation_count\" >= 0 AND length(\"relation_fingerprint\") = 64\n        AND \"relation_fingerprint\" NOT GLOB '*[^0-9a-f]*' AND \"time_sealed\" >= 0",
+      "name": "turn_lineage_operation_coverage_shape",
+      "entityType": "checks",
+      "table": "turn_lineage_operation_coverage"
+    },
+    {
+      "value": "\"capture_schema_version\" = 1",
+      "name": "turn_lineage_pre_migration_operation_shape",
+      "entityType": "checks",
+      "table": "turn_lineage_pre_migration_operation"
+    },
+    {
+      "value": "\"relation_kind\" IN ('exact_read', 'typed_citation')\n        AND \"owner_kind\" IN (\n          'course', 'learning_navigation', 'learner_goal', 'learning_material', 'learning_interaction',\n          'learner_response_evidence', 'future_attention', 'assignment', 'learner_state_judgment',\n          'advisory_plan_suggestion'\n        )\n        AND length(\"record_id\") > 0\n        AND length(\"revision_id\") > 0 AND \"revision_version\" >= 0\n        AND length(\"producer_part_id\") > 0 AND \"producer_version\" >= 1",
+      "name": "turn_lineage_record_relation_shape",
+      "entityType": "checks",
+      "table": "turn_lineage_record_relation"
+    },
+    {
+      "value": "\"message_ordinal\" >= 0 AND \"part_ordinal\" >= 0 AND \"embedded_ordinal\" >= 0",
+      "name": "session_administrative_history_embedded_part_shape",
+      "entityType": "checks",
+      "table": "session_administrative_history_embedded_part"
+    },
+    {
+      "value": "\"ordinal\" >= 0 AND \"time_created\" >= 0 AND \"time_created\" <= 9007199254740991\n        AND (\"source_time_created\" IS NULL OR (\"source_time_created\" >= 0\n          AND \"source_time_created\" <= 9007199254740991))",
+      "name": "session_administrative_history_message_shape",
+      "entityType": "checks",
+      "table": "session_administrative_history_message"
+    },
+    {
+      "value": "\"message_ordinal\" >= 0 AND \"part_ordinal\" >= 0",
+      "name": "session_administrative_history_part_shape",
+      "entityType": "checks",
+      "table": "session_administrative_history_part"
+    },
+    {
+      "value": "length(\"source_file_fingerprint\") = 64\n        AND \"source_file_fingerprint\" NOT GLOB '*[^0-9a-f]*'\n        AND length(\"membership_fingerprint\") = 64\n        AND \"membership_fingerprint\" NOT GLOB '*[^0-9a-f]*'\n        AND length(\"order_fingerprint\") = 64\n        AND \"order_fingerprint\" NOT GLOB '*[^0-9a-f]*'",
+      "name": "session_administrative_history_fingerprints",
+      "entityType": "checks",
+      "table": "session_administrative_history"
+    },
+    {
+      "value": "\"kind\" IN ('offline_exact_restore', 'local_import_copy')\n        AND \"bundle_version\" = 1 AND \"classifier_version\" = 1 AND \"order_version\" = 1\n        AND \"message_count\" >= 1 AND \"part_count\" >= 1\n        AND \"history_frontier_time\" >= 0 AND \"history_frontier_time\" <= 9007199254740991\n        AND \"imported_revert_absent\" = 1",
+      "name": "session_administrative_history_shape",
+      "entityType": "checks",
+      "table": "session_administrative_history"
+    },
+    {
+      "value": "\"frontier_time\" >= 0 AND \"frontier_time\" <= 9007199254740991\n        AND \"message_count\" >= 0 AND \"frontier_version\" = 1",
+      "name": "session_presentation_frontier_shape",
+      "entityType": "checks",
+      "table": "session_presentation_frontier"
     },
     {
       "value": "\"source_event_sequence\" >= 0 AND \"time_created\" >= 0",

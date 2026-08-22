@@ -24,7 +24,14 @@ import {
   ApiNotFoundError,
   InvalidRequestError,
   PermissionNotFoundError,
+  SessionAdministrativeHistoryIntegrityError,
+  SessionPresentationFrontierUnrepresentableError,
+  SessionHistoricalPresentationNotRevertibleError,
+  SessionDeletionAuditNotAvailableError,
+  SessionDeletionAuditProjectionError,
+  SessionDeletionInvocationConflictError,
   SessionBusyError,
+  SessionIDRetiredError,
   SessionTreeBusyError,
   TurnActiveMismatchError,
   TurnAdmissionConflictError,
@@ -42,6 +49,7 @@ import { QueryBoolean } from "./query"
 import { Turn } from "@opencode-ai/schema/turn"
 import { FutureAttentionEvent } from "@opencode-ai/schema/future-attention-event"
 import { EventV2 } from "@opencode-ai/core/event"
+import { SessionDeletion } from "@opencode-ai/core/session-deletion"
 
 const root = "/session"
 export const ListQuery = Schema.Struct({
@@ -101,6 +109,114 @@ export const RevertPayload = Schema.Struct(Struct.omit(SessionRevert.RevertInput
 export const PermissionResponsePayload = Schema.Struct({
   response: PermissionV1.Reply,
 })
+export const SessionDeletionModePayload = Schema.Struct({ mode: SessionDeletion.Mode })
+export const SessionDeletionTarget = Schema.Struct({
+  sessionID: SessionID,
+  parentSessionID: Schema.NullOr(SessionID),
+})
+export const SessionDeletionProposal = Schema.Struct({
+  schemaVersion: Schema.Literal(1),
+  requestID: SessionDeletion.RequestID,
+  rootSessionID: SessionID,
+  targets: Schema.Array(SessionDeletionTarget),
+  subtreeCount: Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)),
+  subtreeFingerprint: Schema.String,
+  mode: SessionDeletion.Mode,
+  requestFingerprint: Schema.String,
+})
+export const SessionDeletionSettlement = Schema.Struct({
+  schemaVersion: Schema.Literal(1),
+  requestID: SessionDeletion.RequestID,
+  requestFingerprint: Schema.String,
+  rootSessionID: SessionID,
+  subtreeCount: Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)),
+  subtreeFingerprint: Schema.String,
+  mode: SessionDeletion.Mode,
+  permissionDecisionFingerprint: Schema.String,
+  proposalSchemaVersion: Schema.Literal(1),
+  outcome: Schema.Literal("applied"),
+  deletionTime: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  sessionBodiesDeleted: Schema.Literal(true),
+})
+export const SessionDeletionCommitResult = Schema.Struct({
+  type: Schema.Literals(["applied", "replayed", "already_deleted", "deletion_mode_conflict"]),
+  settlement: SessionDeletionSettlement,
+  settlementBytes: Schema.String,
+  auditAvailable: Schema.Boolean,
+})
+export const SessionDeletionExistingResult = Schema.Struct({
+  type: Schema.Literals(["already_deleted", "deletion_mode_conflict"]),
+  settlement: SessionDeletionSettlement,
+  settlementBytes: Schema.String,
+  auditAvailable: Schema.Boolean,
+})
+export const SessionDeletionProposalResult = Schema.Union([SessionDeletionProposal, SessionDeletionExistingResult])
+export const SessionDeletionPurgeProposal = Schema.Struct({
+  schemaVersion: Schema.Literal(1),
+  requestID: SessionDeletion.PurgeRequestID,
+  rootSessionID: SessionID,
+  deletionRequestID: SessionDeletion.RequestID,
+  auditBundleID: Schema.String,
+  requestFingerprint: Schema.String,
+})
+export const SessionDeletionPurgeSettlement = Schema.Struct({
+  schemaVersion: Schema.Literal(1),
+  requestID: SessionDeletion.PurgeRequestID,
+  requestFingerprint: Schema.String,
+  deletionRequestID: SessionDeletion.RequestID,
+  outcome: Schema.Literal("applied"),
+  purgeTime: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+})
+export const SessionDeletionPurgeResult = Schema.Struct({
+  type: Schema.Literals(["applied", "replayed", "already_purged"]),
+  settlement: SessionDeletionPurgeSettlement,
+  settlementBytes: Schema.String,
+})
+export const SessionDeletionAuditRecord = Schema.Struct({
+  ownerKind: SessionDeletion.OwnerKind,
+  recordID: Schema.String,
+  revisionID: Schema.String,
+  revisionVersion: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  contextClassification: Schema.Literals(["not_entered", "locator_only", "semantic_full"]),
+  exactRead: Schema.Boolean,
+  typedCitation: Schema.Boolean,
+})
+export const SessionDeletionAuditOperation = Schema.Struct({
+  operationID: Schema.String,
+  ordinal: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  terminalStatus: Schema.Literals(["completed", "failed", "interrupted"]),
+  records: Schema.Array(SessionDeletionAuditRecord),
+})
+export const SessionDeletionAudit = Schema.Struct({
+  schemaVersion: Schema.Literal(1),
+  bundleID: Schema.String,
+  operationCount: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  operationFingerprint: Schema.String,
+  relationCount: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  relationFingerprint: Schema.String,
+  deletionTime: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  sessionBodiesDeleted: Schema.Literal(true),
+  operations: Schema.Array(SessionDeletionAuditOperation),
+})
+export const SessionDeletionReadProjection = Schema.Union([
+  Schema.Struct({ schemaVersion: Schema.Literal(1), state: Schema.Literal("live") }),
+  Schema.Struct({ schemaVersion: Schema.Literal(1), state: Schema.Literal("missing") }),
+  Schema.Struct({
+    schemaVersion: Schema.Literal(1),
+    state: Schema.Literals(["deleted_full", "deleted_minimal_audit_purged"]),
+    settlement: SessionDeletionSettlement,
+    settlementBytes: Schema.String,
+    auditAvailable: Schema.Literal(false),
+  }),
+  Schema.Struct({
+    schemaVersion: Schema.Literal(1),
+    state: Schema.Literal("deleted_minimal_audit"),
+    settlement: SessionDeletionSettlement,
+    settlementBytes: Schema.String,
+    auditAvailable: Schema.Literal(true),
+    audit: SessionDeletionAudit,
+  }),
+])
 
 const TurnErrors = [
   TurnAdmissionConflictError,
@@ -114,6 +230,9 @@ const TurnErrors = [
   SessionTreeBusyError,
   TurnTreeChangedError,
   TurnIntegrityError,
+  SessionIDRetiredError,
+  SessionAdministrativeHistoryIntegrityError,
+  SessionPresentationFrontierUnrepresentableError,
 ] as const
 
 export const SessionPaths = {
@@ -127,6 +246,10 @@ export const SessionPaths = {
   futureAttentionFinalizations: `${root}/:sessionID/future-attention/finalization`,
   message: `${root}/:sessionID/message/:messageID`,
   remove: `${root}/:sessionID`,
+  proposeRemoval: `${root}/:sessionID/deletion/proposal`,
+  deletionProjection: `${root}/:sessionID/deletion`,
+  proposeAuditPurge: `${root}/:sessionID/deletion/audit/purge/proposal`,
+  purgeAudit: `${root}/:sessionID/deletion/audit`,
   update: `${root}/:sessionID`,
   forkBasis: `${root}/:sessionID/fork-basis`,
   start: `${root}/:sessionID/turn`,
@@ -221,7 +344,7 @@ export const SessionApi = HttpApi.make("session")
           params: { sessionID: SessionID },
           query: MessagesQuery,
           success: described(Schema.Array(SessionV1.WithParts), "List of messages"),
-          error: [HttpApiError.BadRequest, ApiNotFoundError],
+          error: [HttpApiError.BadRequest, ApiNotFoundError, SessionAdministrativeHistoryIntegrityError],
         }).annotateMerge(
           OpenApi.annotations({
             identifier: "session.messages",
@@ -246,7 +369,7 @@ export const SessionApi = HttpApi.make("session")
           params: { sessionID: SessionID, messageID: MessageID },
           query: WorkspaceRoutingQuery,
           success: described(SessionV1.WithParts, "Message"),
-          error: [HttpApiError.BadRequest, ApiNotFoundError],
+          error: [HttpApiError.BadRequest, ApiNotFoundError, SessionAdministrativeHistoryIntegrityError],
         }).annotateMerge(
           OpenApi.annotations({
             identifier: "session.message",
@@ -257,13 +380,83 @@ export const SessionApi = HttpApi.make("session")
         HttpApiEndpoint.delete("remove", SessionPaths.remove, {
           params: { sessionID: SessionID },
           query: WorkspaceRoutingQuery,
-          success: described(Schema.Boolean, "Successfully deleted session"),
-          error: [HttpApiError.BadRequest, ApiNotFoundError, SessionBusyError, SessionTreeBusyError],
+          payload: SessionDeletionProposal,
+          success: described(SessionDeletionCommitResult, "Durable Session deletion settlement"),
+          error: [
+            HttpApiError.BadRequest,
+            ApiNotFoundError,
+            SessionBusyError,
+            SessionTreeBusyError,
+            TurnTreeChangedError,
+            SessionDeletionInvocationConflictError,
+            SessionDeletionAuditProjectionError,
+          ],
         }).annotateMerge(
           OpenApi.annotations({
             identifier: "session.delete",
             summary: "Delete session",
-            description: "Delete a session and permanently remove all associated data, including messages and history.",
+            description:
+              "Commit one exact previously displayed Session-tree deletion proposal. The selected mode is immutable and replay-safe.",
+          }),
+        ),
+        HttpApiEndpoint.post("proposeRemoval", SessionPaths.proposeRemoval, {
+          params: { sessionID: SessionID },
+          query: WorkspaceRoutingQuery,
+          payload: SessionDeletionModePayload,
+          success: described(
+            SessionDeletionProposalResult,
+            "Exact Session-tree deletion proposal or current immutable deletion settlement",
+          ),
+          error: [HttpApiError.BadRequest, ApiNotFoundError, SessionBusyError, SessionTreeBusyError],
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "session.delete_proposal",
+            summary: "Prepare Session deletion",
+            description:
+              "Return the exact root, complete descendant scope, and selected retention mode that must be shown before deletion is committed. Learner-managed local export files are outside this deletion and are not removed.",
+          }),
+        ),
+        HttpApiEndpoint.get("deletionProjection", SessionPaths.deletionProjection, {
+          params: { sessionID: SessionID },
+          query: WorkspaceRoutingQuery,
+          success: described(SessionDeletionReadProjection, "Body-free Session deletion and optional audit state"),
+          error: [HttpApiError.BadRequest, SessionDeletionAuditProjectionError],
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "session.deletion_projection",
+            summary: "Read Session deletion state",
+            description:
+              "Read the immutable deletion settlement and, when retained, its body-free non-causal audit projection.",
+          }),
+        ),
+        HttpApiEndpoint.post("proposeAuditPurge", SessionPaths.proposeAuditPurge, {
+          params: { sessionID: SessionID },
+          query: WorkspaceRoutingQuery,
+          success: described(SessionDeletionPurgeProposal, "Exact Session deletion-audit purge proposal"),
+          error: [HttpApiError.BadRequest, SessionDeletionAuditNotAvailableError],
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "session.deletion_audit_purge_proposal",
+            summary: "Prepare deletion-audit purge",
+            description: "Bind a separate destructive request to the exact retained audit bundle before it is purged.",
+          }),
+        ),
+        HttpApiEndpoint.delete("purgeAudit", SessionPaths.purgeAudit, {
+          params: { sessionID: SessionID },
+          query: WorkspaceRoutingQuery,
+          payload: SessionDeletionPurgeProposal,
+          success: described(SessionDeletionPurgeResult, "Durable deletion-audit purge settlement"),
+          error: [
+            HttpApiError.BadRequest,
+            SessionDeletionInvocationConflictError,
+            SessionDeletionAuditNotAvailableError,
+          ],
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "session.deletion_audit_purge",
+            summary: "Purge retained deletion audit",
+            description:
+              "Commit one exact purge proposal without rewriting the original Session deletion settlement or releasing its retired root identity.",
           }),
         ),
         HttpApiEndpoint.patch("update", SessionPaths.update, {
@@ -271,7 +464,12 @@ export const SessionApi = HttpApi.make("session")
           query: WorkspaceRoutingQuery,
           payload: UpdatePayload,
           success: described(Session.Info, "Successfully updated session"),
-          error: [HttpApiError.BadRequest, ApiNotFoundError, SessionBusyError],
+          error: [
+            HttpApiError.BadRequest,
+            ApiNotFoundError,
+            SessionBusyError,
+            SessionAdministrativeHistoryIntegrityError,
+          ],
         }).annotateMerge(
           OpenApi.annotations({
             identifier: "session.update",
@@ -386,7 +584,14 @@ export const SessionApi = HttpApi.make("session")
           query: WorkspaceRoutingQuery,
           payload: ShellPayload,
           success: described(SessionV1.WithParts, "Created message"),
-          error: [HttpApiError.BadRequest, ApiNotFoundError, SessionBusyError],
+          error: [
+            HttpApiError.BadRequest,
+            ApiNotFoundError,
+            SessionBusyError,
+            SessionAdministrativeHistoryIntegrityError,
+            SessionHistoricalPresentationNotRevertibleError,
+            SessionPresentationFrontierUnrepresentableError,
+          ],
         }).annotateMerge(
           OpenApi.annotations({
             identifier: "session.shell",
@@ -399,7 +604,13 @@ export const SessionApi = HttpApi.make("session")
           query: WorkspaceRoutingQuery,
           payload: RevertPayload,
           success: described(Session.Info, "Updated session"),
-          error: [HttpApiError.BadRequest, ApiNotFoundError, SessionBusyError],
+          error: [
+            HttpApiError.BadRequest,
+            ApiNotFoundError,
+            SessionBusyError,
+            SessionAdministrativeHistoryIntegrityError,
+            SessionHistoricalPresentationNotRevertibleError,
+          ],
         }).annotateMerge(
           OpenApi.annotations({
             identifier: "session.revert",
@@ -412,7 +623,13 @@ export const SessionApi = HttpApi.make("session")
           params: { sessionID: SessionID },
           query: WorkspaceRoutingQuery,
           success: described(Session.Info, "Updated session"),
-          error: [HttpApiError.BadRequest, ApiNotFoundError, SessionBusyError],
+          error: [
+            HttpApiError.BadRequest,
+            ApiNotFoundError,
+            SessionBusyError,
+            SessionAdministrativeHistoryIntegrityError,
+            SessionHistoricalPresentationNotRevertibleError,
+          ],
         }).annotateMerge(
           OpenApi.annotations({
             identifier: "session.unrevert",
@@ -438,7 +655,12 @@ export const SessionApi = HttpApi.make("session")
           params: { sessionID: SessionID, messageID: MessageID },
           query: WorkspaceRoutingQuery,
           success: described(Schema.Boolean, "Successfully deleted message"),
-          error: [HttpApiError.BadRequest, ApiNotFoundError, SessionBusyError],
+          error: [
+            HttpApiError.BadRequest,
+            ApiNotFoundError,
+            SessionBusyError,
+            SessionAdministrativeHistoryIntegrityError,
+          ],
         }).annotateMerge(
           OpenApi.annotations({
             identifier: "session.deleteMessage",
@@ -451,7 +673,7 @@ export const SessionApi = HttpApi.make("session")
           params: { sessionID: SessionID, messageID: MessageID, partID: PartID },
           query: WorkspaceRoutingQuery,
           success: described(Schema.Boolean, "Successfully deleted part"),
-          error: [HttpApiError.BadRequest, ApiNotFoundError, SessionBusyError],
+          error: [HttpApiError.BadRequest, ApiNotFoundError, SessionBusyError, SessionAdministrativeHistoryIntegrityError],
         }).annotateMerge(
           OpenApi.annotations({
             identifier: "part.delete",
@@ -463,7 +685,13 @@ export const SessionApi = HttpApi.make("session")
           query: WorkspaceRoutingQuery,
           payload: SessionV1.Part,
           success: described(SessionV1.Part, "Successfully updated part"),
-          error: [HttpApiError.BadRequest, ApiNotFoundError, SessionBusyError],
+          error: [
+            HttpApiError.BadRequest,
+            ApiNotFoundError,
+            SessionBusyError,
+            SessionAdministrativeHistoryIntegrityError,
+            SessionPresentationFrontierUnrepresentableError,
+          ],
         }).annotateMerge(
           OpenApi.annotations({
             identifier: "part.update",

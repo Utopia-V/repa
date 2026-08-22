@@ -21,7 +21,15 @@ import { Project } from "../../src/project/project"
 import { HttpApiApp } from "../../src/server/routes/instance/httpapi/server"
 import * as HttpSessionError from "../../src/server/routes/instance/httpapi/handlers/session-errors"
 import { ExperimentalPaths } from "../../src/server/routes/instance/httpapi/groups/experimental"
-import { SessionPaths } from "../../src/server/routes/instance/httpapi/groups/session"
+import {
+  SessionDeletionCommitResult,
+  SessionDeletionProposal,
+  SessionDeletionProposalResult,
+  SessionDeletionPurgeProposal,
+  SessionDeletionPurgeResult,
+  SessionDeletionReadProjection,
+  SessionPaths,
+} from "../../src/server/routes/instance/httpapi/groups/session"
 import { Session } from "@/session/session"
 import { SessionPrompt } from "@/session/prompt"
 import { SessionRunState } from "@/session/run-state"
@@ -63,6 +71,7 @@ import { LearningCommandInvocationTable } from "@opencode-ai/core/learning-comma
 import { TurnLifecycle } from "@opencode-ai/core/turn/turn"
 import { TurnInputTable, TurnTable } from "@opencode-ai/core/turn/sql"
 import { Turn } from "@opencode-ai/schema/turn"
+import { SessionPresentation } from "@opencode-ai/core/session-presentation"
 
 const noopBootstrapLayer = Layer.succeed(
   InstanceBootstrapService.Service,
@@ -810,12 +819,109 @@ describe("session HttpApi", () => {
   )
 
   it.instance(
+    "carries the exact deletion choice, settlement, audit purge, and replay over the public HTTP surface",
+    () =>
+      Effect.gen(function* () {
+        const test = yield* TestInstance
+        const session = yield* createSession({ title: "public deletion lifecycle" })
+        const headers = { "x-opencode-directory": test.directory, "content-type": "application/json" }
+
+        const proposal = yield* requestJson<typeof SessionDeletionProposal.Type>(
+          pathFor(SessionPaths.proposeRemoval, { sessionID: session.id }),
+          {
+            method: "POST",
+            headers,
+            body: JSON.stringify({ mode: "minimal_audit" }),
+          },
+        )
+        expect(proposal).toMatchObject({
+          schemaVersion: 1,
+          rootSessionID: session.id,
+          targets: [{ sessionID: session.id, parentSessionID: null }],
+          subtreeCount: 1,
+          mode: "minimal_audit",
+        })
+
+        const applied = yield* requestJson<typeof SessionDeletionCommitResult.Type>(
+          pathFor(SessionPaths.remove, { sessionID: session.id }),
+          { method: "DELETE", headers, body: JSON.stringify(proposal) },
+        )
+        expect(applied).toMatchObject({
+          type: "applied",
+          settlement: { requestID: proposal.requestID, rootSessionID: session.id, mode: "minimal_audit" },
+          auditAvailable: true,
+        })
+
+        expect(
+          yield* requestJson<typeof SessionDeletionProposalResult.Type>(
+            pathFor(SessionPaths.proposeRemoval, { sessionID: session.id }),
+            {
+              method: "POST",
+              headers,
+              body: JSON.stringify({ mode: "minimal_audit" }),
+            },
+          ),
+        ).toMatchObject({
+          type: "already_deleted",
+          settlementBytes: applied.settlementBytes,
+          auditAvailable: true,
+        })
+        expect(
+          yield* requestJson<typeof SessionDeletionReadProjection.Type>(
+            pathFor(SessionPaths.deletionProjection, { sessionID: session.id }),
+            { headers },
+          ),
+        ).toMatchObject({
+          state: "deleted_minimal_audit",
+          settlementBytes: applied.settlementBytes,
+          auditAvailable: true,
+          audit: { operationCount: 0, relationCount: 0, sessionBodiesDeleted: true },
+        })
+
+        const purgeProposal = yield* requestJson<typeof SessionDeletionPurgeProposal.Type>(
+          pathFor(SessionPaths.proposeAuditPurge, { sessionID: session.id }),
+          { method: "POST", headers },
+        )
+        const purged = yield* requestJson<typeof SessionDeletionPurgeResult.Type>(
+          pathFor(SessionPaths.purgeAudit, { sessionID: session.id }),
+          { method: "DELETE", headers, body: JSON.stringify(purgeProposal) },
+        )
+        expect(purged).toMatchObject({
+          type: "applied",
+          settlement: { requestID: purgeProposal.requestID, deletionRequestID: proposal.requestID },
+        })
+        expect(
+          yield* requestJson<typeof SessionDeletionPurgeResult.Type>(
+            pathFor(SessionPaths.purgeAudit, { sessionID: session.id }),
+            { method: "DELETE", headers, body: JSON.stringify(purgeProposal) },
+          ),
+        ).toMatchObject({ type: "replayed", settlementBytes: purged.settlementBytes })
+        expect(
+          yield* requestJson<typeof SessionDeletionCommitResult.Type>(
+            pathFor(SessionPaths.remove, { sessionID: session.id }),
+            { method: "DELETE", headers, body: JSON.stringify(proposal) },
+          ),
+        ).toMatchObject({ type: "replayed", settlementBytes: applied.settlementBytes, auditAvailable: false })
+        expect(
+          yield* requestJson<typeof SessionDeletionReadProjection.Type>(
+            pathFor(SessionPaths.deletionProjection, { sessionID: session.id }),
+            { headers },
+          ),
+        ).toMatchObject({
+          state: "deleted_minimal_audit_purged",
+          settlementBytes: applied.settlementBytes,
+          auditAvailable: false,
+        })
+      }),
+    { git: true, config: { formatter: false, lsp: false } },
+  )
+
+  it.instance(
     "returns declared 409 errors when Session mutation endpoints enter during closing",
     () =>
       Effect.gen(function* () {
         const test = yield* TestInstance
         const runState = yield* SessionRunState.Service
-        const sessions = yield* Session.Service
         const headers = { "x-opencode-directory": test.directory, "content-type": "application/json" }
         const cases = [
           {
@@ -831,14 +937,13 @@ describe("session HttpApi", () => {
           const entered = yield* Deferred.make<void>()
           const release = yield* Deferred.make<void>()
           yield* Effect.addFinalizer(() => Deferred.succeed(release, undefined).pipe(Effect.asVoid))
-          const reader = yield* runState
-            .shared(session.id, Deferred.succeed(entered, undefined).pipe(Effect.andThen(Deferred.await(release))))
+          const closing = yield* runState
+            .closeMany([session.id], () =>
+              Deferred.succeed(entered, undefined).pipe(Effect.andThen(Deferred.await(release))),
+            )
             .pipe(Effect.forkChild)
           yield* Deferred.await(entered).pipe(Effect.timeout("2 seconds"))
-          const deletion = yield* sessions.remove(session.id).pipe(Effect.forkChild)
-          yield* Effect.gen(function* () {
-            while ((yield* runState.phase(session.id)) !== "closing") yield* Effect.sleep("1 millis")
-          }).pipe(Effect.timeout("2 seconds"))
+          expect(yield* runState.phase(session.id)).toBe("closing")
 
           const response = yield* request(input.path(session.id), {
             method: input.method,
@@ -857,8 +962,7 @@ describe("session HttpApi", () => {
           })
 
           yield* Deferred.succeed(release, undefined)
-          yield* Fiber.join(reader)
-          yield* Fiber.join(deletion)
+          yield* Fiber.join(closing)
         }
       }),
     { git: true, config: { formatter: false, lsp: false } },
@@ -866,7 +970,7 @@ describe("session HttpApi", () => {
   )
 
   it.instance(
-    "returns declared not found errors for read routes",
+    "returns declared not found errors for Session reads and deletion proposal",
     () =>
       Effect.gen(function* () {
         const test = yield* TestInstance
@@ -893,12 +997,13 @@ describe("session HttpApi", () => {
         expect(messages.status).toBe(404)
         expect(yield* responseJson(messages)).toEqual(missingSessionBody)
 
-        const remove = yield* request(pathFor(SessionPaths.remove, { sessionID: missingSession }), {
-          headers,
-          method: "DELETE",
+        const removalProposal = yield* request(pathFor(SessionPaths.proposeRemoval, { sessionID: missingSession }), {
+          headers: { ...headers, "content-type": "application/json" },
+          method: "POST",
+          body: JSON.stringify({ mode: "full" }),
         })
-        expect(remove.status).toBe(404)
-        expect(yield* responseJson(remove)).toEqual(missingSessionBody)
+        expect(removalProposal.status).toBe(404)
+        expect(yield* responseJson(removalProposal)).toEqual(missingSessionBody)
 
         const session = yield* createSession({ title: "missing message" })
         const missingMessage = MessageID.ascending()
@@ -1617,6 +1722,114 @@ describe("session HttpApi", () => {
             .get()
             .pipe(Effect.orDie),
         ).toMatchObject({ reason: "source_unavailable" })
+      }),
+    { git: true, config: { formatter: false, lsp: false } },
+  )
+
+  it.instance(
+    "does not let HTTP insert a new Part under sealed administrative history",
+    () =>
+      Effect.gen(function* () {
+        const test = yield* TestInstance
+        const database = yield* Database.Service
+        const svc = yield* Session.Service
+        const headers = { "x-opencode-directory": test.directory, "content-type": "application/json" }
+        const template = yield* createSession({ title: "administrative history template" })
+        const sessionID = SessionID.create()
+        const time = Date.now()
+        const session = {
+          ...template,
+          id: sessionID,
+          slug: "sealed-administrative-history",
+          title: "sealed administrative history",
+          parentID: undefined,
+          time: { created: time, updated: time },
+        }
+        const messageInfo: SessionV1.User = {
+          id: MessageID.ascending(),
+          role: "user",
+          sessionID,
+          agent: "repa",
+          model: { providerID: ProviderV2.ID.make("test"), modelID: ModelV2.ID.make("test") },
+          time: { created: time },
+        }
+        const historicalPart: SessionV1.TextPart = {
+          id: PartID.ascending(),
+          sessionID,
+          messageID: messageInfo.id,
+          type: "text",
+          text: "historical imported presentation",
+        }
+        yield* database.db.transaction((tx) =>
+          Effect.gen(function* () {
+            yield* tx.insert(SessionTable).values(Session.toRow(session)).run().pipe(Effect.orDie)
+            const { id: messageID, sessionID: _, ...messageData } = messageInfo
+            yield* tx
+              .insert(MessageTable)
+              .values({ id: messageID, session_id: sessionID, time_created: time, time_updated: time, data: messageData })
+              .run()
+              .pipe(Effect.orDie)
+            const { id: partID, sessionID: __, messageID: ___, ...partData } = historicalPart
+            yield* tx
+              .insert(PartTable)
+              .values({
+                id: partID,
+                session_id: sessionID,
+                message_id: messageInfo.id,
+                time_created: time,
+                time_updated: time,
+                data: partData,
+              })
+              .run()
+              .pipe(Effect.orDie)
+          }),
+        )
+        const seal = SessionPresentation.createAdministrativeHistorySeal({
+          kind: "offline_exact_restore",
+          sourceFileFingerprint: "a".repeat(64),
+          historyFrontierTime: time,
+          messages: [
+            {
+              messageID: messageInfo.id,
+              ordinal: 0,
+              timeCreated: time,
+              parts: [{ partID: historicalPart.id, ordinal: 0 }],
+            },
+          ],
+        })
+        yield* database.db.transaction((tx) => SessionPresentation.sealAdministrativeHistory(tx, sessionID, seal))
+
+        const insertedPartID = PartID.ascending()
+        const response = yield* request(
+          pathFor(SessionPaths.updatePart, {
+            sessionID,
+            messageID: messageInfo.id,
+            partID: insertedPartID,
+          }),
+          {
+            method: "PATCH",
+            headers,
+            body: JSON.stringify({
+              id: insertedPartID,
+              sessionID,
+              messageID: messageInfo.id,
+              type: "text",
+              text: "must not extend imported history",
+            }),
+          },
+        )
+
+        expect(response.status).toBeGreaterThanOrEqual(400)
+        expect(
+          yield* svc.getPart({
+            sessionID,
+            messageID: messageInfo.id,
+            partID: insertedPartID,
+          }),
+        ).toBeUndefined()
+        yield* database.db.transaction((tx) =>
+          SessionPresentation.assertAdministrativeHistoryIntegrity(tx, sessionID),
+        )
       }),
     { git: true, config: { formatter: false, lsp: false } },
   )

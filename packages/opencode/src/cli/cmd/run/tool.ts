@@ -1297,7 +1297,12 @@ export function toolView(name?: string): ToolView {
 
 export function toolStructuredFinal(commit: StreamCommit): boolean {
   const state = commit.toolState ?? commit.part?.state.status
-  if (commit.part && semanticResult(frame(commit.part)).type !== "absent") return false
+  if (
+    commit.part &&
+    (semanticResult(frame(commit.part)).type !== "absent" || inspectionResult(frame(commit.part)).type !== "absent")
+  ) {
+    return false
+  }
   return (
     commit.kind === "tool" &&
     commit.phase === "final" &&
@@ -1307,7 +1312,26 @@ export function toolStructuredFinal(commit: StreamCommit): boolean {
 }
 
 export function toolInlineInfo(part: ToolPart): ToolInline {
+  const inspection = SemanticPresentation.readInspection(part)
   const ctx = frame(part)
+  if (inspection.type === "invalid") {
+    return {
+      icon: "!",
+      title: "Learning inspection unavailable",
+      mode: "block",
+      body: "Repa could not verify this inspection projection. No owner, lineage, deletion, or causal claim is inferred.",
+    }
+  }
+  if (inspection.type === "valid") {
+    return {
+      icon: "◇",
+      title: `Learning inspection — ${SemanticPresentation.inspectionStatus(inspection.value)}`,
+      mode: "block",
+      body: SemanticPresentation.inspectionLines(inspection.value)
+        .map((item) => `${item.label}: ${item.value}`)
+        .join("\n"),
+    }
+  }
   const semantic = semanticResult(ctx)
   if (semantic.type === "invalid") {
     return {
@@ -1356,6 +1380,15 @@ export function toolInlineInfo(part: ToolPart): ToolInline {
 export function toolScroll(phase: ToolPhase, ctx: ToolFrame): string {
   if (phase === "final") {
     const semantic = semanticResult(ctx)
+    const inspection = inspectionResult(ctx)
+    if (inspection.type === "invalid") {
+      return "Learning inspection unavailable: Repa could not verify this projection, so no owner or lineage truth is inferred."
+    }
+    if (inspection.type === "valid") {
+      return SemanticPresentation.inspectionLines(inspection.value)
+        .map((item) => `${item.label}: ${item.value}`)
+        .join("\n")
+    }
     if (semantic.type === "invalid") {
       return "Consequential result unavailable: Repa could not verify this result, so no success is inferred."
     }
@@ -1399,10 +1432,7 @@ export function toolScroll(phase: ToolPhase, ctx: ToolFrame): string {
   return fallbackFinal(ctx)
 }
 
-export function toolPermissionInfo(
-  request: PermissionRequest,
-  input: ToolDict,
-): ToolPermissionInfo | undefined {
+export function toolPermissionInfo(request: PermissionRequest, input: ToolDict): ToolPermissionInfo | undefined {
   const semantic = SemanticPresentation.readProposal(request)
   if (semantic.type === "invalid") {
     return {
@@ -1433,11 +1463,14 @@ export function toolPermissionInfo(
 function semanticResult(ctx: ToolFrame) {
   if (ctx.status !== "completed") return { type: "absent" as const }
   if (!ctx.part) {
-    return SemanticPresentation.requiresResult(ctx.name)
-      ? ({ type: "invalid" as const })
-      : ({ type: "absent" as const })
+    return SemanticPresentation.requiresResult(ctx.name) ? { type: "invalid" as const } : { type: "absent" as const }
   }
   return SemanticPresentation.readResult(ctx.part)
+}
+
+function inspectionResult(ctx: ToolFrame) {
+  if (ctx.status !== "completed" || !ctx.part) return { type: "absent" as const }
+  return SemanticPresentation.readInspection(ctx.part)
 }
 
 function semanticResultStatus(outcome: SemanticPresentation.ResultProjection["outcome"]) {

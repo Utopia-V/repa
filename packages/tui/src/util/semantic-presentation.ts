@@ -1,6 +1,7 @@
 import { SemanticPresentation } from "@opencode-ai/core/semantic-presentation"
 import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import type { PermissionRequest, ToolPart } from "@opencode-ai/sdk/v2"
+import { inspectionPresentation } from "./learning-inspection"
 
 export type ProposalRead =
   | { readonly type: "absent" }
@@ -43,7 +44,7 @@ export function isOnceOnlyPermission(request: PermissionRequest) {
 
 export function shouldHideCompletedTool(part: ToolPart, showDetails: boolean) {
   if (showDetails || part.state.status !== "completed") return false
-  return resultPresentation(part).type === "absent"
+  return resultPresentation(part).type === "absent" && inspectionPresentation(part).type === "absent"
 }
 
 export function resultStatus(value: SemanticPresentation.ResultProjection) {

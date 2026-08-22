@@ -1462,6 +1462,25 @@ itAbcTool.live("session.processor seals A/B/C before one FIFO tool effect and pr
           ["call-b", "error"],
           ["call-c", "error"],
         ])
+        expect(parts[1]).toMatchObject({
+          state: {
+            metadata: {
+              disposition: "not_started_limit",
+              repaTurnExhaustion: {
+                schemaVersion: 1,
+                counter: "tool",
+                observed: 1,
+                limit: 1,
+                turnID,
+                rejectedAttemptID: parts[1]!.id,
+                envelopeFingerprint: expect.stringMatching(/^[0-9a-f]{64}$/),
+              },
+            },
+          },
+        })
+        expect(parts[2]?.state.status === "error" ? parts[2].state.metadata : undefined).not.toHaveProperty(
+          "repaTurnExhaustion",
+        )
         const storedCandidates = yield* database.db
           .select()
           .from(TurnToolCandidateTable)

@@ -1040,6 +1040,11 @@ export function read(tx: Transaction, query: ReadQuery, options: ReadOptions) {
   })
 }
 
+/** Exact historical owner snapshot for an already-bound immutable Context cut. */
+export function readConcernAtFrontier(tx: Transaction, concernID: ConcernID, frontierSequence: number) {
+  return readConcernSnapshot(tx, concernID, frontierSequence)
+}
+
 export function listEligibleForContext(tx: Transaction, input: Readonly<{ now: number; limit?: number }>) {
   return Effect.gen(function* () {
     const limit = input.limit ?? MAX_OPERATIONS
@@ -2243,7 +2248,9 @@ function validateLearnerWitness(
     }
     const learner = yield* currentSource(tx, witness.occurrenceID)
     const sourceOrder = source?.type === "learner_occurrence" ? source.sourceOrder : undefined
-    const cut = pendingCut ?? (source && source.type !== "learner_occurrence" ? yield* completeSourceRootCut(tx, source) : undefined)
+    const cut =
+      pendingCut ??
+      (source && source.type !== "learner_occurrence" ? yield* completeSourceRootCut(tx, source) : undefined)
     if (
       learner.timeAdmitted <= concern.current.timeCommitted ||
       (source && learner.timeAdmitted > source.timeCompleted) ||
@@ -2267,7 +2274,10 @@ type RootModelCut = Readonly<{
   timeAdmitted: number
 }>
 
-function completeSourceRootCut(tx: Transaction, source: Exclude<CompleteServiceSource, { type: "learner_occurrence" }>) {
+function completeSourceRootCut(
+  tx: Transaction,
+  source: Exclude<CompleteServiceSource, { type: "learner_occurrence" }>,
+) {
   if (source.type === "assistant_completion" || source.type === "tool_result") {
     return rootModelCut(tx, {
       sessionID: source.sessionID,
@@ -2666,10 +2676,7 @@ function trustedCompletionReason(
   })
 }
 
-function unavailableClaimCompletion(
-  tx: Transaction,
-  group: typeof FutureAttentionClaimGroupTable.$inferSelect,
-) {
+function unavailableClaimCompletion(tx: Transaction, group: typeof FutureAttentionClaimGroupTable.$inferSelect) {
   return Effect.gen(function* () {
     const row = yield* tx
       .select({ model: TurnUnavailableModelTable, source: TurnUnavailableSourceTable })

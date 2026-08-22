@@ -10,6 +10,8 @@ First-principles ownership, provenance, and policy corrections: 2026-07-27
 
 Tutor move-selection and flow-continuity responsibility clarified: 2026-07-29
 
+Context-input versus causal-use semantics clarified: 2026-08-13
+
 Status: Accepted architecture baseline under ADR-0012, with runtime lineage and
 native persistence amended by ADR-0014. This document is normative for
 ownership, dependency direction, state authority, and failure boundaries.
@@ -363,6 +365,112 @@ use a whole root or a bounded subtree. Entering an unknown directory permits an
 ordinary Session there but does not silently create a durable LearningSpace or
 Course. Directory names and moves remain source-location facts until an
 explicit learning operation accepts or reconciles their meaning.
+
+### Session deletion choice and retained audit
+
+Session deletion binds an explicit learner-selected mode, exact root, and
+complete current descendant closure before destructive work begins. One uniform
+mode covers the whole tree. One mode removes the conversation bodies, Context
+cuts, and every optional Context/read/citation/action inspection association.
+The other removes the same bodies but atomically seals one body-free subtree
+audit containing only exact owner record identity/revision, exactly proven not-
+entered versus semantic/full versus locator-only Context status, exact-read and
+typed-citation occurrence, the corresponding operation's
+`completed | failed | interrupted` terminal status, deletion time, and body-
+deleted status. An absent/unknown mode or changed closure fails before mutation;
+there is no silent default and no newly added child is swept into stale
+permission.
+
+A valid retained bundle covers every admitted interactive Tutor/Agent model
+operation in the exact deleted tree and is sealed only after versioned Context,
+terminal typed lazy-read, owner-command citation, and Turn-status producers
+prove complete coverage. Narrow internal model operations remain outside this
+learning-inspection audit. Partial derivation fails the deletion without
+mutation; it does not add another retained status or fabricate a negative.
+
+The optional audit is an Interaction-owned deletion projection, not a learning
+authority or model-rationale record. A distinct mandatory body-free Interaction
+control receipt preserves only the applied destructive request's physical
+identity/fingerprint, root/tree precondition fingerprint/count, selected mode,
+learner-permission binding, deletion time, and body-deleted result so exact
+replay/conflict/recovery remains possible after the Session rows disappear. It
+contains no record-to-operation lineage and never substitutes for the optional
+audit. Audit purge has its own immutable minimal settlement and cannot mutate or
+replay the original deletion.
+
+The root Session ID in that surviving receipt remains an occupied, retired
+identity within the same LearnerHome/database. Direct root, first-Turn,
+delegated-child, and fork-target materialization all check the same control-
+receipt address transactionally before reserving an owner or writing Session,
+Turn, message, lineage, Event, or sequence state. They return typed
+`session_id_retired` rather than creating a second Session lifetime. A
+materialization/deletion race serializes to a live Session visible to deletion
+or a committed receipt visible to materialization; supported transitions never
+allow both. Audit purge does not release the ID, and no Session-incarnation
+layer is introduced.
+
+Local JSON export remains a learner-controlled offline capability outside the
+database deletion transaction. Deletion does not scan for or remove those
+files, but an exported file cannot reopen the retired address. An identity-
+preserving administrative restore is admitted only into another LearnerHome/
+database after complete version/reference/identity validation; it atomically
+restores only a nonempty usable Session/Message/Part graph plus one complete
+sealed `offline_exact_restore` administrative-history classification and
+Session order frontier. It fabricates no Turn, Context, command, domain, Event,
+or inspection lineage. Empty/non-renderable bundles and pending/running Tool,
+nonterminal Assistant, unmatched-step, or unresolved task/compaction state fail
+before Session materialization. Any nonempty imported `Session.revert` target,
+snapshot, or diff likewise fails as `import_history_unsafe`; it is neither
+restored nor cleared. The first later transcript writer in that restored
+Session may be a non-Turn utility or an ordinary new Turn, but is always a
+strict successor of the imported frontier.
+
+Inside the original LearnerHome, exact import of a receipt-occupied ID returns
+typed `session_id_retired` without mutation. A separately and explicitly chosen
+**import as new copy** operation reuses the Gate 12 fork-start composition: it
+builds a closed versioned remap for every typed Session/Message/Part reference,
+then atomically materializes read-only `local_import_copy` historical
+presentations, their complete sealed administrative-history classification,
+and a normalized target order/frontier together with one genuine strict-
+successor learner root Turn under fresh identities. It neither reconnects old
+deletion/audit, Context/read/citation,
+command/domain, task-result, nor Event lineage, nor silently falls back from
+exact restore. Exact response replay returns the already-created copy instead
+of allocating another one.
+
+The administrative-history classification covers every imported Message and
+Part with canonical ordinals, counts, and fingerprints. Current-work,
+pending-task/Tool/compaction, startup recovery, cancellation, paging, and
+Context consumers all read that same seal. Revert, unrevert, cleanup, and every
+transcript writer read it too. Imported rows can contribute only read-only
+conversation presentation before current input and cannot become a Turn input,
+model/tool operation, recovery candidate, revert target/Patch input, Context
+lineage, command effect, or domain source. A revert naming imported history
+returns `historical_presentation_not_revertible`; later local revert state may
+bind only a local post-frontier suffix and cannot restore source snapshot state
+or delete sealed history. Revert scanning and cleanup derive that suffix from
+canonical Session presentation order, not raw Message-ID comparison.
+
+Exact restore preserves supported source timestamps and seeds the Session
+presentation frontier from their maximum; copy source times are only display
+metadata and target presentation time is normalized. Every later Message writer,
+including direct shell/admin, compaction/program-owned presentation, and
+ordinary Turn/model work, reserves a strict-successor block through one Session
+mutation boundary before transcript or external-effect mutation. Tool and
+Assistant times remain nondecreasing. A local occurrence, User Message, and Turn
+share one representable time strictly after the current frontier. Restart and
+replay preserve admitted order; an unrepresentable block refuses before any
+shell/snapshot/worktree/model/Tool/Event effect. Import itself advances no
+shared-learning frontier and proves no activity.
+
+Neither projection retains learner/Assistant/Context/Tool/task bodies, excerpts,
+summaries, operation purpose, selected action, provider metadata, or causal
+attribution. The learner may later delete the entire optional audit, after which
+it cannot be reconstructed; the control receipts remain only as destructive-
+operation truth. Independently owned learning effects and the minimum body-free
+receipts needed to keep them resolvable remain under
+their existing owners in both modes and report only source-unavailable truth.
+This narrow audit purge does not authorize cross-authority deep deletion.
 
 LearnerHome may retain zero or more explicitly approved content roots for
 cross-directory discovery. When the invocation directory is inside one of
@@ -915,7 +1023,7 @@ The architecture deliberately rejects one overloaded `revision` number.
 | course-view revision    | immutable identity of one route/structure view                                                          | ordering Session messages                                      |
 | artifact revision       | content identity, normally a digest or source-native immutable revision                                 | learner-state confidence                                       |
 | policy profile revision | identity of selected Tutor defaults and enforced overlays                                               | domain evidence                                                |
-| context cut             | immutable manifest of the exact revisions, references, time, and capabilities shown to one model sample | durable authority after the sample finishes                    |
+| context cut             | immutable manifest of the exact revisions, references, time, and capabilities bound as observation conditions to one admitted model operation | proof of provider transport, causal influence, or a new domain authority |
 
 The production fork does not retain the pre-fork
 `system_state.state_revision`. A context cut may record the native database
@@ -923,9 +1031,12 @@ commit watermark for audit, but no domain uses it as a universal stale-write
 guard. A domain command checks only the entity, source, and policy
 preconditions that make its own transition legal.
 
-One context cut records a commit watermark for audit plus the typed
-dependencies/versions it actually consumed. The next model sample recompiles;
-an already-dispatched request never changes underneath the model.
+One context cut records a commit watermark for audit plus the exact typed
+composition/input dependencies bound into the admitted operation. This proves
+recorded inclusion and version at admission; it does not by itself prove
+provider transport, a later lazy read, or causal influence on a completed
+action. The next model sample recompiles; an already-dispatched request never
+changes underneath the model.
 
 ## Context is an observer and working set
 
@@ -1101,22 +1212,30 @@ state and selected control intent therefore need distinct representation in
 composition. Historical ALS-021 described this failure shape but does not
 supply current acceptance evidence.
 
-When the Learning System chooses to let durable state govern a model sample,
-the context cut must make that selection inspectable and preserve any
-constraint that materially changes the learner's role. The selection may use
-model judgment, but it is a Learning System composition decision rather than an
-accidental implication of prompt prose. The model still owns flexible
-realization: wording, explanation, example, question, representation, and
-research. The exact projection is deliberately open; it need not be durable on
-every Turn and does not authorize a mode, pedagogy enum, second runtime, or
-universal action record.
+When the Learning System explicitly binds durable state as a program-owned
+current control constraint, the context cut must make that binding inspectable
+and preserve any constraint that materially changes the learner's role. Mere
+semantic inclusion, locator delivery, lazy read, typed citation, or temporal
+proximity does not create such a binding or prove causal influence on a
+model-authored move. An explicit selection may use model judgment, but it is a
+Learning System composition decision rather than an accidental implication of
+prompt prose. The model still owns flexible realization: wording, explanation,
+example, question, representation, and research. The exact projection is
+deliberately open; it need not be durable on every Turn and does not authorize
+a mode, pedagogy enum, second runtime, universal action record, or generic
+causal-use fact.
+
+Inspection may report an exact binding or selection event as operational
+lineage, but it does not attribute a particular record as the cause of the
+model-authored answer. Owner-specific command effects remain owner truth rather
+than a basis for reconstructing model rationale.
 
 Historical ALS-021/022 documents explored that distinction, but their raw run
 artifacts are not retained and their published aggregates are not current
 acceptance evidence. The architectural distinction instead follows from the
 owned meanings: exposing a candidate does not say whether it is background,
 one legal current default, or one of several unresolved concerns. When durable
-state is chosen to govern a move, selected purpose is therefore a real
+state is explicitly bound to govern a move, selected purpose is therefore a real
 composition meaning rather than an optional wording convention. Gate 20 must
 qualify the concrete projection against the current fork.
 
@@ -1448,12 +1567,21 @@ must not retroactively redefine an old migration or leave two databases at one
 `user_version` with different constraints.
 
 The receipt and the domain records it supports do not inherit Session deletion
-lifecycle. Inherited Session, message, part, and event rows may continue to
-cascade when a transcript is deleted, but durable learning authorities never
-use those rows as cascade-owning parents. Ordinary transcript deletion leaves a
-minimal non-content causal receipt marked source-unavailable and preserves the
-learning state. Removing or superseding that state is a separate explicit
-deep-delete operation whose domain impact is visible before commit.
+lifecycle. Inherited Session, message, part, and event bodies are removed under
+either learner-selected deletion mode, but durable learning authorities never
+use those rows as cascade-owning parents. Existing minimum non-content command
+and Turn receipts remain only where surviving effects or references require
+them and report source-unavailable truth. The distinct Session-deletion control
+receipt survives for destructive replay/conflict/recovery even when no learning
+effect or transcript reference survives; it carries no learning provenance or
+Gate 22 lineage. Its exact root Session ID is occupied and retired from every
+root/child/fork target-materialization path while the receipt survives, so a
+later Session cannot impersonate the deleted address or corrupt replay truth.
+The optional retained-audit mode
+separately seals only the allowlisted Context/read/citation/terminal facts; the
+full mode removes that projection as well. Removing or superseding independent
+learning state is a separate explicit deep-delete operation whose domain impact
+is visible before commit.
 
 A cross-domain transition, such as completing an assignment with activity that
 also serves a revisit, is one explicit application operation over one SQLite
@@ -1605,6 +1733,22 @@ Assignment lifecycle transition, or recomputed plan by itself.
 | generic tool changes an artifact       | record the artifact/tool result; create no learner/course fact until an explicit domain command imports it                   |
 | context omitted relevant state         | model may inspect state lazily; recorded selection manifest and source refs make the omission diagnosable and correctable    |
 | move selection interrupted or stale     | preserve committed effects, end the process-local selection, recompile current state, and choose or clarify again without blind replay |
+| Session deletion mode is absent or unknown | reject before mutation; never choose retention or full deletion silently |
+| Session deletion tree changed after permission | reject without mutation and require a newly shown exact-tree choice; never include an unselected descendant |
+| selected Session tree has admitting/running/terminalizing work | return `session_tree_busy`; deletion emits no interrupt/cancel/finalize action and the learner may separately settle exact work before a new deletion request |
+| Session deletion or audit sealing fails | commit neither a partial body deletion nor a falsely complete audit; preserve the prior state and report failure truthfully |
+| learner later deletes the minimal Session audit | atomically remove the complete optional audit; preserve independent learning state and never reconstruct deleted bodies |
+| exact local import targets a receipt-retired Session ID in the same LearnerHome | return `session_id_retired` before any Session/Message/Part/Event write; preserve the deletion settlement and external backup unchanged |
+| learner explicitly imports the backup as a new same-home copy | atomically create a fully remapped fresh Interaction identity graph plus one genuine root Turn; retain only typed imported-presentation provenance and reconnect no old operational or learning lineage |
+| exact restore targets another LearnerHome/database | validate and atomically restore the closed exported Session/Message/Part graph at its original identities; fabricate no Turn, Context, domain, deletion, or inspection lineage |
+| import history is empty, non-renderable, executable-looking unfinished, or cannot seal complete historical membership | reject before Session materialization; create no owner/Turn/Event and never recover or execute imported work |
+| import contains any live `Session.revert` target/snapshot/diff | `import_history_unsafe`; create no Session/seal and perform no snapshot/Patch/worktree/transcript mutation or silent control-state clearing |
+| revert targets imported Message/Part/Patch history | `historical_presentation_not_revertible`; mutate no snapshot, worktree, Session, transcript, seal, or frontier; local revert/unrevert/cleanup derives its range from canonical presentation order and remains confined to the post-frontier local suffix |
+| first local Turn follows imported history under clock regression or future source time | use the current Session presentation frontier and bind the occurrence, User Message, and Turn/input to one representable strict successor; preserve paging/Context order after any intervening utility and infer no activity |
+| direct shell/admin or another non-Turn transcript writer follows imported history | reserve its complete strict-successor Message block and nondecreasing Tool/Assistant times before transcript or external-effect mutation; keep non-Turn identity while preserving paging/Context order across replay/restart |
+| a later transcript writer cannot reserve a representable successor block | return typed frontier failure before transcript, shell, snapshot, worktree, model, Tool, or Event mutation |
+| imported-history classification is missing, partial, corrupt, or overlaps current work | report integrity failure across continuation/recovery/Context consumers; never invent a Turn, drop a row, or silently reinterpret it |
+| import bundle, typed reference, identity map, or target identity is invalid | reject the entire exact restore or copy without partial materialization and without silently switching modes |
 | conflicting local writer               | reject/serialize through the LearnerHome owner and entity preconditions; never silently merge semantic state                 |
 
 ## Target module ownership

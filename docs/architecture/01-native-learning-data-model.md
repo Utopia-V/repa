@@ -186,27 +186,139 @@ events, tool activity, and terminal outcomes. Native learning records reference
 the exact admitted learner occurrence, completed assistant/tool occurrence, or
 other trusted source that gave the write its basis.
 
-Current Session deletion cascades through messages, parts, and the Session
-event aggregate. Durable Course, Course View, material, learner, agenda-family,
-route, and policy records are not cascade children of those inherited tables. Their
-causal relationship uses a Repa-owned durable receipt that may retain the
-original Interaction identifiers but does not require transcript content to
-survive. Ordinary Session deletion removes the transcript and marks that source
-unavailable while preserving independently owned learning state. The
-post-baseline Data Lifecycle capability may later remove or supersede affected
+Session deletion requires an explicit learner-selected root, complete current
+descendant closure, and one uniform mode. Both modes remove messages, parts,
+Session event bodies, transcript and Tool presentation, rendered Context, and
+every other Session-owned body for that exact tree. Full deletion also removes
+Context/read/citation/action inspection associations. The optional retained-
+audit mode preserves one atomic subtree-wide body-free Interaction projection
+of:
+
+- exact owner-native record identity and revision;
+- `semantic_or_full | locator_only | not_entered` Context relation for the
+  exact operation;
+- exact-read and typed-citation occurrence;
+- `completed | failed | interrupted` operation terminal status;
+- deletion time; and
+- body-deleted status.
+
+A valid audit bundle covers every admitted interactive Tutor/Agent operation in
+the exact deleted tree, stores each terminal state, and stores the positive
+union of Context/read/citation relations. Context relations come from the exact
+canonical cut; exact-read relations are projected transactionally from terminal
+registered lazy-read Tool results; typed-citation relations are projected from
+first-applied registered owner commands and their exact owner basis/reference
+rows; terminal status comes from the admitted model operation. Each producer is
+joined through its exact Assistant operation identity and a versioned complete-
+coverage seal. Absence inside that sealed coverage is a truthful negative;
+internal title/compaction/representation operations remain outside the
+learning-inspection audit. Missing or partial source coverage makes minimal-
+audit deletion fail without mutation; it cannot become a fabricated negative or
+an extra retained `unknown` field. The
+audit retains no transcript, Assistant answer, Context body, Tool input/output,
+task result, excerpt, summary, selected action, purpose, model metadata, or
+causal attribution. It may later be fully deleted as one whole-tree bundle and
+cannot be recreated after that transition. The optional audit is Interaction-
+owned and subordinate to the source rows from which deletion derives it; it is
+not a new learning authority.
+
+A separate non-cascading Interaction control receipt always survives an applied
+Session-tree deletion. It contains only the physical request/fingerprint, root
+semantic address, subtree count/fingerprint, uniform mode, learner-permission
+binding, deletion time, and applied/body-deleted result needed for exact replay,
+mode conflict, and crash recovery. It contains no owner revision or model-
+operation relation and is not Gate 22 lineage. Later whole-audit purge has a
+separate immutable minimal request/settlement; neither purge nor replay rewrites
+the original deletion receipt or recreates audit.
+
+The receipt's database-scoped root Session ID is also the authoritative
+retirement marker for that exact materialization identity. Every direct-root,
+first-Turn, delegated-child, and fork-target creation path checks the receipt in
+the same transaction before any owner reservation or durable Session/Turn/
+message/lineage/Event write. An occupied ID returns typed
+`session_id_retired`; audit purge does not release it. Creation racing deletion
+serializes to either the still-live Session observed by deletion or the applied
+receipt observed by creation, never a live Session and receipt at one address.
+This uses the existing root ID field and does not add an incarnation or deleted-
+descendant identity set.
+
+A local export file is outside this database-owned deletion lifecycle. Exact
+identity-preserving import is an administrative transcript restore admitted
+only into another LearnerHome/database whose complete Interaction identity
+space does not conflict. It atomically restores the versioned
+nonempty usable Session/Message/Part graph, current project/directory binding,
+and one complete sealed `offline_exact_restore` administrative-history
+classification. It creates no Turn, learner occurrence, model/tool operation,
+Context cut, command/domain record, deletion receipt, Event sequence, or Gate
+22 lineage. Empty/non-renderable or executable-looking unfinished history is
+rejected. Any imported live `Session.revert` target/snapshot/diff is likewise
+rejected as unsafe rather than restored or cleared. The next transcript writer
+may be a non-Turn utility or an ordinary new Turn, but it uses a strict successor
+of the imported-history frontier.
+
+The same file cannot revive the retired address in its original LearnerHome.
+Ordinary exact import returns `session_id_retired`; an explicit new-copy import
+allocates fresh Session/Message/Part identities and a closed versioned mapping
+for every typed membership, Assistant-parent, compaction, and nested attachment
+reference. `Session.revert` must be absent and is not mapped or dropped. Gate 12
+then atomically combines read-only
+`local_import_copy` historical presentations, complete classification, and a
+normalized target order/frontier with one genuine strict-successor learner root
+Turn and fresh occurrence identities. The copy carries no old deletion/audit,
+Context/read/citation, command/domain, task-result, or Event lineage. Exact
+restore and copy are distinct typed operations with no silent fallback.
+
+The administrative-history projection is Session-owned Interaction state. One
+manifest binds import kind, bundle/classifier/order versions, file fingerprint,
+target Session, complete Message/Part counts and membership/order fingerprint,
+`history_frontier_time`, plus validated absence of imported `Session.revert`;
+membership binds every imported target Message and Part to one canonical
+ordinal. No covered row may also be a Turn input, model/tool operation,
+candidate/invocation, current-work owner, or revert target. Continuation,
+recovery, pending-work, paging, revert/unrevert/cleanup, Context, and every
+transcript writer consume the seal and preserve historical-only meaning across
+restart. Imported Patch Parts are inert and a revert naming imported history
+returns typed no-effect; a later local revert may affect only the post-frontier
+local suffix, which is derived from canonical Session presentation order rather
+than raw Message-ID comparison.
+
+Exact restore preserves supported source timestamps and uses their maximum as
+the immutable imported-history seed; copy normalizes fresh target presentation
+time and treats source time as display metadata only. The current Session
+presentation frontier then advances atomically with every committed Message.
+Direct shell/admin and all other non-Turn writers reserve strict-successor
+Message blocks before transcript or external effects just as ordinary Turn/
+model writers do, while retaining non-Turn identity. Tool/Assistant times are
+nondecreasing, restart/replay preserves the block, and unrepresentable order
+fails before mutation. A local occurrence, User Message, and Turn share one
+representable strict-successor time. Import creates no shared-learning frontier
+transition.
+
+Durable Course, Course View, material, learner, agenda-family, route, and policy
+records are not cascade children of inherited Interaction tables. Their
+source relationship uses Repa-owned body-free receipts where already required
+to keep a surviving effect resolvable. Those receipts remain distinct from the
+optional audit, report source-unavailable truth after deletion, and do not
+retain transcript content or Gate 22 lineage by implication. The post-baseline
+Data Lifecycle capability may later remove or supersede independently owned
 learning state only after showing its exact domain impact and receiving
 explicit learner authorization.
 
-Truly Session-scoped projections, temporary runtime focus, streamed Parts, and
-tool presentation remain Interaction-owned and may follow Session deletion.
-This distinction is ownership, not a ban on provenance links.
+Temporary runtime focus and non-allowlisted Session projections follow body
+deletion. This distinction is ownership, not a ban on the learner-selected
+minimal provenance links above.
 
 The implementation must preserve distinct logical identities for:
 
 - admitted learner occurrence versus replayed, synthetic, or compacted text;
 - one provider/model sample;
 - one physical tool invocation and its settled model-visible result;
-- one immutable context cut; and
+- one immutable context cut;
+- one exact Session-deletion choice plus its optional body-free audit bundle;
+- one sealed imported administrative-history membership distinct from live
+  `Session.revert`/current-work state;
+- one Session presentation frontier shared by Turn and non-Turn transcript
+  writers; and
 - the terminal lifecycle that says whether an occurrence actually completed.
 
 These requirements do not authorize copies of the old `session_item`,

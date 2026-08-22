@@ -1,6 +1,20 @@
 # Repa Gate 18: learning context and Session continuation
 
-Status: Whole-Gate independent review complete. Against repository base
+Status: Whole-Gate independent review complete for the recorded Gate 18
+candidate, except that its Session-deletion/Context-retention subsection is
+bounded-reopened by the contract/theory-accepted
+[Gates 5/8/12/18 deletion-choice and local-restore correction](repa-gate-05-08-12-18-session-deletion-choice-correction-2026-08-13.md).
+Gate 22 contract review on 2026-08-22 additionally bounded-reopened only the
+implementation/evidence claim that every registered learning-material read
+projects its exact owner identity. `learning_material_query` displayed values
+did not match the recursive projector, alignment could collapse to selector,
+disposition/outline actions returned false no-positive coverage, and the pinned
+read omitted exact Map/selector/target records. The Gate 18 contract meaning and
+lazy-read catalog remain accepted; the action-complete projector-version
+correction and focused evidence were accepted by the retained reviewer under
+`G22-CR-002` at exact package manifest
+`334CDCAEEA573A8257E8F3B67A8A4AE9550F06522B3E85645B974CE126C4CBE6`.
+Against repository base
 `862f6b7a2318f0ccce4e98dd5ea6fab136739628`, fresh separate top-level reviewer
 task `019fc874-72ee-75b3-92e9-0b923b85efb2` accepted exact semantic candidate
 SHA-256
@@ -22,6 +36,24 @@ reviewed production/test projection plus post-verdict status records were
 committed as `284d2a4ae440fb01f0f5a32eca58a5948464cc5e` and integrated into
 `main` through a docs-only closure/status successor. No push, release, or
 later-Gate authority is established.
+
+The accepted Context compilation, immutability, capacity, lazy-read catalog,
+continuation, carrier, failure, recovery, and action-complete material exact-
+read producer boundaries are closed. The
+current implementation still removes Context lineage under the previously
+accepted deletion behavior. The new product direction additionally permits a
+learner-selected body-free audit containing only the correction contract's
+allowlisted facts. Its prerequisite contract is accepted, and a separate
+implementation/evidence candidate is independently accepted under Whole-Gate
+run `G22-WG-20260813-019ff8e2-01` but remains unintegrated. That correction also requires
+every exact-restore or copy Message/Part to have complete sealed historical-only
+classification and a stable Session ordering frontier. Bounded Context may use
+that transcript only as historical presentation ordered before current input;
+it cannot treat imported unfinished/revert/Patch state as executable, create old
+Context/read/citation relations, or reorder direct shell/admin and other non-
+Turn transcript writes ahead of imported history. Any later Context is compiled
+for the fresh local Session/Turn operation rather than restored from the source
+Session and consumes the same Session presentation order as transcript paging.
 
 Date: 2026-08-03; contract/theory accepted 2026-08-04;
 implementation/evidence accepted 2026-08-05
@@ -286,10 +318,11 @@ path or credential to the model.
 An exact retry or recovery path reads the stored structured cut and its exact
 stored rendered block. It does not rerun owner queries, advance trusted time,
 replace the Gate 15 cut, or render with a newer renderer. A conflicting
-operation envelope or context fingerprint fails closed. Deleting the owning
-Session through the accepted Session-tree deletion path may make the cut
-source-unavailable; it must not leave a hidden copy presented as replayable
-truth.
+operation envelope or context fingerprint fails closed. Under learner-selected
+full Session deletion the cut becomes source-unavailable. Under the bounded
+minimal-audit correction, once its implementation/evidence is independently
+accepted, the allowlisted body-free inclusion/read/citation/terminal
+classification may survive; no Context body or hidden copy is replayable truth.
 
 The context cut is immutable. Correcting an owner after admission changes a
 later operation's cut and preserves the old cut as the conditions of the old
@@ -795,7 +828,7 @@ Decision ID `G18-BUDGET-001`.
 | Unknown model capacity later overflows at provider                                                                                                 | Truthful provider overflow; no same-envelope retry or false “context fit” claim                                                                                                                       |
 | Provider fails after admission                                                                                                                     | Operation/cut remain exact evidence; no domain fact is fabricated and no automatic context rebuild occurs                                                                                             |
 | Crash after cut commit but before sampling/settlement                                                                                              | Recovery exposes the admitted unsampled/failed state according to Turn ownership; it does not redispatch blindly                                                                                      |
-| Session/source deletion                                                                                                                            | Accepted deletion/tombstone semantics produce source-unavailable; no hidden retained transcript/context copy                                                                                          |
+| Session/source deletion                                                                                                                            | Full mode produces source-unavailable with no optional lineage; the accepted correction contract lets an explicitly selected minimal-audit mode retain only its body-free allowlist once its separate implementation/evidence is accepted; neither retains a transcript or Context body |
 | Compaction needed                                                                                                                                  | Narrow internal compaction has no Gate 18 context; a later interactive sample is a new operation/cut                                                                                                  |
 
 The context compiler performs no Course, navigation, Goal, Artifact,
@@ -895,8 +928,10 @@ Gate 18 does not establish:
 - request/context replay conflicts cover changed operation identity, owner cut,
   policy/renderer version, effective capability, canonical provider-visible
   tool-definition/tool-choice fingerprints or byte counts, and rendered bytes;
-- Session-tree deletion and historical fixture migration preserve accepted
-  source-unavailable/tombstone behavior without orphaned context rows.
+- Session-tree deletion and historical fixture migration preserve exact full-
+  deletion source-unavailable behavior and, once separately accepted and
+  implemented, the learner-selected body-free audit without orphaned Context
+  rows or fabricated backfill.
 
 ### Producer and pure-read evidence
 

@@ -1,7 +1,17 @@
 import { LearningOccurrence } from "@opencode-ai/schema/learning-occurrence"
 import { Turn } from "@opencode-ai/schema/turn"
 import { sql } from "drizzle-orm"
-import { check, foreignKey, index, integer, primaryKey, sqliteTable, text, unique, uniqueIndex } from "drizzle-orm/sqlite-core"
+import {
+  check,
+  foreignKey,
+  index,
+  integer,
+  primaryKey,
+  sqliteTable,
+  text,
+  unique,
+  uniqueIndex,
+} from "drizzle-orm/sqlite-core"
 import { AdmittedLearnerOccurrenceTable } from "../learning-command/occurrence.sql"
 import { MessageTable, PartTable, SessionTable } from "../session/sql"
 import type { SessionSchema } from "../session/schema"
@@ -48,6 +58,9 @@ export const TurnTable = sqliteTable(
       .on(table.session_id)
       .where(sql`${table.state} = 'running'`),
     index("turn_session_admitted_idx").on(table.session_id, table.time_admitted, table.id),
+    index("turn_terminal_root_discovery_idx")
+      .on(table.time_terminal, table.id)
+      .where(sql`${table.depth} = 0 AND ${table.state} <> 'running'`),
     check("turn_limits_nonnegative", sql`${table.model_limit} >= 0 AND ${table.tool_limit} >= 0`),
     check(
       "turn_counts_bounded",
@@ -202,6 +215,7 @@ export const TurnToolCandidateTable = sqliteTable(
   },
   (table) => [
     unique("turn_candidate_turn_part_unique").on(table.turn_id, table.part_id),
+    unique("turn_candidate_part_model_unique").on(table.part_id, table.assistant_message_id),
     unique("turn_candidate_turn_part_model_unique").on(table.turn_id, table.part_id, table.assistant_message_id),
     uniqueIndex("turn_candidate_model_emission_idx").on(table.assistant_message_id, table.emission_ordinal),
     uniqueIndex("turn_candidate_model_call_idx").on(table.assistant_message_id, table.call_id),
@@ -501,10 +515,7 @@ export const TurnModelSourceRetentionTable = sqliteTable(
   },
   (table) => [
     primaryKey({ columns: [table.owner, table.owner_reference_id] }),
-    index("turn_model_source_retention_source_idx").on(
-      table.source_turn_id,
-      table.source_assistant_message_id,
-    ),
+    index("turn_model_source_retention_source_idx").on(table.source_turn_id, table.source_assistant_message_id),
     check(
       "turn_model_source_retention_shape",
       sql`length(${table.owner}) > 0 AND length(${table.owner_reference_id}) > 0
@@ -534,6 +545,9 @@ export const TurnUnavailableSourceTable = sqliteTable(
   (table) => [
     index("turn_unavailable_session_idx").on(table.session_id),
     index("turn_unavailable_parent_idx").on(table.parent_turn_id, table.parent_task_part_id),
+    index("turn_unavailable_root_discovery_idx")
+      .on(table.time_terminal, table.turn_id)
+      .where(sql`${table.depth} = 0`),
     check("turn_unavailable_outcome", sql`${table.outcome} IN ('completed', 'failed', 'interrupted', 'exhausted')`),
     check(
       "turn_unavailable_time_nonnegative",

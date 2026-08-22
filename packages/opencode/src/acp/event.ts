@@ -375,6 +375,7 @@ export class Subscription {
               toolName: part.tool,
               state: part.state,
               semantic: SemanticPresentation.readResult(part),
+              inspection: SemanticPresentation.readInspection(part),
               cwd,
             }),
           },

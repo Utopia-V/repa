@@ -20,6 +20,25 @@ OAuth credential to Repa's own store, and the bounded Gate 14 released-model
 qualification passed; independent closure remains outstanding. Current disposition is owned by
 [the documentation index](../README.md).
 
+Separate correction notice (2026-08-13): Gate 5's local-file-only import/export
+capability remains retained, but its historical same-database, same-identity
+restore evidence is bounded-reopened by the contract/theory-accepted
+[Gates 5/8/12/18 deletion-choice and local-restore correction](repa-gate-05-08-12-18-session-deletion-choice-correction-2026-08-13.md).
+The maintainer selected deletion finality at the original Session address.
+Under that accepted correction, exact identity-preserving restore is legal only
+into another LearnerHome/database; import into the original
+LearnerHome must either return typed `session_id_retired` or be explicitly
+chosen as a fully reidentified new copy. Both paths reject empty, unusable, or
+executable-looking unfinished history plus every active `Session.revert`/
+snapshot/diff state, and atomically seal every imported Message/Part as non-
+executable, non-revertible administrative history with a stable order and
+Session presentation frontier shared by every later transcript writer. This
+does not reopen terminal-only composition, local-file-only input, network
+exclusion, or project/directory rebinding. Its separate
+[implementation/evidence record](repa-gate-05-08-12-18-session-deletion-choice-correction-implementation-evidence-2026-08-14.md)
+is independently accepted under Whole-Gate run
+`G22-WG-20260813-019ff8e2-01` and remains unintegrated.
+
 Date: 2026-07-14
 
 Parent plan: [Roadmap 09](../roadmap/09-one-time-opencode-fork-baseline.md)
@@ -223,10 +242,18 @@ without restoring hosted sharing behavior.
 - `run --help` has no share option, and supplying `--share` is rejected before
   Session execution. Source and focused tests show that no direct-run share
   callback remains.
-- a local JSON `import -> export -> delete -> import -> export` round trip
-  preserves Session, message, part, and current project/directory rebinding.
-  HTTP(S) import fails locally without a network call, account header, or
-  share API fallback.
+- at the accepted historical/current-runtime snapshot, a local JSON
+  `import -> export -> delete -> import -> export` round trip preserves Session,
+  message, part, and current project/directory rebinding. The 2026-08-13
+  correction bounded-reopens only the same-database identity-preserving restore
+  claim: the accepted replacement preserves exact identities only in another
+  LearnerHome/database and requires an explicit fully reidentified new copy for
+  same-home reuse. Neither path may create an empty/raw Session or
+  expose imported unfinished/revert state as current work or worktree control;
+  complete historical-only classification, imported-target revert refusal, and
+  all-transcript-writer ordering-frontier evidence are required from the pending
+  implementation/evidence layer. HTTP(S) import still fails locally without a
+  network call, account header, or share API fallback.
 - `plugin`, `serve`, local `stats`, and the other retained root commands remain
   registered and keep their help contracts.
 - only the CLI help/snapshot tests, import tests, direct-run process tests, and
@@ -826,9 +853,13 @@ classification of `PrCommand` is superseded by that correction.
   them and is now restored by `53b41aa0d` after removal of its share-link
   branch;
 - `run` no longer owns a share option or direct share callback;
-- import is local-JSON-only, and a native-database
+- import is local-JSON-only, and the historical native-database
   `import -> export -> delete -> import -> export` round trip preserved the
-  Session, message, part, and current project/directory rebinding;
+  Session, message, part, and current project/directory rebinding; its same-
+  database identity-preserving restore expectation is now explicitly bounded-
+  reopened by the 2026-08-13 Gates 5/8/12/18 correction, while the observed
+  current-runtime behavior remains provenance rather than the proposed final
+  lifecycle;
 - HTTP(S) import was rejected without reaching a listening test server;
 - `bun test test/cli/help/help-snapshots.test.ts test/cli/import.test.ts
 test/cli/root-shortcuts.test.ts` passed 5 tests and 27 snapshots;

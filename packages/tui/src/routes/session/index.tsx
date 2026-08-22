@@ -84,6 +84,9 @@ import {
   shouldHideCompletedTool,
   type ResultRead,
 } from "../../util/semantic-presentation"
+import { inspectionPresentation, inspectionStatus, type InspectionRead } from "../../util/learning-inspection"
+import { LearningInspectionExhaustionContent, LearningInspectionToolContent } from "../../component/learning-inspection"
+import { inspectionExhaustionPresentation } from "../../util/learning-inspection-exhaustion"
 import { usePluginRuntime } from "../../plugin/runtime"
 import { getRevertDiffFiles } from "../../util/revert-diff"
 import { REPA_BASE_MODE, useBindings, useCommandShortcut, useOpencodeKeymap } from "../../keymap"
@@ -1155,6 +1158,17 @@ export function Session() {
                     </Switch>
                   )}
                 </For>
+                <Show
+                  when={sync.data.active_turn[route.sessionID] ? undefined : sync.data.turn_terminal[route.sessionID]}
+                  keyed
+                >
+                  {(turn) => (
+                    <TurnExhaustionNotice
+                      turn={turn}
+                      parts={messages().flatMap((message) => sync.data.part[message.id] ?? [])}
+                    />
+                  )}
+                </Show>
               </scrollbox>
               <box flexShrink={0}>
                 <Show when={permissions()[0]} keyed>
@@ -1345,9 +1359,7 @@ function FutureAttentionFinalizationNotice(props: { value: FutureAttentionFinali
       customBorderChars={SplitBorder.customBorderChars}
       borderColor={props.value.receipt.outcome === "served" ? theme.success : theme.warning}
     >
-      <text fg={theme.text}>
-        {presentation().title}
-      </text>
+      <text fg={theme.text}>{presentation().title}</text>
       <text fg={theme.textMuted}>{presentation().detail}</text>
     </box>
   )
@@ -1587,6 +1599,7 @@ function ToolPart(props: { last: boolean; part: ToolPart; message: AssistantMess
   const ctx = use()
   const display = createMemo(() => toolDisplay(props.part.tool))
   const semantic = createMemo(() => resultPresentation(props.part))
+  const inspection = createMemo(() => inspectionPresentation(props.part))
 
   // Hide tool if showDetails is false and tool completed successfully
   const shouldHide = createMemo(() => shouldHideCompletedTool(props.part, ctx.showDetails()))
@@ -1612,6 +1625,9 @@ function ToolPart(props: { last: boolean; part: ToolPart; message: AssistantMess
   return (
     <Show when={!shouldHide()}>
       <Switch>
+        <Match when={inspection().type !== "absent"}>
+          <InspectionToolResult read={inspection()} part={props.part} />
+        </Match>
         <Match when={semantic().type !== "absent"}>
           <SemanticToolResult read={semantic()} part={props.part} />
         </Match>
@@ -1662,6 +1678,47 @@ function ToolPart(props: { last: boolean; part: ToolPart; message: AssistantMess
         </Match>
       </Switch>
     </Show>
+  )
+}
+
+function TurnExhaustionNotice(props: { turn: TurnInfo; parts: readonly Part[] }) {
+  const { theme } = useTheme()
+  const read = createMemo(() => inspectionExhaustionPresentation(props.turn, props.parts))
+  const visible = createMemo(() => {
+    const value = read()
+    return value.type === "absent" ? undefined : value
+  })
+  return (
+    <Show when={visible()} keyed>
+      {(value) => (
+        <box
+          border={["left"]}
+          borderColor={theme.warning}
+          customBorderChars={SplitBorder.customBorderChars}
+          paddingLeft={2}
+          paddingTop={1}
+          paddingBottom={1}
+          marginTop={1}
+        >
+          <LearningInspectionExhaustionContent turn={props.turn} parts={props.parts} />
+        </box>
+      )}
+    </Show>
+  )
+}
+
+function InspectionToolResult(props: { read: InspectionRead; part: ToolPart }) {
+  return (
+    <BlockTool
+      title={
+        props.read.type === "valid"
+          ? `# Learning inspection — ${inspectionStatus(props.read.value)}`
+          : "# Learning inspection unavailable"
+      }
+      part={props.part}
+    >
+      <LearningInspectionToolContent part={props.part} />
+    </BlockTool>
   )
 }
 

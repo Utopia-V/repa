@@ -81,12 +81,18 @@ import { ProviderV2 } from "@opencode-ai/core/provider"
 import { AbsolutePath } from "@opencode-ai/core/schema"
 import { SemanticPresentation } from "@opencode-ai/core/semantic-presentation"
 import { SessionSchema } from "@opencode-ai/core/session/schema"
+import { SessionDeletion } from "@opencode-ai/core/session-deletion"
 import { MessageTable, PartTable, SessionTable } from "@opencode-ai/core/session/sql"
 import { SessionProjector } from "@opencode-ai/core/session/projector"
 import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
 import { TurnLifecycle } from "@opencode-ai/core/turn/turn"
+import { TurnLineage } from "@opencode-ai/core/turn-lineage"
 import { TurnModelOperationTable } from "@opencode-ai/core/turn/sql"
+import {
+  TurnLineageCandidateCoverageTable,
+  TurnLineageRecordRelationTable,
+} from "@opencode-ai/core/session-deletion/sql"
 import { Turn } from "@opencode-ai/schema/turn"
 import { Agent } from "@/agent/agent"
 import { EventV2Bridge } from "@/event-v2-bridge"
@@ -1169,11 +1175,12 @@ it.effect("settles a live Agent-native Goal permission abort without inventing a
   }),
 )
 
-it.effect("runs one root Assignment through exact proposal, settlement, presentation, and physical replay", () =>
+it.effect("runs one root Assignment through proposal, replay, and body-free deletion lineage", () =>
   Effect.gen(function* () {
     permissionRequests.length = 0
     const db = (yield* Database.Service).db
     const runtime = yield* LearningCommandRuntime.Service
+    const sessions = yield* Session.Service
     const source = "Analyze the semaphore proof by Friday."
     const input = assignmentCreateInput(source, "Analyze the semaphore proof")
     const interaction = yield* seedInteraction(
@@ -1250,6 +1257,36 @@ it.effect("runs one root Assignment through exact proposal, settlement, presenta
     expect(result.metadata).toMatchObject({ outcome: "applied", durablySettled: true })
     expect(yield* exactPartResult(db, interaction.registration.partID)).toEqual(result)
     expect(yield* db.select().from(AssignmentEffectTable).all()).toHaveLength(1)
+    expect(
+      yield* db
+        .select()
+        .from(TurnLineageRecordRelationTable)
+        .where(eq(TurnLineageRecordRelationTable.producer_part_id, interaction.registration.partID))
+        .all(),
+    ).toEqual([
+      expect.objectContaining({
+        assistant_message_id: interaction.registration.assistantMessageID,
+        relation_kind: "typed_citation",
+        owner_kind: "learning_interaction",
+        record_id: interaction.occurrenceID,
+        revision_id: interaction.occurrenceID,
+        revision_version: 0,
+        producer_part_id: interaction.registration.partID,
+        producer_version: 1,
+      }),
+    ])
+    expect(
+      yield* db
+        .select()
+        .from(TurnLineageCandidateCoverageTable)
+        .where(eq(TurnLineageCandidateCoverageTable.part_id, interaction.registration.partID))
+        .get(),
+    ).toMatchObject({
+      assistant_message_id: interaction.registration.assistantMessageID,
+      producer_kind: "typed_citation",
+      outcome: "positive_projected",
+      relation_count: 1,
+    })
 
     const replay = yield* runtime.executeCommand(
       LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
@@ -1264,6 +1301,45 @@ it.effect("runs one root Assignment through exact proposal, settlement, presenta
     )
     expect(replay).toEqual(result)
     expect(permissionRequests).toHaveLength(1)
+    expect(
+      yield* db
+        .select({ count: sql<number>`count(*)` })
+        .from(TurnLineageRecordRelationTable)
+        .where(eq(TurnLineageRecordRelationTable.producer_part_id, interaction.registration.partID))
+        .get(),
+    ).toEqual({ count: 1 })
+
+    yield* settleInteractionTurn(db, interaction, Date.now() + 1)
+    const proposal = yield* sessions.proposeRemoval({
+      sessionID: interaction.registration.sessionID,
+      mode: "minimal_audit",
+    })
+    expect(yield* sessions.commitRemoval(proposal)).toMatchObject({ type: "applied", auditAvailable: true })
+    const projection = yield* db.transaction((tx) =>
+      SessionDeletion.readProjection(tx, interaction.registration.sessionID),
+    )
+    if (projection.state !== "deleted_minimal_audit") {
+      return yield* Effect.die("Expected the Assignment Session to retain a minimal deletion audit")
+    }
+    expect(
+      projection.audit.operations.flatMap((operation) =>
+        operation.records.filter(
+          (record) =>
+            record.ownerKind === "learning_interaction" &&
+            record.recordID === interaction.occurrenceID &&
+            record.revisionID === interaction.occurrenceID,
+        ),
+      ),
+    ).toEqual([
+      expect.objectContaining({
+        revisionVersion: 0,
+        contextClassification: "not_entered",
+        exactRead: false,
+        typedCitation: true,
+      }),
+    ])
+    expect(yield* db.select().from(AssignmentEffectTable).all()).toHaveLength(1)
+    expect(JSON.stringify(projection)).not.toContain(source)
   }),
 )
 
@@ -11785,6 +11861,10 @@ function settleInteractionTurn(
         state: "completed",
         time,
       })
+      yield* TurnLineage.coverTerminalCandidate(tx, interaction.registration.partID, time)
+      if (!(yield* TurnLineage.trySealOperation(tx, interaction.registration.assistantMessageID, time))) {
+        return yield* Effect.die("Expected the settled test interaction to seal complete lineage coverage")
+      }
       yield* TurnLifecycle.settle(tx, {
         turnID: interaction.turnID,
         outcome: "completed",
@@ -12262,7 +12342,7 @@ function seedInteraction(
     const interaction = { sessionID, userMessageID, turnID, inputID, occurrenceID }
     return {
       ...interaction,
-      registration: yield* insertAssistant(db, interaction, suffix, input, toolID, time),
+      registration: yield* insertAssistant(db, interaction, suffix, input, toolID, time + 1),
     }
   }).pipe(Effect.orDie)
 }
@@ -12335,7 +12415,7 @@ function seedFollowupInteraction(
     }
     return {
       ...interaction,
-      registration: yield* insertAssistant(db, interaction, suffix, input, toolID, options.time),
+      registration: yield* insertAssistant(db, interaction, suffix, input, toolID, options.time + 1),
     }
   }).pipe(Effect.orDie)
 }

@@ -231,13 +231,76 @@ Learning is native when it changes the agent's normal behavior rather than appea
   Last-minute rescue after a task has collapsed to a minute-scale deadline
   window is outside Repa's product scope.
 - When a Session produces a relevant durable change, the learner can inspect
-  what was recorded, what was inferred, and what future action changed. A
+  what was recorded, what was inferred, and the exact operational lineage that
+  remains available. Context inclusion, an exact read, a typed citation, and a
+  completed Tutor answer do not identify which record caused the answer. A
   routine explanation does not require an expanded end-of-session audit.
 
 An interaction can be educationally valuable while leaving only Session history,
 source references, and a modest future reminder. Structured evidence exists to
 improve later teaching and advice; it is not a form that every explanation
 must fill.
+
+### Learner-chosen Session deletion
+
+Deleting a Session is a learner-controlled choice over the exact current root
+and descendant tree, with one uniform mode for that whole scope. The learner may
+delete the conversation bodies, Context, read/citation/action associations, and
+every optional inspection trace; later inspection can then
+report only deleted, unavailable, or unknown source truth that independently
+owned learning records still preserve. Or the learner may delete all bodies
+while retaining a minimal structured audit containing only exact record
+identity/revision, whether it did not enter Context or entered as semantic/full
+versus locator-only content, exact read or typed-citation occurrence, the
+corresponding operation's `completed | failed | interrupted` terminal state,
+deletion time, and body-deleted status.
+
+The choice is explicit and has no silent default. The minimal audit retains no
+transcript, learner input, Assistant answer, Context body, Tool input/output,
+task result, excerpt, or summary. It records operational lineage only and
+cannot explain why a model produced an answer. The learner may later delete
+the minimal audit completely; it cannot be recreated after full deletion. A
+minimum body-free destructive-operation receipt may survive solely to make the
+chosen deletion/purge, replay, and conflict truthful; it is not inspection
+lineage and cannot reconstruct any deleted relation or body. While that receipt
+survives, a new root, child, or forked Session cannot reuse its exact root ID and
+impersonate the deleted Session; the ID remains retired within that local
+LearnerHome.
+
+A learner-managed local export file is outside the LearnerHome database, so
+Session deletion neither finds nor destroys that backup. Deletion is still
+final at the original Session address inside that LearnerHome. An exact
+identity-preserving restore is legal only into another LearnerHome/database
+where the imported identities are unoccupied. Importing the same material back
+into the original LearnerHome is an explicit **new-copy** action: it receives a
+fresh Session, Message, Part, Turn, and learner-occurrence identity graph, and
+the imported presentations do not regain the deleted Session's Context, Tool,
+command, domain, or operational lineage. Repa never silently converts a failed
+exact restore into a copy or invents a deleted-to-live incarnation transition.
+
+An import cannot create an empty or ambiguous Session. Every admitted imported
+Message and Part belongs to one complete durable administrative-history seal,
+is read-only and non-executable, and remains outside Turn, pending-work,
+recovery, Context-lineage, and learning-effect truth. Empty, non-renderable, or
+executable-looking unfinished bundles and every imported live
+`Session.revert`/snapshot/diff state are refused rather than cleared or run.
+Imported Message/Part/Patch presentations cannot later be used to revert the
+target worktree or delete the sealed history; only a fresh local post-import
+suffix may acquire ordinary local revert/unrevert/cleanup meaning.
+
+Exact restore preserves the supported source presentation times and seeds the
+restored Session's ordering frontier; a new copy normalizes a fresh presentation
+order. Every later transcript writer—including direct shell/admin and other
+non-Turn utilities—reserves strict-successor presentation order through the same
+Session boundary before an external effect. The first local learner Message and
+Turn follow the current frontier, so clock regression or a future backup
+timestamp cannot place any new utility or Turn before imported history. Import
+alone does not prove learner activity or advance shared learning state.
+
+Independently owned learning records and the minimum body-free receipts needed
+to keep their already-committed meaning resolvable retain their own lifecycles.
+This Session choice does not silently deep-delete Course, Goal, Assignment,
+learner-state, suggestion, policy, or other learning authority state.
 
 ## Product boundaries
 

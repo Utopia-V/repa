@@ -7,6 +7,7 @@ import {
   InvalidCursorError,
   MessageNotFoundError,
   SessionNotFoundError,
+  SessionIDRetiredError,
   UnknownError,
 } from "@opencode-ai/protocol/errors"
 import { AbsolutePath } from "@opencode-ai/core/schema"
@@ -65,12 +66,23 @@ export const SessionHandler = HttpApiBuilder.group(Api, "server.session", (handl
         "session.create",
         Effect.fn(function* (ctx) {
           return {
-            data: yield* session.create({
-              id: ctx.payload.id,
-              agent: ctx.payload.agent,
-              model: ctx.payload.model,
-              location: ctx.payload.location ?? { directory: AbsolutePath.make(process.cwd()) },
-            }),
+            data: yield* session
+              .create({
+                id: ctx.payload.id,
+                agent: ctx.payload.agent,
+                model: ctx.payload.model,
+                location: ctx.payload.location ?? { directory: AbsolutePath.make(process.cwd()) },
+              })
+              .pipe(
+                Effect.catchTag("SessionIDRetiredError", (error) =>
+                  Effect.fail(
+                    new SessionIDRetiredError({
+                      ...error,
+                      message: `Session ID is retired in this database: ${error.sessionID}`,
+                    }),
+                  ),
+                ),
+              ),
           }
         }),
       )

@@ -37,6 +37,7 @@ import {
   normalizeHostPreparedToolInput,
 } from "@/tool/learning-command"
 import { TurnLifecycle } from "@opencode-ai/core/turn/turn"
+import { TurnLineage } from "@opencode-ai/core/turn-lineage"
 import { Turn } from "@opencode-ai/schema/turn"
 import { TurnEvent } from "@opencode-ai/schema/turn-event"
 import { LearningFrontier } from "@opencode-ai/core/learning-frontier"
@@ -45,6 +46,7 @@ import { LearningContext } from "@opencode-ai/core/learning-context"
 import { LLMNativeRuntime } from "./llm/native-runtime"
 import { LLMAISDK } from "./llm/ai-sdk"
 import { INVALID_TOOL_ID } from "@/tool/invalid"
+import { SessionPresentation } from "@opencode-ai/core/session-presentation"
 
 const DOOM_LOOP_THRESHOLD = 3
 export type Result = "compact" | "stop" | "continue"
@@ -53,6 +55,11 @@ export type FailureReason = Extract<
   Turn.TerminalReason,
   "provider_failure" | "tool_runtime_failure" | "permission_failure" | "projection_failure" | "integrity_failure"
 >
+
+type PresentationMutationError =
+  | Session.BusyError
+  | SessionPresentation.AdministrativeHistoryIntegrityError
+  | SessionPresentation.FrontierUnrepresentableError
 
 class ProcessorIntegrityFailure extends Error {}
 class CapacityFailure extends Error {
@@ -89,7 +96,7 @@ export interface Handle {
   readonly updateToolCall: (
     toolCallID: string,
     update: (part: SessionV1.ToolPart) => SessionV1.ToolPart,
-  ) => Effect.Effect<SessionV1.ToolPart | undefined>
+  ) => Effect.Effect<SessionV1.ToolPart | undefined, PresentationMutationError>
   readonly completeToolCall: (
     toolCallID: string,
     output: {
@@ -98,11 +105,13 @@ export interface Handle {
       output: string
       attachments?: SessionV1.FilePart[]
     },
-  ) => Effect.Effect<void>
-  readonly failToolCall?: (toolCallID: string, error: unknown) => Effect.Effect<boolean>
+  ) => Effect.Effect<void, PresentationMutationError>
+  readonly failToolCall?: (toolCallID: string, error: unknown) => Effect.Effect<boolean, PresentationMutationError>
   readonly registeredToolCall: (toolCallID: string) => RegisteredToolCall | undefined
   readonly bindModelOperation: (operation: Turn.ModelOperation) => Effect.Effect<void, Turn.Error>
-  readonly process: (streamInput: LLM.InternalStreamInput | LLM.Prepared) => Effect.Effect<Result>
+  readonly process: (
+    streamInput: LLM.InternalStreamInput | LLM.Prepared,
+  ) => Effect.Effect<Result, PresentationMutationError>
 }
 
 type Input = {
@@ -218,7 +227,9 @@ const layer = Layer.effect(
           error instanceof CapacityFailure ||
           error instanceof Turn.IntegrityError ||
           error instanceof Turn.AdmissionConflictError ||
-          error instanceof Turn.SourceUnavailableError
+          error instanceof Turn.SourceUnavailableError ||
+          error instanceof SessionPresentation.AdministrativeHistoryIntegrityError ||
+          error instanceof SessionPresentation.FrontierUnrepresentableError
         ) {
           return "integrity_failure"
         }
@@ -718,11 +729,14 @@ const layer = Layer.effect(
                   },
                   options: {
                     commit: () =>
-                      TurnLifecycle.settleModel(tx, {
-                        turnID: input.turnID!,
-                        assistantMessageID: input.assistantMessage.id,
-                        state,
-                        time,
+                      Effect.gen(function* () {
+                        yield* TurnLifecycle.settleModel(tx, {
+                          turnID: input.turnID!,
+                          assistantMessageID: input.assistantMessage.id,
+                          state,
+                          time,
+                        })
+                        yield* TurnLineage.trySealOperation(tx, input.assistantMessage.id, time)
                       }).pipe(Effect.asVoid, Effect.orDie),
                   },
                 },
@@ -1081,12 +1095,15 @@ const layer = Layer.effect(
           Effect.gen(function* () {
             const before = yield* TurnLifecycle.invocation(tx, { turnID: input.turnID!, partID: call.partID })
             if (!before || before.state !== "running") return { result: before }
+            const time = Date.now()
             const invocation = yield* TurnLifecycle.settleTool(tx, {
               turnID: input.turnID!,
               partID: call.partID,
               state,
-              time: Date.now(),
+              time,
             })
+            yield* TurnLineage.coverTerminalCandidate(tx, call.partID, time)
+            yield* TurnLineage.trySealOperation(tx, call.messageID, time)
             return {
               result: invocation,
               event: {
@@ -1108,6 +1125,7 @@ const layer = Layer.effect(
         call: ToolCall,
         state: "not_started_limit" | "not_started_turn_exhausted",
         time: number,
+        terminal?: Turn.Terminal,
       ): SessionV1.ToolPart => ({
         id: call.partID,
         messageID: call.messageID,
@@ -1123,7 +1141,24 @@ const layer = Layer.effect(
             state === "not_started_limit"
               ? "Tool not started: this Turn's tool budget is exhausted"
               : "Tool not started: an earlier sibling exhausted the Turn",
-          metadata: { turnID: input.turnID!, disposition: state, notStarted: true },
+          metadata: {
+            turnID: input.turnID!,
+            disposition: state,
+            notStarted: true,
+            ...(state === "not_started_limit" && terminal?.exhaustion
+              ? {
+                  repaTurnExhaustion: {
+                    schemaVersion: 1,
+                    counter: terminal.exhaustion.counter,
+                    observed: terminal.exhaustion.observed,
+                    limit: terminal.exhaustion.limit,
+                    turnID: input.turnID!,
+                    rejectedAttemptID: terminal.exhaustion.rejectedAttemptID,
+                    envelopeFingerprint: terminal.exhaustion.envelopeFingerprint,
+                  },
+                }
+              : {}),
+          },
           time: { start: time, end: time },
         },
       })
@@ -1189,6 +1224,7 @@ const layer = Layer.effect(
               if (!admission.turn?.terminal) {
                 return yield* Effect.die(`Tool exhaustion did not terminalize its Turn: ${call.callID}`)
               }
+              const terminal = admission.turn.terminal
               return {
                 result: admission,
                 events: [
@@ -1198,7 +1234,7 @@ const layer = Layer.effect(
                       definition: SessionV1.Event.PartUpdated,
                       data: {
                         sessionID: item.sessionID,
-                        part: notStartedPart(item, state, time),
+                        part: notStartedPart(item, state, time, terminal),
                         time,
                       },
                     }
@@ -1612,7 +1648,9 @@ const layer = Layer.effect(
                   return yield* Effect.fail(Cause.squash(cause))
                 }),
             ),
-            Effect.ensuring(observeFailure(cleanup(), "projection_failure").pipe(Effect.uninterruptible)),
+            Effect.ensuring(
+              observeFailure(cleanup(), "projection_failure").pipe(Effect.uninterruptible, Effect.ignore),
+            ),
             Effect.catch(halt),
           )
 

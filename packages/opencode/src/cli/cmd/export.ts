@@ -7,6 +7,8 @@ import { UI } from "../ui"
 import * as prompts from "@clack/prompts"
 import { EOL } from "os"
 import { Effect } from "effect"
+import { Database } from "@opencode-ai/core/database/database"
+import { LearnerHomeIdentity } from "@opencode-ai/core/database/identity"
 
 function redact(kind: string, id: string, value: string) {
   return value.trim() ? `[redacted:${kind}:${id}]` : value
@@ -239,6 +241,7 @@ export const ExportCommand = effectCmd({
 
 const run = Effect.fn("Cli.export.body")(function* (args: { sessionID?: string; sanitize?: boolean }) {
   const svc = yield* Session.Service
+  const { db } = yield* Database.Service
   let sessionID = args.sessionID ? SessionID.make(args.sessionID) : undefined
   process.stderr.write(`Exporting session: ${sessionID ?? "latest"}\n`)
 
@@ -283,10 +286,20 @@ const run = Effect.fn("Cli.export.body")(function* (args: { sessionID?: string; 
   return yield* Effect.gen(function* () {
     const sessionInfo = yield* svc.get(sessionID!)
     const messages = yield* svc.messages({ sessionID: sessionInfo.id })
-
-    const exportData = { info: sessionInfo, messages }
-
-    process.stdout.write(JSON.stringify(args.sanitize ? sanitize(exportData) : exportData, null, 2))
+    const sourceDatabaseID = yield* db.transaction(LearnerHomeIdentity.read).pipe(Effect.orDie)
+    const history = args.sanitize ? sanitize({ info: sessionInfo, messages }) : { info: sessionInfo, messages }
+    process.stdout.write(
+      JSON.stringify(
+        {
+          type: "repa_session_offline_history",
+          schemaVersion: 1,
+          sourceDatabaseID,
+          ...history,
+        },
+        null,
+        2,
+      ),
+    )
     process.stdout.write(EOL)
   }).pipe(Effect.catchCause(() => fail(`Session not found: ${sessionID!}`)))
 })

@@ -126,6 +126,7 @@ export const LearningMaterialReadTool = Tool.define<
             abort: context.abort,
           })
           return learningContextReadResult({
+            capabilityID: LEARNING_MATERIAL_READ_TOOL_ID,
             title: "Exact Tutor material",
             metadata: {
               mapID: input.mapID,
@@ -141,6 +142,7 @@ export const LearningMaterialReadTool = Tool.define<
             const status = classifyMaterialFailure(error)
             return Effect.succeed(
               learningContextReadResult({
+                capabilityID: LEARNING_MATERIAL_READ_TOOL_ID,
                 title: "Exact Tutor material unavailable",
                 metadata: {
                   mapID: input.mapID,

@@ -1,9 +1,18 @@
 # OpenCode fork Gate 8: learning-command settlement
 
 Status: Accepted boundary retained at corrective integration commit
-`9e91d43c629b66d65c8741e342bca7cf05de5667`; one scoped immutable-occurrence
-presentation correction is pending independent implementation/evidence
-closure. The 2026-07-27
+`9e91d43c629b66d65c8741e342bca7cf05de5667`, except that the Session-deletion/
+retention subsection is bounded-reopened by the contract/theory-accepted
+[Gates 5/8/12/18 deletion-choice and local-restore correction](repa-gate-05-08-12-18-session-deletion-choice-correction-2026-08-13.md).
+Its exact current implementation/evidence successor is independently accepted
+under Whole-Gate run `G22-WG-20260813-019ff8e2-01` and remains unintegrated.
+Gate 22 review temporarily reopened only Gate 18's material exact-read relation
+feeding the optional audit; the retained reviewer accepted the action-complete
+successor at manifest `334CDCAEEA573A8257E8F3B67A8A4AE9550F06522B3E85645B974CE126C4CBE6`.
+Deletion transaction, command settlement, and every other Gate 8 meaning were
+unchanged.
+One scoped immutable-occurrence presentation correction is pending independent
+implementation/evidence closure. The 2026-07-27
 first-principles audit had scoped-reopened the current physical
 shared-substrate dependency and primary-TUI settlement-presentation
 boundaries. The original Course-command proof at implementation commit
@@ -520,6 +529,14 @@ Parts.
 
 ## Session deletion and source-unavailable tombstone
 
+Current correction notice (2026-08-13): the following clauses remain exact
+provenance for the accepted implementation and for independently required
+command effects/receipts. Their rule that presentation lineage is always
+removed now has one contract/theory-accepted optional-retention correction: the
+learner may
+choose to retain only the allowlisted body-free Context/read/citation/terminal
+audit. No other Gate 8 settlement meaning is reopened.
+
 Ordinary Session deletion does not undo, replay, or deep-delete an accepted
 Course selection. For each deleted Session it must atomically:
 
@@ -530,11 +547,20 @@ Course selection. For each deleted Session it must atomically:
   invocation, or receipt/effect reference remains;
 - preserve Course acceptance effects, immutable receipts, and each effect's
   first exact `applied` settlement record;
-- remove Session-, Message-, Part-, presentation-lineage, and durable
-  Session-event transcript data, together with every failed, interrupted,
-  rejected, conflicting, or duplicate physical invocation owned by an
-  Assistant in that Session; and
+- remove Session-, Message-, Part-, and durable Session-event bodies plus all
+  non-allowlisted presentation lineage. Full deletion removes every optional
+  inspection association; minimal-audit deletion may retain only the candidate
+  body-free Context/read/citation/terminal projection once the bounded
+  correction's implementation/evidence is independently accepted. Failed,
+  interrupted, rejected, conflicting, or duplicate physical invocation bodies
+  owned by an Assistant in that Session are still removed; and
 - publish deletion visibility only after the database transaction commits.
+
+An explicit same-home import-as-copy under that correction never reconnects the
+new Session to an old command occurrence, physical invocation, immutable
+receipt, effect, or source tombstone. Those records retain their original
+identity and deletion/source-unavailable truth; imported presentations are not
+evidence that the old command ran again.
 
 The current publish-then-remove path and catch-and-log failure behavior are not
 sufficient for this claim. A failed tombstone or transcript/aggregate deletion
@@ -553,11 +579,13 @@ effect. A no-effect physical invocation that survives in another Session also
 retains the tombstoned occurrence until its owning Assistant/Session is
 deleted; exact physical replay still precedes the unavailable-source check.
 
-After transcript deletion, the receipt and first applied settlement are
-inspectable audit and correction evidence. No active executor can present the
+After transcript deletion, the independently required receipt and first applied
+settlement remain inspectable correction evidence. They are distinct from the
+learner-selected optional Session audit. No active executor can present the
 deleted Session/Part as a live trusted envelope, so the command replay API does
 not resurrect or continue that invocation. Read-only inspection can return the
-stored result and its source-availability status.
+stored result and its source-availability status, plus only the optional audit
+fields the selected mode separately permits.
 
 ## Runtime and dependency ownership
 

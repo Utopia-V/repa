@@ -14,6 +14,7 @@ import { InstanceState } from "@/effect/instance-state"
 import { InstanceRef } from "@/effect/instance-ref"
 import { EventV2Bridge } from "@/event-v2-bridge"
 import { SessionTurnEvents } from "./turn-events"
+import { SessionPresentation } from "@opencode-ai/core/session-presentation"
 import { and, asc, eq } from "drizzle-orm"
 
 export type TurnWorkResult =
@@ -28,6 +29,11 @@ export type TurnWorkResult =
         | "owner_failure"
         | "integrity_failure"
     }
+
+type ShellPresentationError =
+  | BusyError
+  | SessionPresentation.AdministrativeHistoryIntegrityError
+  | SessionPresentation.FrontierUnrepresentableError
 
 export type StartTurnInput<E, E2, E3, R = never> = {
   readonly sessionID: SessionID
@@ -50,6 +56,7 @@ export type SteerTurnInput<E, R = never> = {
 
 export interface Interface {
   readonly assertNotBusy: (sessionID: SessionID) => Effect.Effect<void, BusyError>
+  readonly activeTurnIDs: (sessionIDs: readonly SessionID[]) => Effect.Effect<readonly Turn.ID[]>
   readonly shared: SessionLifecycle.Interface["shared"]
   readonly admit: SessionLifecycle.Interface["admit"]
   readonly mutateThenAdmit: SessionLifecycle.Interface["mutateThenAdmit"]
@@ -68,6 +75,7 @@ export interface Interface {
     sessionID: SessionID,
     effect: (markCommitted: Effect.Effect<void>) => Effect.Effect<A, E, R>,
   ) => Effect.Effect<A, E | BusyError, R>
+  readonly awaitClosing: (sessionID: SessionID) => Effect.Effect<void>
   readonly phase: SessionLifecycle.Interface["phase"]
   readonly startTurn: <E, E2, E3, R>(
     input: StartTurnInput<E, E2, E3, R>,
@@ -81,10 +89,10 @@ export interface Interface {
   readonly interruptTurn: (sessionID: SessionID, turnID: Turn.ID) => Effect.Effect<Turn.Info, Turn.Error>
   readonly startShell: (
     sessionID: SessionID,
-    onInterrupt: Effect.Effect<SessionV1.WithParts>,
-    work: Effect.Effect<SessionV1.WithParts>,
+    onInterrupt: Effect.Effect<SessionV1.WithParts, ShellPresentationError>,
+    work: Effect.Effect<SessionV1.WithParts, ShellPresentationError>,
     ready?: Latch.Latch,
-  ) => Effect.Effect<SessionV1.WithParts, BusyError>
+  ) => Effect.Effect<SessionV1.WithParts, BusyError | ShellPresentationError>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/SessionRunState") {}
@@ -128,7 +136,7 @@ const layer = Layer.effect(
     const runners = new Map<
       SessionID,
       {
-        runner: Runner.Runner<SessionV1.WithParts>
+        runner: Runner.Runner<SessionV1.WithParts, ShellPresentationError>
         context: NonNullable<typeof InstanceRef.Service>
       }
     >()
@@ -480,14 +488,14 @@ const layer = Layer.effect(
 
     const runner = Effect.fn("SessionRunState.runner")(function* (
       sessionID: SessionID,
-      onInterrupt: Effect.Effect<SessionV1.WithParts>,
+      onInterrupt: Effect.Effect<SessionV1.WithParts, ShellPresentationError>,
     ) {
       const existing = runners.get(sessionID)
       if (existing) return existing.runner
       const context = yield* InstanceState.context
       const located = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
         effect.pipe(Effect.provideService(InstanceRef, context))
-      const next = Runner.make<SessionV1.WithParts>(scope, {
+      const next = Runner.make<SessionV1.WithParts, ShellPresentationError>(scope, {
         onIdle: located(status.set(sessionID, { type: "idle" })),
         onBusy: located(status.set(sessionID, { type: "busy" })),
         onInterrupt,
@@ -770,6 +778,20 @@ const layer = Layer.effect(
       if (existing?.runner.busy) yield* busyError(sessionID)
     })
 
+    const activeTurnIDs: Interface["activeTurnIDs"] = Effect.fn("SessionRunState.activeTurnIDs")(function* (
+      sessionIDs,
+    ) {
+      const selected = [...new Set(sessionIDs)]
+      const processOwners = selected.flatMap((sessionID) => {
+        const owner = turnOwners.get(sessionID)
+        return owner && owner.phase !== "releasing" ? [owner.turnID] : []
+      })
+      const durable = yield* db
+        .transaction((tx) => TurnLifecycle.activeIDs(tx, selected))
+        .pipe(Effect.catchTag("SqlError", Effect.die))
+      return [...new Set([...processOwners, ...durable])].sort()
+    })
+
     const cancel = Effect.fn("SessionRunState.cancel")(function* (sessionID: SessionID) {
       const existing = runners.get(sessionID)
       const current = yield* InstanceState.context.pipe(
@@ -789,8 +811,8 @@ const layer = Layer.effect(
 
     const startShell = Effect.fn("SessionRunState.startShell")(function* (
       sessionID: SessionID,
-      onInterrupt: Effect.Effect<SessionV1.WithParts>,
-      work: Effect.Effect<SessionV1.WithParts>,
+      onInterrupt: Effect.Effect<SessionV1.WithParts, ShellPresentationError>,
+      work: Effect.Effect<SessionV1.WithParts, ShellPresentationError>,
       ready?: Latch.Latch,
     ) {
       const owner = turnOwners.get(sessionID)
@@ -851,7 +873,7 @@ const layer = Layer.effect(
       ): Effect.Effect<A, E | BusyError, R> => {
         const sessionID = selected[index]
         if (!sessionID) return effect(Effect.forEach(committed, (mark) => mark, { discard: true }))
-        return lifecycle.close(sessionID, Effect.void, (markCommitted) =>
+        return lifecycle.closeIfIdle(sessionID, (markCommitted) =>
           acquire(index + 1, [...committed, markCommitted]),
         )
       }
@@ -860,6 +882,7 @@ const layer = Layer.effect(
 
     return Service.of({
       assertNotBusy,
+      activeTurnIDs,
       shared: lifecycle.shared,
       admit: lifecycle.admit,
       mutateThenAdmit: lifecycle.mutateThenAdmit,
@@ -869,6 +892,7 @@ const layer = Layer.effect(
       closeMany,
       discard,
       close,
+      awaitClosing: lifecycle.awaitClosing,
       phase: lifecycle.phase,
       startTurn,
       steerTurn,

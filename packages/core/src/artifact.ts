@@ -1894,6 +1894,19 @@ function getArtifactInfo(source: Queryable, artifactID: ArtifactID) {
   })
 }
 
+export function readArtifactInfoInTransaction(source: Queryable, artifactID: ArtifactID) {
+  return getArtifactInfo(source, artifactID)
+}
+
+export function readArtifactRevisionInTransaction(
+  source: Queryable,
+  artifactID: ArtifactID,
+  revisionID: RevisionID,
+  attribution: AttributionBasis,
+) {
+  return exactRevision(source, artifactID, revisionID, attribution)
+}
+
 function artifactInfo(
   artifact: ArtifactRow,
   current: CurrentSourceRow,

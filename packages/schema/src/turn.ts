@@ -180,6 +180,32 @@ export const Exhaustion = Schema.Struct({
 }).annotate({ identifier: "Turn.Exhaustion" })
 export type Exhaustion = typeof Exhaustion.Type
 
+export const InspectionExhaustion = Schema.Union([
+  Schema.Struct({
+    schemaVersion: Schema.Literal(1),
+    type: Schema.Literal("generic"),
+    counter: CounterKind,
+    reason: Schema.String,
+  }),
+  Schema.Struct({
+    schemaVersion: Schema.Literal(1),
+    type: Schema.Literals(["predecessor_continuation_exhausted", "rejected_tool_continuation_exhausted"]),
+    counter: CounterKind,
+    predecessorPartID: SessionV1.PartID,
+    queryFingerprint: Schema.String,
+    outputFingerprint: Schema.String,
+    completeSoFar: Schema.Boolean,
+    gapCounts: Schema.Struct({
+      oversizedCandidateSkipped: NonNegativeInt,
+      rangeItemsSkipped: NonNegativeInt,
+    }),
+    gapFingerprint: Schema.String,
+    continuationPending: Schema.Boolean,
+    rangeNextOffset: NonNegativeInt.pipe(optional),
+  }),
+]).annotate({ identifier: "Turn.InspectionExhaustion" })
+export type InspectionExhaustion = typeof InspectionExhaustion.Type
+
 export const Terminal = Schema.Struct({
   outcome: Schema.Literals(["completed", "failed", "interrupted", "exhausted"]),
   reason: TerminalReason,
@@ -203,6 +229,7 @@ export const Info = Schema.Struct({
   timeAdmitted: DateTimeUtcFromMillis,
   causalTime: DateTimeUtcFromMillis,
   terminal: Terminal.pipe(optional),
+  inspectionExhaustion: InspectionExhaustion.pipe(optional),
 }).annotate({ identifier: "Turn.Info" })
 export type Info = typeof Info.Type
 

@@ -1,5 +1,5 @@
 import { Effect } from "effect"
-import { effectCmd } from "../effect-cmd"
+import { effectCmd, fail } from "../effect-cmd"
 import { Session } from "@/session/session"
 import { NotFoundError } from "@/storage/storage"
 import { Database } from "@opencode-ai/core/database/database"
@@ -166,7 +166,12 @@ const aggregateSessionStats = Effect.fn("Cli.stats.aggregate")(function* (
       Effect.gen(function* () {
         const messages = yield* svc
           .messages({ sessionID: session.id })
-          .pipe(Effect.catchIf(NotFoundError.isInstance, () => Effect.succeed([])))
+          .pipe(
+            Effect.catchIf(NotFoundError.isInstance, () => Effect.succeed([])),
+            Effect.catchTag("SessionPresentation.AdministrativeHistoryIntegrityError", (error) =>
+              fail(`Session ${error.sessionID} has invalid administrative history: ${error.reason}`),
+            ),
+          )
 
         const sessionCost = session.cost ?? 0
         const sessionTokens = session.tokens ?? { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } }

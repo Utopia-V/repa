@@ -6,12 +6,19 @@ import { waitForAbort } from "@opencode-ai/core/process"
 import { NonNegativeInt, PositiveInt } from "@opencode-ai/core/schema"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
 import { Effect, Schema } from "effect"
-import { learningContextReadResult } from "./learning-context-read"
+import {
+  learningContextReadResult,
+  learningInspectionInput,
+  learningInspectionReadResult,
+} from "./learning-context-read"
+import { inspectionOwner } from "@opencode-ai/core/learning-inspection-owner"
 import { Tool } from "./tool"
 
 export const COURSE_QUERY_TOOL_ID = "course_query"
 export const LEARNING_NAVIGATION_QUERY_TOOL_ID = "learning_navigation_query"
 export const COURSE_NAVIGATION_QUERY_TOOL_IDS = [COURSE_QUERY_TOOL_ID, LEARNING_NAVIGATION_QUERY_TOOL_ID] as const
+type Transaction = Parameters<Parameters<Database.Interface["db"]["transaction"]>[0]>[0]
+const Inspection = learningInspectionInput
 
 const CourseQueryInput = Schema.Union([
   Schema.Struct({
@@ -52,6 +59,7 @@ const CourseQueryInput = Schema.Union([
     courseID: Course.CourseID,
     viewID: Course.ViewID,
     revisionID: Course.RevisionID,
+    ...Inspection,
   }),
   Schema.Struct({
     action: Schema.Literal("list_revision_items"),
@@ -95,16 +103,18 @@ const CourseQueryInput = Schema.Union([
 ]).annotate({ parseOptions: { onExcessProperty: "error" } })
 
 const LearningNavigationQueryInput = Schema.Union([
-  Schema.Struct({ action: Schema.Literal("current_default") }),
-  Schema.Struct({ action: Schema.Literal("current_anchor"), courseID: Course.CourseID }),
+  Schema.Struct({ action: Schema.Literal("current_default"), ...Inspection }),
+  Schema.Struct({ action: Schema.Literal("current_anchor"), courseID: Course.CourseID, ...Inspection }),
   Schema.Struct({
     action: Schema.Literal("pinned_default_transition"),
     effectID: LearnerNavigation.DefaultEffectID,
+    ...Inspection,
   }),
   Schema.Struct({
     action: Schema.Literal("pinned_anchor_transition"),
     courseID: Course.CourseID,
     effectID: LearnerNavigation.AnchorEffectID,
+    ...Inspection,
   }),
 ]).annotate({ parseOptions: { onExcessProperty: "error" } })
 
@@ -119,9 +129,45 @@ export const CourseQueryTool = Tool.define<
     const database = yield* Database.Service
     return {
       description:
-        "Read exact Course-owner state, including bounded View, Revision, item, mapping, and reuse-citation pages. pinned_learning_context expands a zero-based Course entry from one exact stored Gate 18 cut; it never retargets to a newer working Revision and labels a later selection as superseded. Every list or pinned range returns at most 64 records and truthful remainder; a fresh-query cursor is not a frozen snapshot. Results fail truthfully when the Gate 18 lazy-read byte allowance cannot carry a whole value. This tool never changes learning state.",
+        "Read exact Course-owner state, including bounded View, Revision, item, mapping, and reuse-citation pages. get_revision accepts includeInspection=true to carry the exact revision-versus-working-selection relation and operational lineage through the typed primary-TUI projection in the same snapshot. pinned_learning_context expands a zero-based Course entry from one exact stored Gate 18 cut; it never retargets to a newer working Revision and labels a later selection as superseded. Every list or pinned range returns at most 64 records and truthful remainder; a fresh-query cursor is not a frozen snapshot. Results fail truthfully when the Gate 18 lazy-read byte allowance cannot carry a whole value. This tool never changes learning state.",
       parameters: CourseQueryInput,
       execute: (input: Schema.Schema.Type<typeof CourseQueryInput>, context) => {
+        if (input.action === "get_revision" && input.includeInspection) {
+          return database.db
+            .transaction((tx) =>
+              Effect.gen(function* () {
+                const value = yield* Course.readRevisionSummaryInTransaction(
+                  tx,
+                  input.courseID,
+                  input.viewID,
+                  input.revisionID,
+                )
+                const read = {
+                  capabilityID: COURSE_QUERY_TOOL_ID,
+                  title: "get revision",
+                  metadata: { action: input.action },
+                  value: { value },
+                  itemCount: 1,
+                } satisfies Parameters<typeof learningContextReadResult>[0]
+                return yield* learningInspectionReadResult(
+                  tx,
+                  read,
+                  context,
+                  inspectionOwner("course_view", "exact immutable Course View revision", [
+                    { label: "Course", value: value.courseID },
+                    { label: "View", value: value.viewID },
+                    { label: "Working relation", value: value.disposition },
+                    {
+                      label: "Selection semantics",
+                      value: "revision creation and working-revision selection are independent transitions",
+                    },
+                  ]),
+                  input.includeInspection,
+                )
+              }),
+            )
+            .pipe(Effect.orDie)
+        }
         if (input.action === "pinned_learning_context") {
           return abortable(
             Effect.gen(function* () {
@@ -130,6 +176,7 @@ export const CourseQueryTool = Tool.define<
               )
               if (stored.type !== "available") {
                 return learningContextReadResult({
+                  capabilityID: COURSE_QUERY_TOOL_ID,
                   title: "Pinned Course context",
                   metadata: {
                     action: input.action,
@@ -145,6 +192,7 @@ export const CourseQueryTool = Tool.define<
               const entry = section.entries[input.entryIndex]
               if (!entry || entry.kind !== "course") {
                 return learningContextReadResult({
+                  capabilityID: COURSE_QUERY_TOOL_ID,
                   title: "Pinned Course context",
                   metadata: {
                     action: input.action,
@@ -162,6 +210,7 @@ export const CourseQueryTool = Tool.define<
                 ...(input.limit === undefined ? {} : { limit: input.limit }),
               })
               return learningContextReadResult({
+                capabilityID: COURSE_QUERY_TOOL_ID,
                 title: "Pinned Course context",
                 metadata: {
                   action: input.action,
@@ -189,6 +238,7 @@ export const CourseQueryTool = Tool.define<
                 Effect.map((page) => {
                   const result = { ...page, items: page.items.map(courseRead) }
                   return learningContextReadResult({
+                    capabilityID: COURSE_QUERY_TOOL_ID,
                     title: "Courses",
                     metadata: {
                       action: input.action,
@@ -209,6 +259,7 @@ export const CourseQueryTool = Tool.define<
             courses.getCourse(input.courseID).pipe(
               Effect.map((course) =>
                 learningContextReadResult({
+                  capabilityID: COURSE_QUERY_TOOL_ID,
                   title: course.title,
                   metadata: { action: input.action, courseID: course.id, stateVersion: course.stateVersion },
                   value: { course: courseRead(course) },
@@ -292,20 +343,25 @@ export const CourseQueryTool = Tool.define<
 export const LearningNavigationQueryTool = Tool.define<
   typeof LearningNavigationQueryInput,
   Record<string, unknown>,
-  LearnerNavigation.ReadService
+  LearnerNavigation.ReadService | Database.Service
 >(
   LEARNING_NAVIGATION_QUERY_TOOL_ID,
   Effect.gen(function* () {
     const navigation = yield* LearnerNavigation.ReadService
+    const database = yield* Database.Service
     return {
       description:
-        "Read the exact current default-Course projection or route-anchor head, or expand one pinned default/anchor transition by its exact effect identity. Pinned reads never retarget to the current head. Results fail truthfully when the Gate 18 lazy-read byte allowance cannot carry a whole value. This tool never changes navigation or learning-command state.",
+        "Read the exact current default-Course projection or route-anchor head, or expand one pinned default/anchor transition by its exact effect identity. Set includeInspection to true for the same-snapshot typed TUI owner/lineage projection. Pinned reads never retarget to the current head. Results fail truthfully when the Gate 18 lazy-read byte allowance cannot carry a whole value. This tool never changes navigation or learning-command state.",
       parameters: LearningNavigationQueryInput,
       execute: (input, context) => {
+        if (input.includeInspection) {
+          return database.db.transaction((tx) => inspectNavigationRead(tx, input, context)).pipe(Effect.orDie)
+        }
         if (input.action === "current_default") {
           return abortable(navigation.currentDefault(), context.abort).pipe(
             Effect.map((current) =>
               learningContextReadResult({
+                capabilityID: LEARNING_NAVIGATION_QUERY_TOOL_ID,
                 title: "Current default Course",
                 metadata: { action: input.action, headID: current.headID, version: current.version },
                 value: { current },
@@ -319,6 +375,7 @@ export const LearningNavigationQueryTool = Tool.define<
           return abortable(navigation.readDefaultTransition(input.effectID), context.abort).pipe(
             Effect.map((result) =>
               learningContextReadResult({
+                capabilityID: LEARNING_NAVIGATION_QUERY_TOOL_ID,
                 title: "Pinned default-Course transition",
                 metadata: { action: input.action, effectID: input.effectID, result: result.type },
                 value: { result },
@@ -335,6 +392,7 @@ export const LearningNavigationQueryTool = Tool.define<
           ).pipe(
             Effect.map((result) =>
               learningContextReadResult({
+                capabilityID: LEARNING_NAVIGATION_QUERY_TOOL_ID,
                 title: "Pinned Course route-anchor transition",
                 metadata: {
                   action: input.action,
@@ -352,6 +410,7 @@ export const LearningNavigationQueryTool = Tool.define<
         return abortable(navigation.currentAnchor(input.courseID), context.abort).pipe(
           Effect.map((current) =>
             learningContextReadResult({
+              capabilityID: LEARNING_NAVIGATION_QUERY_TOOL_ID,
               title: "Current Course route anchor",
               metadata: { action: input.action, headID: current.headID, version: current.version },
               value: { current },
@@ -364,6 +423,73 @@ export const LearningNavigationQueryTool = Tool.define<
     }
   }),
 )
+
+function inspectNavigationRead(
+  tx: Transaction,
+  input: Schema.Schema.Type<typeof LearningNavigationQueryInput>,
+  context: Tool.Context,
+) {
+  return Effect.gen(function* () {
+    const read = yield* Effect.gen(function* () {
+      if (input.action === "current_default") {
+        const current = yield* LearnerNavigation.readCurrentDefault(tx)
+        return {
+          capabilityID: LEARNING_NAVIGATION_QUERY_TOOL_ID,
+          title: "Current default Course",
+          metadata: { action: input.action, headID: current.headID, version: current.version },
+          value: { current },
+          itemCount: 1,
+        } satisfies Parameters<typeof learningContextReadResult>[0]
+      }
+      if (input.action === "current_anchor") {
+        const current = yield* LearnerNavigation.readCurrentAnchor(tx, input.courseID)
+        return {
+          capabilityID: LEARNING_NAVIGATION_QUERY_TOOL_ID,
+          title: "Current Course route anchor",
+          metadata: { action: input.action, headID: current.headID, version: current.version },
+          value: { current },
+          itemCount: 1,
+        } satisfies Parameters<typeof learningContextReadResult>[0]
+      }
+      if (input.action === "pinned_default_transition") {
+        const result = yield* LearnerNavigation.readLearningContextDefaultTransition(tx, input.effectID)
+        return {
+          capabilityID: LEARNING_NAVIGATION_QUERY_TOOL_ID,
+          title: "Pinned default-Course transition",
+          metadata: { action: input.action, effectID: input.effectID, result: result.type },
+          value: { result },
+          itemCount: result.type === "available" ? 1 : 0,
+        } satisfies Parameters<typeof learningContextReadResult>[0]
+      }
+      const result = yield* LearnerNavigation.readLearningContextAnchorTransition(tx, {
+        courseID: input.courseID,
+        effectID: input.effectID,
+      })
+      return {
+        capabilityID: LEARNING_NAVIGATION_QUERY_TOOL_ID,
+        title: "Pinned Course route-anchor transition",
+        metadata: { action: input.action, courseID: input.courseID, effectID: input.effectID, result: result.type },
+        value: { result },
+        itemCount: result.type === "available" ? 1 : 0,
+      } satisfies Parameters<typeof learningContextReadResult>[0]
+    })
+    return yield* learningInspectionReadResult(
+      tx,
+      read,
+      context,
+      inspectionOwner(
+        "learning_navigation",
+        input.action === "current_default"
+          ? "current learner-owned default Course"
+          : input.action === "current_anchor"
+            ? "current learner-owned Course route anchor"
+            : "immutable navigation transition",
+        [{ label: "Course relation", value: "navigation is independent of Course structure and working selection" }],
+      ),
+      input.includeInspection,
+    )
+  })
+}
 
 function abortable<A, E, R>(effect: Effect.Effect<A, E, R>, signal: AbortSignal) {
   if (signal.aborted) return waitForAbort(signal)
@@ -384,6 +510,7 @@ function exactRead<A, E, R>(effect: Effect.Effect<A, E, R>, action: string, sign
   return abortable(effect, signal).pipe(
     Effect.map((value) =>
       learningContextReadResult({
+        capabilityID: COURSE_QUERY_TOOL_ID,
         title: action.replaceAll("_", " "),
         metadata: { action },
         value: { value },
@@ -402,6 +529,7 @@ function pageRead<A, E, R>(
   return abortable(effect, signal).pipe(
     Effect.map((page) =>
       learningContextReadResult({
+        capabilityID: COURSE_QUERY_TOOL_ID,
         title: action.replaceAll("_", " "),
         metadata: {
           action,

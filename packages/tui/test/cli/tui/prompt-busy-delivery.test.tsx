@@ -387,6 +387,18 @@ function text(call: DeliveryCall | undefined) {
   return isRecord(item) && typeof item.text === "string" ? item.text : undefined
 }
 
+test("primary TUI submits a natural inspection/correction request without an internal record ID", async () => {
+  await using prompt = await mountPrompt()
+  const request =
+    "What does Repa remember about that Goal, did it enter earlier context, and if it is stale help me correct it?"
+  prompt.prompt.set({ input: request, parts: [] })
+  prompt.app.mockInput.pressEnter()
+  await wait(() => prompt.calls.start.length === 1)
+  expect(text(prompt.calls.start[0])).toBe(request)
+  expect(JSON.stringify(prompt.calls.start[0]?.body)).not.toContain("goalID")
+  expect(JSON.stringify(prompt.calls.start[0]?.body)).not.toContain("revisionID")
+})
+
 test("busy send stays editable and unadmitted before one latest-payload start", async () => {
   await using prompt = await mountPrompt({ currentWorkBinding: "ctrl+y", width: 72 })
   const turnA = "trn_busy_a"

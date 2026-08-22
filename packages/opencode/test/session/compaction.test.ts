@@ -36,6 +36,9 @@ import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { LearnerAdmission, Occurrence } from "@opencode-ai/core/learning-command"
 import { materializeTestSessionInfo } from "../fixture/session"
 import { MessageTable, SessionTable } from "@opencode-ai/core/session/sql"
+import { EventTable } from "@opencode-ai/core/event/sql"
+import { SessionPresentation } from "@opencode-ai/core/session-presentation"
+import { SessionPresentationFrontierTable } from "@opencode-ai/core/session-presentation/sql"
 import { eq } from "drizzle-orm"
 
 const summary = Layer.succeed(
@@ -961,6 +964,153 @@ describe("session.compaction.prune", () => {
 })
 
 describe("session.compaction.process", () => {
+  itCompaction.instance(
+    "reserves compaction presentation after a future frontier before plugin and model effects",
+    () => {
+      const stub = llm()
+      let samples = 0
+      const effects = { compacting: 0, transform: 0 }
+      stub.push((input) => {
+        samples += 1
+        return reply("summary")(input)
+      })
+      const pluginLayer = Layer.mock(Plugin.Service)({
+        trigger: <Name extends string, Input, Output>(name: Name, _input: Input, output: Output) =>
+          Effect.sync(() => {
+            if (name === "experimental.session.compacting") effects.compacting += 1
+            if (name === "experimental.chat.messages.transform") effects.transform += 1
+            return output
+          }),
+        list: () => Effect.succeed([]),
+        init: () => Effect.void,
+      })
+
+      return Effect.gen(function* () {
+        const database = yield* Database.Service
+        const ssn = yield* SessionNs.Service
+        const session = yield* materializeTestSessionInfo()
+        yield* createUserMessage(session.id, "continuity source")
+        yield* createSummaryCompaction(session.id)
+        const messages = yield* ssn.messages({ sessionID: session.id })
+        const parentID = messages.at(-1)?.info.id
+        expect(parentID).toBeTruthy()
+        const futureFrontier = Date.now() + 60_000
+        yield* database.db
+          .update(SessionPresentationFrontierTable)
+          .set({ frontier_time: futureFrontier })
+          .where(eq(SessionPresentationFrontierTable.session_id, session.id))
+          .run()
+          .pipe(Effect.orDie)
+
+        yield* SessionCompaction.use.process({
+          parentID: parentID!,
+          messages,
+          sessionID: session.id,
+          auto: false,
+        })
+
+        const after = yield* ssn.messages({ sessionID: session.id })
+        const summary = after.find(
+          (message) => message.info.role === "assistant" && message.info.summary === true,
+        )
+        expect(summary?.info.time.created).toBe(futureFrontier + 1)
+        expect(effects).toEqual({ compacting: 1, transform: 1 })
+        expect(samples).toBe(1)
+        expect(
+          yield* database.db
+            .select({
+              frontierTime: SessionPresentationFrontierTable.frontier_time,
+              messageCount: SessionPresentationFrontierTable.message_count,
+            })
+            .from(SessionPresentationFrontierTable)
+            .where(eq(SessionPresentationFrontierTable.session_id, session.id))
+            .get()
+            .pipe(Effect.orDie),
+        ).toEqual({ frontierTime: futureFrontier + 1, messageCount: after.length })
+      }).pipe(withCompaction({ llm: stub.llmLayer, plugin: pluginLayer }))
+    },
+    { git: true },
+  )
+
+  itCompaction.instance(
+    "refuses an exhausted compaction frontier before plugin, model, transcript, or Event effects",
+    () => {
+      const stub = llm()
+      let samples = 0
+      let pluginCalls = 0
+      stub.push((input) => {
+        samples += 1
+        return reply("must not sample")(input)
+      })
+      const pluginLayer = Layer.mock(Plugin.Service)({
+        trigger: <Name extends string, Input, Output>(_name: Name, _input: Input, output: Output) =>
+          Effect.sync(() => {
+            pluginCalls += 1
+            return output
+          }),
+        list: () => Effect.succeed([]),
+        init: () => Effect.void,
+      })
+
+      return Effect.gen(function* () {
+        const database = yield* Database.Service
+        const ssn = yield* SessionNs.Service
+        const session = yield* materializeTestSessionInfo()
+        yield* createUserMessage(session.id, "continuity source")
+        yield* createSummaryCompaction(session.id)
+        const messages = yield* ssn.messages({ sessionID: session.id })
+        const parentID = messages.at(-1)?.info.id
+        expect(parentID).toBeTruthy()
+        const events = yield* database.db
+          .select()
+          .from(EventTable)
+          .where(eq(EventTable.aggregate_id, session.id))
+          .orderBy(EventTable.seq)
+          .all()
+          .pipe(Effect.orDie)
+        yield* database.db
+          .update(SessionPresentationFrontierTable)
+          .set({ frontier_time: Number.MAX_SAFE_INTEGER })
+          .where(eq(SessionPresentationFrontierTable.session_id, session.id))
+          .run()
+          .pipe(Effect.orDie)
+
+        const refused = yield* SessionCompaction.use
+          .process({ parentID: parentID!, messages, sessionID: session.id, auto: false })
+          .pipe(Effect.exit)
+
+        expect(Exit.isFailure(refused)).toBe(true)
+        if (Exit.isFailure(refused)) {
+          expect(Cause.squash(refused.cause)).toBeInstanceOf(SessionPresentation.FrontierUnrepresentableError)
+        }
+        expect(pluginCalls).toBe(0)
+        expect(samples).toBe(0)
+        expect(yield* ssn.messages({ sessionID: session.id })).toEqual(messages)
+        expect(
+          yield* database.db
+            .select()
+            .from(EventTable)
+            .where(eq(EventTable.aggregate_id, session.id))
+            .orderBy(EventTable.seq)
+            .all()
+            .pipe(Effect.orDie),
+        ).toEqual(events)
+        expect(
+          yield* database.db
+            .select({
+              frontierTime: SessionPresentationFrontierTable.frontier_time,
+              messageCount: SessionPresentationFrontierTable.message_count,
+            })
+            .from(SessionPresentationFrontierTable)
+            .where(eq(SessionPresentationFrontierTable.session_id, session.id))
+            .get()
+            .pipe(Effect.orDie),
+        ).toEqual({ frontierTime: Number.MAX_SAFE_INTEGER, messageCount: messages.length })
+      }).pipe(withCompaction({ llm: stub.llmLayer, plugin: pluginLayer }))
+    },
+    { git: true },
+  )
+
   itCompaction.instance(
     "binds the fixed compaction purpose while keeping plugin guidance additive",
     () => {

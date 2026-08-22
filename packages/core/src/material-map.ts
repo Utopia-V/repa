@@ -2541,6 +2541,10 @@ function requireMapInfo(source: Queryable, mapID: MapID) {
   })
 }
 
+export function readMapInfoInTransaction(source: Queryable, mapID: MapID) {
+  return requireMapInfo(source, mapID)
+}
+
 function requireArtifactTarget(source: Queryable, mapID: MapID) {
   return Effect.gen(function* () {
     const row = yield* source
@@ -2656,6 +2660,10 @@ function requireSelectorInfo(source: Queryable, mapID: MapID, selectorID: Select
     if (!row) return yield* new NotFoundError({ entity: "selector", id: selectorID })
     return selectorInfo(row)
   })
+}
+
+export function readSelectorInfoInTransaction(source: Queryable, mapID: MapID, selectorID: SelectorID) {
+  return requireSelectorInfo(source, mapID, selectorID)
 }
 
 function selectorInfo(row: typeof MaterialSelectorTable.$inferSelect): SelectorInfo {
@@ -2798,6 +2806,10 @@ function requireAlignmentInfo(source: Transaction, alignmentID: AlignmentID) {
     if (!info) return yield* new NotFoundError({ entity: "alignment", id: alignmentID })
     return info
   })
+}
+
+export function readAlignmentInfoInTransaction(source: Transaction, alignmentID: AlignmentID) {
+  return requireAlignmentInfo(source, alignmentID)
 }
 
 /**

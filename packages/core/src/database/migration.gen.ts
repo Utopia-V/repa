@@ -25,5 +25,15 @@ export const migrations = (
     import("./migration/repa/20260809150754_gate20b_learner_state_judgment"),
     import("./migration/repa/20260810080004_gate21_advisory_learning_planning"),
     import("./migration/repa/20260811180409_gate21a_learning_context_renderer_v7"),
+    import("./migration/repa/20260813111949_gate22_session_deletion_restore_lineage"),
+    import("./migration/repa/20260813124045_gate22_restore_lineage_followup"),
+    import("./migration/repa/20260813130151_gate22_lineage_candidate_identity"),
+    import("./migration/repa/20260813140546_gate22_owner_kind_allowlist"),
+    import("./migration/repa/20260813143000_gate22_presentation_frontier_delete_count"),
+    import("./migration/repa/20260814005504_gate22_embedded_history_identity"),
+    import("./migration/repa/20260814012438_gate22_lineage_legacy_capture"),
+    import("./migration/repa/20260814040835_gate22_lineage_producer_occurrence"),
+    import("./migration/repa/20260822113040_gate22_learning_inspection"),
+    import("./migration/repa/20260822113528_gate22_learning_inspection_context_coverage"),
   ])
 ).map((module) => module.default) satisfies DatabaseMigration.Migration[]

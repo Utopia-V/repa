@@ -127,7 +127,10 @@ function insertDetachedFutureAttentionFinalizations(
             .where(eq(EventSequenceTable.aggregate_id, sessionID))
             .run()
         } else {
-          yield* tx.insert(EventSequenceTable).values({ aggregate_id: sessionID, seq: sequences.at(-1)! }).run()
+          yield* tx
+            .insert(EventSequenceTable)
+            .values({ aggregate_id: sessionID, seq: sequences.at(-1)! })
+            .run()
         }
         yield* tx
           .insert(EventTable)
@@ -692,8 +695,21 @@ describe("HttpApi SDK", () => {
         const invalidCursor = yield* capture(() =>
           sdk.session.messages({ sessionID: parentID, limit: 2, before: "bad" }),
         )
-        const deleted = yield* capture(() => sdk.session.delete({ sessionID: childID }))
-        const getDeleted = yield* capture(() => sdk.session.get({ sessionID: childID }))
+        const proposalResult = yield* call(() => sdk.session.deleteProposal({ sessionID: parentID, mode: "full" }))
+        const proposal = {
+          status: proposalResult.response.status,
+          data: proposalResult.data,
+          error: proposalResult.error,
+        }
+        const deletionProposal = proposalResult.data
+        if (!deletionProposal || !("targets" in deletionProposal))
+          return yield* Effect.fail(new Error(`Expected an exact deletion proposal: ${JSON.stringify(proposal)}`))
+        expect(proposal.status, JSON.stringify(proposal.error)).toBe(200)
+        expect(deletionProposal.targets[0]?.parentSessionID).toBeNull()
+        const deleted = yield* capture(() => sdk.session.delete({ sessionID: parentID, ...deletionProposal }))
+        const getDeleted = yield* capture(() => sdk.session.get({ sessionID: parentID }))
+        expect(deleted.status, JSON.stringify(deleted.error)).toBe(200)
+        expect(getDeleted.status).toBe(404)
 
         return {
           statuses: statuses({
@@ -710,6 +726,7 @@ describe("HttpApi SDK", () => {
             missingGet,
             missingMessages,
             invalidCursor,
+            proposal,
             deleted,
             getDeleted,
           }),

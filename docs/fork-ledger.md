@@ -115,12 +115,14 @@ move. They differed on whether Gate 23 could absorb the repair or a separate
 boundary was required.
 
 Producer/consumer ordering resolved that topology question. Gate 18 must remain
-an observer; Gate 22 must inspect actual rather than merely possible
-consumption; and final Gate 23 integration should not be the first owner of a
-substantial control behavior. Roadmap 09 therefore inserts Gate 21A between the
-last still-admitted baseline pressure producer and Gate 22. `21A` preserves the
-already published Gate 22/23 meanings and historical references; it does not
-make Tutor selection a planning subdomain.
+an observer; Gate 22 must inspect an actual Interaction result and its exact
+Context/read/citation lineage rather than only possible candidate availability;
+and final Gate 23 integration should not be the first owner of a substantial
+control behavior. The 2026-08-13 correction below clarifies that this lineage
+does not itself prove per-record model-causal consumption. Roadmap 09 therefore
+inserts Gate 21A between the last still-admitted baseline pressure producer and
+Gate 22. `21A` preserves the already published Gate 22/23 meanings and
+historical references; it does not make Tutor selection a planning subdomain.
 
 The accepted `P17-F16` correction owns only the product responsibility and evidence
 boundary. It does not select any mechanism—including an ordinary LLM,
@@ -4037,6 +4039,866 @@ binds the exact artifacts and focused executable results. Both review layers
 are accepted, and the accepted implementation is integrated into local `main`
 through commit `984f046fa`.
 
+## 2026-08-13 Gate 22 opening-grill authority correction
+
+The explicitly invoked Gate 22 opening grill began from clean
+`main`/`origin/main` baseline
+`b8100d1c17cd31ec713062c8a1ca5254208899ec`, after the accepted Gate 21A
+implementation, whole-Gate verdict, mainline integration, and publication
+record. No Gate 22 contract or implementation candidate existed.
+
+The grill falsified the causal reading of Roadmap 09's earlier “actual
+consumption” wording. Existing owner revisions, Context cuts, exact lazy-read
+Tool Parts, typed cross-owner citations, Assistant content, and Turn terminal
+state can establish precise operational lineage. They do not by themselves
+establish that one durable record governed or changed a model-authored move.
+Three boundary cases make the distinction acceptance-relevant: a locator-only
+revision with no exact read can coexist with a completed answer; an admitted
+cut can survive provider failure without a completed action; and Session
+deletion can make historical lineage source-unavailable rather than prove it
+absent.
+
+Roadmap 09 and the system architecture now distinguish durable owner truth,
+exact operational lineage, separately evidenced causal effect, and unavailable
+or partial truth. Context inclusion, lazy read, typed citation, temporal order,
+and completed prose are not generic causal-use facts. Gate 22 may compose
+bounded read-only navigation and a shared learner-visible projection over
+existing authorities, but it adds no universal consumption, action, purpose,
+activity, or audit owner. Gate 23 retains the connected causal product trace.
+This clarification does not reopen Gate 18 or Gate 21A.
+
+Current source inspection confirms that the existing owners and Interaction
+chain preserve the underlying exact facts. It also exposes two pre-contract
+composition questions rather than accepted implementation requirements:
+ordinary owner-read Tool Parts have no typed inspection-result projection in
+the default TUI, and no bounded production query currently maps one exact owner
+revision back to its Context/read/Assistant/Turn lineage. A Gate 22 contract
+must decide the narrow truthful read/projection boundary and evidence without
+promoting either gap into a second domain owner.
+
+The resulting unreviewed
+[Gate 22 contract/theory candidate](research/repa-gate-22-learning-native-tui-inspect-correct-2026-08-13.md)
+is bound at exact working-tree SHA-256
+`5553610026EB4094EFB3CBF491C7055E6BAA5BB0DB80BE0988282191B9A019F7`
+(554 lines / 27,854 bytes). An executor-side read-only child preflight found
+and the executor repaired three contract contradictions before this binding:
+inspection now permits the current Turn's truthful Interaction delta while
+protecting inspected owners and historical lineage; typed citation is no
+longer causal-effect evidence; and later provider failure cannot erase an
+already committed owner correction. The preflight is not the required fresh
+separate top-level review and supplies no acceptance verdict.
+
+Gate 22 is now at the contract-review handoff. No contract/theory acceptance,
+fresh top-level review run, implementation authority, branch, commit,
+publication, release, or Gate 23 claim follows from this opening work.
+
+## 2026-08-13 Gate 22 maintainer decisions and bounded Session-deletion correction
+
+The preceding opening-grill entry records the state before two maintainer-owned
+product decisions were resolved. Its statements that the clarification did not
+reopen Gate 18 and that Gate 22 was ready for contract review are superseded by
+this later correction. The first Gate 22 draft had incorrectly moved the two
+live decisions into hypothetical reopen conditions while claiming that no
+maintainer choice blocked review.
+
+The maintainer fixed both meanings:
+
+- Gate 22 exposes exact operational lineage but never attributes a particular
+  durable record as the cause of a Tutor answer. Context inclusion, locator
+  delivery, exact read, typed citation, ordering, terminal completion, and
+  model prose remain non-causal operational facts.
+- Session deletion is an explicit learner choice. Full deletion removes
+  conversation bodies, Context, and optional Context/read/citation/action
+  inspection associations. Minimal-audit deletion removes the same bodies but
+  retains only exact owner record identity/revision, exactly proven
+  not-entered versus semantic/full versus locator-only Context status, exact
+  read or typed citation, the corresponding operation's
+  `completed | failed | interrupted` status, deletion time, and body-deleted
+  status. It retains no transcript, Assistant answer, Context body, Tool body,
+  task-result body, excerpt, or summary, provides no causal attribution, and
+  may later be fully deleted.
+
+Repository authority inspection corrected the initial impact map. Gate 8 owns
+the atomic Session-deletion transaction and surviving command receipts; Gate 12
+owns Interaction terminal truth and referenced unavailable-source receipts;
+Gate 18 owns Context cut deletion. The new behavior therefore bounded-reopens
+only those three deletion/retention subsections. Their occurrence, settlement,
+Turn, Context compilation, continuation, recovery, and every other accepted
+invariant remain closed. Existing independently required body-free receipts and
+durable learning records keep their own lifecycles in both modes; the optional
+audit is separate and does not authorize general cross-authority deep deletion.
+The current runtime still implements the earlier deletion contract.
+
+The resulting then-unreviewed
+[deletion-choice correction candidate, now expanded to Gates 5/8/12/18](research/repa-gate-05-08-12-18-session-deletion-choice-correction-2026-08-13.md)
+is bound at exact working-tree SHA-256
+`A8E373C7A138062C9242DB95E30CB3ED73210621A6849608E01FCC03B28C454C`
+(423 lines / 20,949 bytes). It specifies explicit no-default admission, the
+strict audit allowlist, ownership, lifecycle, atomicity, migration, TUI meaning,
+failure behavior, later audit purge, exclusions, and deterministic acceptance
+evidence. It is not implementation authority.
+
+The revised downstream
+[Gate 22 contract/theory candidate](research/repa-gate-22-learning-native-tui-inspect-correct-2026-08-13.md)
+is bound at exact working-tree SHA-256
+`74B45B544CBFB5DCE13FDB1FD92E5D43D4CFE3C8A9275F1E9BCA4C58C785CD77`
+(621 lines / 32,780 bytes). It withdraws per-record Tutor-answer attribution,
+reads only the selected deletion mode's surviving truth, and cannot widen or
+cache the optional audit. The earlier candidate SHA-256
+`5553610026EB4094EFB3CBF491C7055E6BAA5BB0DB80BE0988282191B9A019F7`
+remains exact superseded-draft provenance and is not reviewable authority.
+
+The control point recorded at this stage was fresh separate top-level contract/
+theory review of the then-Gates 8/12/18 correction. Gate 22's own contract review waits for that
+producer contract to close; Gate 22 implementation additionally waits for
+accepted producer implementation/evidence. No review verdict, implementation,
+migration, branch, commit, publication, release, or Gate 23 claim follows from
+this documentation correction.
+
+## 2026-08-13 Gates 8/12/18 deletion-correction first review and rebound
+
+Whole-Gate review run `G22-WG-20260813-019ff8e2-01` uses top-level reviewer task
+`019ff945-7b10-7f53-999f-b92dfa68d30c` and executor task
+`019ff8e2-96e9-7472-a138-adbd107b9afe`. Its prerequisite contract/theory pass
+reviewed exact correction SHA-256
+`A8E373C7A138062C9242DB95E30CB3ED73210621A6849608E01FCC03B28C454C`
+and returned **Revise**. The reviewer left the production checkout unmodified
+and opened seven acceptance-changing findings:
+
+- `G81218-CR-001`: full deletion had no surviving body-free authority for exact
+  destructive replay, same-address mode conflict, or later audit-purge truth;
+- `G81218-CR-002`: deletion wording could be implemented as an implicit
+  cancellation despite Gate 12's `session_tree_busy` contract;
+- `G81218-CR-003`: the learner's choice and audit coverage were not bound to the
+  complete exact descendant closure;
+- `G81218-CR-004`: Context inclusion, exact-read, typed-citation, and terminal
+  facts lacked named live producers and exact owner-to-operation joins;
+- `G81218-CR-005`: the rendered lifecycle accidentally admitted retention
+  widening after full deletion;
+- `G81218-CR-006`: prerequisite evidence depended circularly on Gate 22; and
+- `G81218-CR-007`: affected Gate 8/18 notices prematurely described the
+  correction as accepted or reviewed.
+
+The executor adjudicated all seven as valid. The rebound correction now names a
+minimal non-cascading deletion/purge control-settlement boundary distinct from
+optional inspection lineage; binds one visible uniform mode to the exact root
+and descendant fingerprint; preserves immediate busy refusal, separately
+authorized exact-Turn interruption, and ownerless-orphan recovery; and defines
+versioned producer projections and coverage seals for canonical Context,
+terminal registered lazy-read results, first-applied owner-command citations,
+and model-operation status. The legal graph now has only the two alternative
+live deletion edges plus retained-audit purge. Its prerequisite evidence uses an
+owner-neutral production read/decoder and leaves Gate 22 TUI consumption to the
+later layer. At that first rebound, Gate 8/12/18 and current-status notices
+therefore remained explicitly review-revised and closure-pending.
+
+The exact rebound
+[correction candidate, now expanded to Gates 5/8/12/18](research/repa-gate-05-08-12-18-session-deletion-choice-correction-2026-08-13.md)
+is bound at SHA-256
+`0C906D84B60DBAA68EFBC33F481AFF648C0B2BFC56BB46D7E37340E6258FC616`
+(719 lines / 40,645 bytes). The same reviewer inspected that exact rebound,
+closed `G81218-CR-001..007` against their original acceptance impacts, and
+returned **Revise** with the sole new acceptance-changing finding
+`G81218-CR-008`. The control receipt permanently occupied `(database, root
+Session ID)` for replay/conflict, but every root/first-Turn/child/fork target
+creation path still treated an absent Session row as reusable. Current
+`prepareRootStart` and `prepareChildStart` therefore permitted a new live
+Session at the old receipt address, conflating deletion truth across two Session
+lifetimes. The reviewer required either complete incarnation identity or typed
+retirement of every receipt-occupied target ID; no owner decision was needed.
+
+The executor chose the narrower existing-identity repair. The current rebound
+uses the receipt's already-allowlisted root ID as a permanent database-scoped
+retirement marker, adds one shared pre-owner occupancy guard plus transactional
+recheck across direct-root, first-Turn, delegated-child, and fork-target
+materialization, preserves typed source-unavailable parent/fork-source truth,
+and serializes deletion/creation races without adding an incarnation or deleted-
+descendant list. Audit purge does not release the ID. Deterministic evidence now
+requires all four materialization paths after both deletion modes and purge,
+zero owner/domain/Event writes, a fresh-ID control, both race orderings, and
+live-Session/control-receipt overlap rejection.
+
+The exact `G81218-CR-008` rebound is SHA-256
+`378ED8793419FA52532F6DFC9B7BAB22C8EA9F3BF41599FBF15B61804A5A7D13`
+(806 lines / 46,553 bytes). Its downstream dependency repair rebinds the still-
+unreviewed
+[Gate 22 contract candidate](research/repa-gate-22-learning-native-tui-inspect-correct-2026-08-13.md)
+at SHA-256
+`F99A2E7EBC8E3DAB9D78F0855116B582E2F734864A105272669739FB505ADB3E`
+(643 lines / 34,628 bytes); this remains a dependency update, not a Gate 22
+review pass. `G81218-CR-001..007` were closed; `G81218-CR-008` remained open at
+this exact review stage pending same-reviewer closure. No implementation,
+migration, commit, publication, release, or Gate 23 authority followed.
+
+## 2026-08-13 Gate 5 restore collision and maintainer rebound
+
+The same reviewer inspected exact correction SHA-256
+`378ED8793419FA52532F6DFC9B7BAB22C8EA9F3BF41599FBF15B61804A5A7D13`, closed
+`G81218-CR-008` against its original acceptance impact, and confirmed that
+`G81218-CR-001..007` remained closed. It then returned owner blocker
+`G81218-CR-009`: permanent retirement of a deletion-receipt root ID conflicted
+with Gate 5's accepted same-database local JSON
+`import -> export -> delete -> import -> export` evidence, because current
+`ImportCommand` recreates the original Session/Message/Part identities after
+deletion.
+
+The maintainer selected deletion finality at the original Session address
+inside one LearnerHome/database. The bounded correction therefore now includes
+Gate 5 and supersedes only that historical same-database identity-preserving
+restore expectation. A learner-managed export file remains outside Session
+deletion and is never scanned for or removed. Exact identity-preserving import
+is an administrative transcript restore admitted only into another
+LearnerHome/database with an unoccupied complete identity set; it restores only
+the supported Session/Message/Part graph and fabricates no Turn, Context,
+learning record, deletion receipt, Event sequence, or inspection lineage.
+
+Inside the original LearnerHome, exact import of the retired root ID returns
+typed `session_id_retired` without mutation. A separate explicit import-as-copy
+choice validates and completely remaps every typed Session/Message/Part,
+Assistant-parent, revert, compaction, and nested attachment identity, then
+reuses Gate 12's fork-start invariant to atomically materialize read-only
+`local_import_copy` historical presentations plus one genuine fresh learner
+root Turn. The new copy reconnects no old deletion/audit, Context/read/citation,
+command/domain, task-result, or Event lineage. There is no silent exact-to-copy
+fallback, same-address incarnation, or deletion-receipt rewrite.
+
+The expanded review candidate is
+[Gates 5/8/12/18 deletion choice and local restore](research/repa-gate-05-08-12-18-session-deletion-choice-correction-2026-08-13.md),
+bound at SHA-256
+`674E581DC6E4140FDB82715E0317E7558F75BE1C2EB007BF8AF58EE386AFEB22`
+(1,007 lines / 60,511 bytes). The downstream dependency update rebinds the
+still-unreviewed
+[Gate 22 contract candidate](research/repa-gate-22-learning-native-tui-inspect-correct-2026-08-13.md)
+at SHA-256
+`CB9235836838A2078A22AE9D8F1552ACD3DE8C0D2D89E505DE016F5A2A195F04`
+(676 lines / 37,443 bytes). Gate 22 now explicitly distinguishes the retired
+deleted Session, another-database administrative restore, and same-home imported
+copy with fresh identity and no old operational lineage.
+
+`G81218-CR-009` remains open until the original reviewer retests it against this
+exact rebound and returns prerequisite-layer `Accept`. No corrected production
+implementation, migration, implementation/evidence acceptance, Gate 22 review,
+branch, commit, publication, release, or Gate 23 authority follows from the
+maintainer decision or documentation repair.
+
+## 2026-08-13 administrative-history legality and ordering rebound
+
+The same reviewer inspected exact correction SHA-256
+`674E581DC6E4140FDB82715E0317E7558F75BE1C2EB007BF8AF58EE386AFEB22`
+and downstream Gate 22 dependency SHA-256
+`CB9235836838A2078A22AE9D8F1552ACD3DE8C0D2D89E505DE016F5A2A195F04`.
+It closed `G81218-CR-009` against its original Gate 5 conflict and confirmed
+that `G81218-CR-001..008` remained closed. It then returned **Revise** with two
+technical Gate 12 composition findings:
+
+- `G81218-CR-010`: the exact-restore exception could materialize an empty
+  Session or executable-looking unfinished Message/Part state without a
+  complete durable pre-Turn classification consumed by continuation, recovery,
+  current-work discovery, and Context; and
+- `G81218-CR-011`: neither exact restore nor copy bound imported presentation
+  order to a Session frontier, so a future source timestamp or regressed target
+  clock could place the first local Turn before restored history.
+
+The executor accepted both findings as technical corrections within the
+maintainer's already selected deletion-finality boundary. Exact restore and
+copy now accept only one nonempty, renderable, reference-closed bundle whose
+closed safety decoder rejects pending/running Tool state, nonterminal Assistant
+state, unmatched steps, and unresolved compaction or subtask state. Every
+admitted imported Message and Part is atomically covered by one complete
+Interaction-owned `offline_exact_restore` or `local_import_copy`
+administrative-history manifest, exact membership, canonical order, and seal.
+The classification is consumed by continuation, startup recovery, current-work
+and pending-work discovery, revert, cancellation, paging, and Context; it never
+becomes a Turn, Event, learning authority, post-deletion audit, or old
+operational lineage.
+
+Another-database exact restore preserves supported identities and presentation
+times; the seal records their maximum validated history frontier without
+turning source time into target activity. Same-home copy completely remaps
+identity and normalizes fresh target presentation order while treating any
+retained source time as display metadata. The first later exact-restore Turn,
+or the genuine copy root Turn, binds occurrence, User Message, and Turn/input
+to one representable strict successor of the sealed Session frontier and the
+ordinary Gate 12 floors. An unrepresentable successor, missing/partial seal,
+unsafe bundle, identity overlap, response-loss mismatch, or order/frontier
+drift rejects atomically rather than creating an empty Session, importing
+current work, or inventing execution.
+
+The exact revised
+[Gates 5/8/12/18 correction](research/repa-gate-05-08-12-18-session-deletion-choice-correction-2026-08-13.md)
+is SHA-256
+`4490C78215C08E0C4164DC461ABD68910E68FE8FF53DC6820F8F1E0EECA222AD`
+(1,177 lines / 72,301 bytes). The downstream dependency propagation rebinds the
+still-unreviewed
+[Gate 22 contract candidate](research/repa-gate-22-learning-native-tui-inspect-correct-2026-08-13.md)
+at SHA-256
+`91157D8D5511012F432818355B5D8CE7664E2BFBD93EC1665FCB2C92DB4B9793`
+(747 lines / 43,262 bytes). Gate 22 now consumes the producer-owned history
+classification/order and distinguishes valid sealed history, refusal,
+integrity failure, strict-successor local work, and non-causal source time; it
+does not infer history or execution from raw transcript rows.
+
+At that stage `G81218-CR-010..011` remained open until the original reviewer
+retested the exact rebound. No corrected production implementation, migration,
+implementation/evidence acceptance, Gate 22 review, branch, commit,
+publication, release, or Gate 23 authority follows from this contract repair.
+
+## 2026-08-13 imported-revert and all-writer frontier rebound
+
+The same reviewer inspected exact correction SHA-256
+`4490C78215C08E0C4164DC461ABD68910E68FE8FF53DC6820F8F1E0EECA222AD`
+and downstream Gate 22 dependency SHA-256
+`91157D8D5511012F432818355B5D8CE7664E2BFBD93EC1665FCB2C92DB4B9793`.
+It confirmed that the zero/unusable/unfinished bundle cases from
+`G81218-CR-010` and the ordinary Gate 12 Turn-frontier cases from
+`G81218-CR-011` were repaired, while `G81218-CR-001..009` remained closed. It
+replaced, rather than closed, those two findings with narrower production-path
+defects:
+
+- `G81218-CR-012`: the export carries live `Session.revert` Message/Part,
+  snapshot, and diff state; current revert/unrevert/cleanup can consume that
+  state and imported Patch Parts to restore/remove target-worktree files or
+  delete the sealed transcript, while `withCleanAdmission` treats any surviving
+  revert as cleanup work; and
+- `G81218-CR-013`: direct shell is a retained non-Turn Session utility that
+  writes synthetic User/Assistant/Tool presentation from raw wall time, while
+  paging orders all Messages by creation time plus ID. Future-dated exact-
+  restore history or a regressed clock can therefore put the later shell
+  presentation before imported history even though ordinary Turns use the
+  imported frontier.
+
+The executor accepted both findings as technical corrections inside the fixed
+deletion-finality and exact-restore/new-copy boundary. Every import with a
+nonempty `Session.revert` target, snapshot, or diff now returns typed
+`import_history_unsafe` before Session, snapshot, worktree, or transcript
+mutation; the control state is neither restored, remapped, nor silently
+cleared. Valid imported Message/Part/Patch rows remain inert historical
+presentation. A later revert naming one returns
+`historical_presentation_not_revertible`; a fresh local revert may bind only a
+post-frontier local target, and revert scanning/unrevert/cleanup derive their
+range from canonical Session presentation order rather than raw Message-ID
+comparison so future-dated imported IDs cannot enter the local suffix.
+
+The immutable imported `history_frontier_time` now seeds one Gate 12 Session
+presentation frontier advanced by every committed Message. Ordinary Turn/model
+work, direct shell/admin, compaction, processor, plan, and every other retained
+transcript writer reserve a complete strict-successor Message block through the
+same Session mutation boundary. Tool start/end and Assistant completion remain
+nondecreasing; direct shell commits its initial ordered block before the
+external command starts; restart and an already-owned physical replay preserve
+the admitted block; a new utility request receives later order. An
+unrepresentable reservation refuses before transcript, shell, snapshot,
+worktree, model, Tool, or Event effect. This adds neither Turn membership to
+utilities nor a universal replay/event owner.
+
+The exact revised
+[Gates 5/8/12/18 correction](research/repa-gate-05-08-12-18-session-deletion-choice-correction-2026-08-13.md)
+is SHA-256
+`79F15DF094A5854C0BECE98D690DE031EAB282607C9AEFAB26124C9EA69811BB`
+(1,299 lines / 81,776 bytes). The downstream dependency propagation rebinds the
+still-unreviewed
+[Gate 22 contract candidate](research/repa-gate-22-learning-native-tui-inspect-correct-2026-08-13.md)
+at SHA-256
+`1A555F8AE3BBEDD0287FC35E2F22D40C9DAC254EA103FCD335E1C385A7647ACC`
+(772 lines / 45,508 bytes). Gate 22 consumes the producer-owned refusal,
+historical-only/non-revertible classification, canonical order, and all-writer
+frontier; it remains unable to infer execution or safe ordering from raw rows,
+source time, or visibility.
+
+The original reviewer then retested this exact rebound, confirmed
+`G81218-CR-001..009` remained closed, kept `G81218-CR-010..011` replaced rather
+than closed, and closed `G81218-CR-012..013` without a new finding or owner
+blocker. It returned **Accept** for exact semantic SHA-256
+`79F15DF094A5854C0BECE98D690DE031EAB282607C9AEFAB26124C9EA69811BB`.
+This accepts only the prerequisite contract/theory layer; it does not itself
+accept production implementation/evidence, Gate 22, integration, publication,
+release, or Gate 23.
+
+## 2026-08-14 Gates 5/8/12/18 correction implementation/evidence candidate
+
+The executor implemented the accepted bounded correction in the production
+working tree against base
+`b8100d1c17cd31ec713062c8a1ca5254208899ec`. The candidate covers the explicit
+deletion proposal and learner-selected mode, immutable deletion/purge control
+settlements, producer-complete body-free audit, permanent root-ID retirement,
+another-database exact restore, same-home fully reidentified copy, closed
+administrative-history decoding and non-revertibility, and one serialized
+strict-successor Session presentation frontier across Turn and non-Turn
+writers. Its deletion-choice carriers are the retained OpenCode HttpApi,
+generated JavaScript SDK, and primary TUI. Protocol, the separate Server data
+API, and its generated Client expose only the related typed
+`session_id_retired` materialization refusal; they do not expose deletion and
+are not counted as deletion carriers. The candidate contains no Gate 22
+inspect/correct composition.
+
+The exact rebound package candidate contains 90 modified or new files under
+`packages/`, totaling 5,402,572 bytes. Its ordinal
+`path<TAB>byte-length<TAB>file-SHA-256` manifest is
+`C18F06F7D10DD2C183AAD13036EA772B3D28DFE976DC4D852CEEF898D7C93474`.
+The review-facing
+[implementation/evidence record](research/repa-gate-05-08-12-18-session-deletion-choice-correction-implementation-evidence-2026-08-14.md)
+binds that manifest to the exact migration, producer, restore/copy, frontier,
+carrier, and failure observations.
+
+Fresh focused evidence includes 35/313 Core Turn-lineage checks, 8/52 Core
+deletion/presentation checks, frozen v24→v32 migration plus migration drift,
+full 59-pass/one-pre-existing-skip compaction and seven-pass import-decoder
+suites, focused restore/copy/retirement/race/busy/audit/revert/citation traces,
+the public HTTP proposal→commit→projection→purge→replay lifecycle, full local
+CLI import and TUI deletion-choice suites, and all owning package typechecks.
+The all-writer audit additionally forced `plan_exit` to preflight frontier
+integrity and representability before emitting its learner-question Event;
+the focused positive trace preserves the affirmative strict-successor User
+presentation, and the exhausted-frontier trace passes with no question Event
+or transcript change, while the atomic Message write still rechecks the current
+block.
+
+The evidence record preserves the remaining non-green environment observations
+rather than converting them into passing claims: a combined prompt-name filter
+contaminated fixtures and a broad two-case plan filter raced one temporary
+LearnerHome, although every exact named scenario passed in isolation; Bun 1.3.14
+on Windows segfaulted on aggregate `httpapi-session.test.ts` retries although
+each changed public case passed. A mistakenly invoked root typecheck also
+reached an excluded Slack package; all owning package typechecks pass, so the
+root result is not acceptance evidence.
+
+The first independent implementation/evidence pass returned **Revise** with
+`G81218-IR-001..002`. The rebound repairs the actual generator owner rather than
+hand-editing generated output: the public OpenAPI now preserves required bodies
+and required-null root-parent truth for the exact deletion lifecycle, the pinned
+SDK generator has a guarded flat-body correction, and a compile-time codegen
+contract covers both generated data types and SDK methods. The full public
+OpenAPI file passes 26/26 with 207 assertions, the generated SDK's exact
+proposal→commit path passes on the one registered `raw` HttpApi scenario,
+OpenCode and SDK typechecks pass, and two consecutive official generations leave
+all 15 generated files byte-identical on the second pass. The rebound also
+narrows the carrier claim to OpenCode HttpApi, generated JavaScript SDK, and
+primary TUI; the Protocol/Server/Client data path is named only for its actual
+typed root-ID retirement behavior.
+
+The same reviewer closed `G81218-IR-001..002` against their original impacts,
+then returned **Revise** with `G81218-IR-003`: the evidence record and this
+ledger had claimed the generated-SDK case covered two retained server paths,
+while the harness registers only `scenario("raw")` and discards the selector.
+The current rebound removes that unexecuted coverage claim without inventing a
+second carrier or changing production behavior.
+
+The same reviewer then closed `G81218-IR-003` and returned **Accept** with no
+new acceptance-changing finding or owner blocker. The exact accepted package
+candidate remains 90 paths / 5,402,572 bytes at manifest SHA-256
+`C18F06F7D10DD2C183AAD13036EA772B3D28DFE976DC4D852CEEF898D7C93474`;
+the exact pre-disposition evidence record reviewed in that final pass had
+SHA-256
+`E2FEADB082837E5D8E11E1A01370CB860A36E26D1604EC8E5DDA313E378690D9`.
+No package byte changed in the documentation-only closure rebound.
+
+Both prerequisite review layers are therefore accepted under Whole-Gate run
+`G22-WG-20260813-019ff8e2-01`. The working-tree implementation is not
+integrated, committed, published, or released. Gate 22 itself remains
+unreviewed, but its producer dependency is satisfied and its contract/theory
+layer is now the next retained review target. This verdict does not accept Gate
+22, authorize its implementation, or advance Gate 23.
+
+## 2026-08-14 Gate 22 contract/theory first review and rebound
+
+Whole-Gate run `G22-WG-20260813-019ff8e2-01` continued with retained top-level
+reviewer task `019ff945-7b10-7f53-999f-b92dfa68d30c` at the Gate 22 contract/
+theory layer. The reviewer inspected exact
+[Gate 22 contract candidate](research/repa-gate-22-learning-native-tui-inspect-correct-2026-08-13.md)
+SHA-256
+`3F61C1670D38D0CAF4AFF33FDB4551BD2EDBF039A875915AFB3E7B54BB22B287`
+(773 lines / 45,538 bytes), confirmed all dispatched authority/dependency
+hashes and the accepted prerequisite package candidate, made no checkout
+mutation, and returned **Revise** with no owner blocker:
+
+- `G22-CR-001`: the composite result had no observation cut, allowed torn
+  current/history/deletion/finalization reads, and tried to include facts that
+  can exist only after the inspection Tool result;
+- `G22-CR-002`: a new composite Tool had no lawful place in Gate 18's closed
+  exact-read catalog, while live reverse lineage, deletion audit, and
+  administrative history lacked one bounded seal-validating consumer read;
+- `G22-CR-003`: Context/read/completion could substitute for the exact positive
+  conditional-current-purpose binding, actual Gate 21A learner-visible action,
+  and owner-specific finalization, especially FutureAttention `not_served`;
+- `G22-CR-004`: the declared owner surface could pass on four convenient rows
+  and falsely normalized Course working selection, coexisting Material Maps,
+  FutureAttention transitions, immutable Context, and other non-isomorphic
+  correction models into one generic current head;
+- `G22-CR-005`: Context omission, deleted descendant, raw minimal-audit miss,
+  administrative history, and import-copy absence claims exceeded the exact
+  identities and complete producer seals that survive; and
+- `G22-CR-006`: the existing Interaction directory stopped at 64 terminal root
+  Turns with no continuation, while output limits did not prove bounded
+  database work for live reverse, audit, or administrative reads.
+
+The executor adjudicated all six as valid technical defects inside the fixed
+no-causal-attribution, learner-selected deletion, and same-home deletion-
+finality decisions. The rebound now binds one supported owner-native read and
+its consumer projections to one outer SQLite transaction/snapshot, records
+explicit separate cuts for another owner or later page, revalidates mutable
+relations, and returns typed stale/partial truth. The Tool result excludes its
+own terminal Part, exact-read projection, candidate coverage, later Assistant,
+and terminal Turn; those facts may appear only in a separately typed post-
+settlement Interaction delta or a later inspection.
+
+The eleven registered Gate 18 owner-read capabilities remain the sole
+`exact_read` producers. Gate 22 adds no generic read producer. It defines three
+read-only consumer contracts instead: exact record-first live lineage,
+root/bundle-bound and complete-seal-validated deletion audit, and exact-Session
+administrative-history classification/membership/frontier. The current schema
+lacks a live record-first access path and terminal-root continuation, so the
+contract now authorizes only the versioned, rebuildable identity/order indexes
+and bounded read APIs needed for those two paths. They retain no body, owner
+fact, cause, title, deleted descendant map, or extra deletion-audit field and
+are removed or unavailable with their sources.
+
+A closed capability matrix now covers Course/View/navigation, Artifact,
+Representation, Material Map/alignment, Goal, retained steering, learner-
+response evidence, FutureAttention, Assignment, learner-state judgment,
+advisory suggestion, Context, and Interaction. Each row preserves its actual
+identity/current/history/lifecycle, potential consumer scope, natural
+resolution, and owner-native correction route, or returns a typed unsupported/
+unavailable result. Material Maps do not gain a canonical head; Course revision
+creation does not move working selection; Context is immutable; and stale
+correction requires fresh read/re-resolution without automatic second
+admission.
+
+The rebound separately renders an exact positive conditional-current-purpose
+binding, the actual Gate 21A learner-visible Interaction result, physical
+command settlement/semantic effect, and owner finalization without making any
+of them per-record Tutor-answer causality. Context negatives are restricted to
+an exact cut plus its real aggregate coverage. Full-deletion truth is restricted
+to the receipt's root address; an unretained former child remains unresolved.
+Minimal-audit negatives require complete bundle/operation/catalog validation.
+Administrative restore/copy reports what its classified transition created or
+excluded and does not invent an exhaustive all-authority absence or manifest-
+to-root-Turn join.
+
+Terminal root-Interaction discovery is now a stable keyset-paged learner-level
+path beyond the old 64-item window, with typed `discovery_incomplete` when the
+admitted total search budget is exhausted. Every new read binds output bounds
+to matching leading-key query-plan or instrumented row/work evidence; a small
+result, SQL `LIMIT`, hidden complete-bundle load, or whole-history scan is not
+accepted as boundedness.
+
+The exact review-revised Gate 22 candidate is SHA-256
+`6AF1D76544E23437A8EA0122DFD183FB546BE011A0CEAF49F7315A0E58DA41C9`
+(1,079 lines / 74,017 bytes). The current status map and Roadmap 09 propagation
+are respectively SHA-256
+`7577796BA0315ECF9D01D4E0F5826F1CE863A7AE5030D6D0CE85C987AE297487`
+and
+`42E3C13B611E648D2A47F666ED50A482C639143711953FC1FBAFA7A845AEE970`.
+The architecture owners already contain the exact current-purpose, Gate 21A
+action, owner-finalization, and no-causal-attribution distinctions, so this
+rebound repairs the derived Gate contract and roadmap rather than rewriting
+stable architecture.
+
+This candidate is pending same-reviewer closure of `G22-CR-001..006`. The
+executor-side read-only evidence scouts are not independent acceptance. No Gate
+22 implementation, implementation/evidence candidate, integration, commit,
+publication, release, or Gate 23 authority follows. The accepted prerequisite
+package remains 90 paths / 5,402,572 bytes at manifest
+`C18F06F7D10DD2C183AAD13036EA772B3D28DFE976DC4D852CEEF898D7C93474`
+and remains unintegrated.
+
+## 2026-08-22 Gate 22 second contract review and producer-bound rebound
+
+The same retained reviewer re-read exact Gate 22 candidate
+`6AF1D76544E23437A8EA0122DFD183FB546BE011A0CEAF49F7315A0E58DA41C9`
+under Whole-Gate run `G22-WG-20260813-019ff8e2-01` and returned **Revise** with
+no owner blocker. `G22-CR-005` closed: Context omission, deletion-root versus
+descendant, sealed-audit, administrative-history/import, and authorship
+negatives no longer exceeded their producers. The other five original findings
+remained open without a new ID:
+
+- `G22-CR-001`: per-section snapshot and self-settlement were repaired, but an
+  invented operation high-water still allowed an operation admitted before page
+  one and sealed later to disappear from a cross-page negative;
+- `G22-CR-002`: the catalog boundary was sound, but actual
+  `learning_material_query` displayed values did not match the recursive
+  projector; several actions produced no relation and flat alignment could
+  project selector instead;
+- `G22-CR-003`: the rebound separated binding/action/effect/finalization, but
+  incorrectly erased a valid sole conditional binding when an exact learner
+  request overrode only the overlapping action, and it lacked immutable
+  physical-replay evidence after later finalization;
+- `G22-CR-004`: the matrix still invented Course-owned Map membership, direct
+  Goal↔Assignment basis edges, Interaction redaction, and deletion-as-
+  correction, while combined Course/navigation evidence could hide their
+  independent ownership; and
+- `G22-CR-006`: a thin directory was not connected to the existing full
+  Message/Part-fingerprint locator under an oversized candidate, and cumulative
+  multi-Tool search budget/replay ownership was absent.
+
+The executor accepted all five residuals as technical corrections. Live
+lineage now has no global operation/seal frontier. A complete negative requires
+one SQLite snapshot to cover one explicitly finite scope within work bounds and
+to validate terminal candidate plus operation seals. Every fresh-cut
+continuation can add positives but remains `non_atomic_search_incomplete`; late
+seal, pending, unsealed, skipped, or over-budget work is an explicit gap.
+
+FutureAttention inspection now keeps the three required arms: one legal sole
+binding without override, multiple unresolved concerns with no singular
+binding, and one legal sole binding preserved while an incompatible exact
+request controls the overlapping action. Command-defined causal occurrence and
+effect address, physical invocation/immutable replay, semantic effect, actual
+action, and current owner finalization remain independently keyed. Exact replay
+continues to show its admission-cut pending result after a later
+`served | not_served` receipt.
+
+The owner matrix now exercises Course/View and learner navigation as separate
+arms. A Map remains Course-independent; only optional alignment binds an exact
+Map selector to exact Course membership. Goal and Assignment are peer owners
+that judgment/advice may consume independently. The accepted authority exposes
+no Interaction-redaction command, and learner-selected Session deletion is a
+separate destructive lifecycle rather than correction.
+
+Older Interaction discovery now returns a thin terminal-root token without
+hashing Message/Part bodies. Exact-locator materialization is a separate bounded
+Tool call. An oversized candidate returns its descriptor and pins the cursor;
+the Agent cannot retry or skip automatically. Explicit skip consumes a new Tool
+slot and permanently marks incomplete coverage. The existing durable Turn tool
+count owns cumulative page/materialize/skip work: physical replay returns the
+same result without consuming/resetting a slot, while a new learner Turn begins
+a new disclosed inspection scope.
+
+`G22-CR-002` boundedly reopens only Gate 18's learning-material exact-read
+implementation/evidence claim. The catalog and historical projection version 1
+remain unchanged. The successor passes a trusted action-specific
+`lineageValue` separately from display/supplemental data and emits material
+projection version 2 for current Artifact Revision, exact Artifact Revision,
+Representation, Map, selector, and alignment. Candidate/operation coverage and
+the minimal-deletion audit accept version 2; alignment wins over its displayed
+selector identity. The complete package successor remains 90 paths, totals
+5,415,354 bytes, and has manifest
+`0005D8E12DC4CCF4AB8E2F96AE41141A44DBB8307BD60E60A402CF69186DDDD4`.
+
+Focused executor evidence passes the six-action/fencing test at 6 cases and 25
+assertions; the Core identity decoder at one case/five assertions; the version-
+2 candidate→operation→minimal-audit trace, including historical-version refusal,
+at one case/16 assertions; the complete owning Core Turn suite at 36 cases/322
+assertions; and Core plus OpenCode typechecks. These observations are not
+independent acceptance.
+The prior package manifest
+`C18F06F7D10DD2C183AAD13036EA772B3D28DFE976DC4D852CEEF898D7C93474`
+remains exact accepted-predecessor provenance. All deletion/restore, other Gate
+18, Gate 21A, and stable architecture behavior remains unchanged.
+
+The exact review-revised
+[Gate 22 contract successor](research/repa-gate-22-learning-native-tui-inspect-correct-2026-08-13.md)
+is SHA-256
+`AE826F738AA2C8CE4A02617726D3DFD4D354F61BB5E5F396BF5EA1AEFE5FA311`
+(1,243 lines / 87,533 bytes). The bounded prerequisite contract/status successor
+is
+`FF91C9FD1BA8C5C8E5A590D6ED2BADBECFC46CB8DA2BF76C9B23546BAFA1EB5B`;
+its implementation/evidence successor is
+`45A2DC79F83C57082D0900858AEA2DDD6893C2A6DDFA92E8293C4EA4BEBFFCFB`.
+Gate 18's contract/status and implementation/evidence successors are
+respectively
+`B1DD63E56E8DE26AB2360F68CF0CB2574CE9FAC9C2FBB23FE43DCAB22D443B57`
+and
+`70B20D97A7F3C1CF0128FBE9B12293C0C26A3DC00A2FDC410E90AD751E12C368`.
+The current status map and Roadmap 09 propagation are
+`3FF607F09BFDE04BCF64FBAAF82B8A088152C4403CD761DD1353B22257D1AC54`
+and
+`F0625CAAD76A7D0F1F3D56F4EF5938DEA07648F40BD4ACC2B3593299E1D1A6FA`.
+
+The current Gate 22 contract successor and the bounded Gate 18 producer/
+evidence successor are pending same-reviewer closure. No Gate 22 implementation,
+integration, commit, publication, release, or Gate 23 action is authorized or
+claimed.
+
+## 2026-08-22 Gate 22 third contract review and action-complete rebound
+
+The retained reviewer inspected exact Gate 22 successor
+`AE826F738AA2C8CE4A02617726D3DFD4D354F61BB5E5F396BF5EA1AEFE5FA311`
+and bounded prerequisite package manifest
+`0005D8E12DC4CCF4AB8E2F96AE41141A44DBB8307BD60E60A402CF69186DDDD4`.
+It returned **Revise** with no owner blocker. `G22-CR-001`, `G22-CR-003`, and
+`G22-CR-005` closed: page-local negative/gap semantics, sole binding under exact-
+request override plus immutable replay, and producer-bounded negative truth all
+survived. The same original IDs carried the three residuals:
+
+- `G22-CR-002`: six convenient material shapes were correct, but outline nodes,
+  Map/alignment disposition history, and pinned multi-record metadata still
+  sealed false no-positive coverage;
+- `G22-CR-004`: the owner matrix meaning was repaired, but Core truth plus one
+  convenient primary-TUI Goal trace could still pass while other owner
+  discriminants rendered incorrectly; the Course row also used nonexistent
+  `publish` vocabulary; and
+- `G22-CR-006`: thin/oversized discovery and tool-count replay were repaired,
+  but model-limit could end progress first and a tool-limit candidate can be
+  rejected before the Gate 22 Tool body returns the promised cursor/incomplete
+  result.
+
+The bounded Gate 18 producer successor is now closed over all 19 registered
+`learning_material_query` actions. It adds Map-scoped outline-node identity;
+combines admitted Map/alignment scope with returned disposition version; uses a
+globally stable alignment identity distinct from selector; and projects pinned
+alignment, Map, selector, recorded/current Artifact revisions, or
+Representation/current Artifact metadata as a multi-record version-2 value.
+Supplemental display data remains fenced, historical material version 1 still
+blocks unsafe minimal-audit sealing, and an unknown future action fails schema/
+projector parity instead of silently sealing no-positive coverage.
+
+The current complete package successor remains 90 paths, totals 5,424,504
+bytes, and has manifest
+`334CDCAEEA573A8257E8F3B67A8A4AE9550F06522B3E85645B974CE126C4CBE6`.
+Fresh executor evidence passes the complete Core Turn suite at 36 cases/323
+assertions, the OpenCode material/fencing file at 6 cases/44 assertions, and
+both package typechecks. The material test covers every registered action arm,
+two pinned target variants, future-action fail-closed behavior, and
+supplemental forgery. These observations are not independent acceptance.
+
+Gate 22 acceptance evidence now requires the actual primary-TUI semantic
+decoder/component renderer to exercise every independently owned matrix row and
+every unsupported/stale/partial/finalization discriminant. Core/projector truth
+cannot substitute for that matrix; one representative released-v1 production
+path remains separately required. Course correction wording now uses only
+create View/first revision, add View revision, select or clear working revision,
+withdraw, and restore.
+
+Interaction continuation now persists a fixed-size authenticated cursor chain
+in every successful Tool result: query/predecessor fingerprints, last key,
+cumulative complete/gap/skip counts and rolling fingerprint, and exact Turn/
+Input/Part identity. Each result records remaining model and tool capacity; a
+last successful call proactively returns incomplete when either reaches zero.
+If `model_limit` or `tool_limit` rejects the next step before a Gate 22 Tool body
+runs, the shared presenter combines the durable Turn exhaustion receipt with the
+latest matching immutable cursor result, preserves every gap/skip and exact
+count/limit through restart, and offers a predecessor-linked new-Turn
+continuation. The rejected candidate never fabricates a page, and no second
+inspection ledger is introduced.
+
+The exact review-revised
+[Gate 22 contract successor](research/repa-gate-22-learning-native-tui-inspect-correct-2026-08-13.md)
+is SHA-256
+`3FC286DFBE6A404A7C8EE55753E62553B012BB7271268C706345120A63D93773`
+(1,322 lines / 93,802 bytes). The bounded prerequisite contract/status and
+implementation/evidence successors are
+`F28590E8661A96A1E261195477F659CE99FA89D8E28733BD93FA15693CD3B877`
+and
+`20448E2435C4B9BE762DE316BC84D13D970A4F66A1C8FE653C2B87947485E56A`.
+Gate 18's contract/status and implementation/evidence successors are
+`1A3086469514E672AB8D7ACBA581C41C55A228F73FE50FF6792EC2869FF8CFDC`
+and
+`A752E8A8CFF2E0ED295AA106EF115B4E682960F20852BD32C9DFB999E3F1C5F5`.
+The current status map and Roadmap 09 propagation are
+`6F52AA65FFEAD7C11EC505ABE651E19536D11746A887A68D5FD134BE0C3EB6D6`
+and
+`78E3B3899118D949F09CAB1433E9160B8BDE054FF3C5DCD5C05061E65E98019D`.
+
+The Gate 22 contract and bounded Gate 18 producer/evidence successors remain
+pending same-reviewer closure. No Gate 22 implementation, integration, commit,
+publication, release, or Gate 23 action is authorized or claimed.
+
+## 2026-08-22 Gate 22 fourth contract review and final exhaustion rebound
+
+The retained reviewer inspected exact Gate 22 successor
+`3FC286DFBE6A404A7C8EE55753E62553B012BB7271268C706345120A63D93773`
+and package successor
+`334CDCAEEA573A8257E8F3B67A8A4AE9550F06522B3E85645B974CE126C4CBE6`.
+It returned **Revise** for Gate 22 with no owner blocker, while separately
+returning **Accept** for the bounded Gate 18/prerequisite producer/evidence
+successor. `G22-CR-002` and `G22-CR-004` closed; `G22-CR-001`, `G22-CR-003`,
+and `G22-CR-005` remained closed. Only `G22-CR-006` remained open.
+
+The reviewer confirmed that all 19 registered material-query actions, both
+pinned multi-record target variants, disposition/outline scope, alignment
+identity, future-action fail-closed behavior, supplemental fencing, version-1
+refusal, and version-2 candidate/operation/audit coverage were complete. It
+reproduced the 6-case/44-assertion OpenCode file, Core identity and audit cases,
+all five file hashes, and the exact 90-path / 5,424,504-byte manifest. That
+verdict restores the current Gates 5/8/12/18 and Gate 18 implementation/evidence
+status without changing unrelated predecessor behavior.
+
+The primary-TUI evidence matrix and exact Gate 7 operation vocabulary also
+closed `G22-CR-004`. The residual exhaustion defect was narrower. Tool-limit has
+a rejected exact Gate 22 candidate/envelope, but model-limit occurs before any
+model operation or Tool candidate. A zero-model-limit Turn therefore cannot be
+classified as Gate 22 work, and a later model-limit cannot choose among older
+or intervening Gate 22 chains merely by latest ordinal or rejected-request
+prose. The prior cursor also needed database-bound predecessor verification,
+not a caller-recomputable checksum.
+
+The final rebound makes zero-predecessor and ambiguous/intervening model-limit
+generic Turn exhaustion. A prior cursor may join model-limit only when one
+unique immediately preceding committed Gate 22 Tool result is in the same
+Session/Turn/Input, explicitly declares `continuation_pending` for that query,
+owns the last model-operation and settled Tool ordinal, and has no intervening
+input, model operation, Tool candidate/result, or unrelated presentation. The
+presenter labels that exact join `predecessor_continuation_exhausted` without
+claiming the unrun model chose a Tool. Tool-limit still uses its rejected exact
+Tool/Part/query/cursor envelope; any mismatch is generic exhaustion.
+
+Continuation now verifies the supplied token against immutable stored
+predecessor Part output bytes/fingerprint, completed candidate/invocation,
+Session/Turn/Input, Tool ID, query, cursor, and full cumulative gap/skip state.
+Erased gaps with a recomputed checksum, wrong predecessor/query/scope/result,
+and same-Turn fresh page-one reset after a gap fail before reading. A deleted
+predecessor is source-unavailable rather than reconstructed. Immediate-
+predecessor verification is sufficient because each immutable result commits
+the already verified rolling chain. Restart reproduces generic versus exact-
+predecessor presentation without replay or cursor reassignment.
+
+The exact review-revised
+[Gate 22 contract successor](research/repa-gate-22-learning-native-tui-inspect-correct-2026-08-13.md)
+is SHA-256
+`26543CC939FE5AC7C8C9B95BEF041CC41071CCB469340920C6927F90B8657BDD`
+(1,377 lines / 98,253 bytes). The accepted prerequisite contract/status and
+implementation/evidence successors are
+`CB76C0D9F31A64738E776C307A754FBB833E804BD31D8C92D07579FEECDC8421`
+and
+`AE3A4C2537B12AAE0CB4547EDD42987EB6058F67A864F6DB41BF3053CCCF182E`.
+Gate 18's accepted contract/status and implementation/evidence successors are
+`4A59B3115968F0C3FDCC2F5F844D510F84EA9F96771151714F16DF3B746B74F1`
+and
+`68EBC048173434B372B873FBFAC98C15660D63C007D8A752BE8569B7F533F092`.
+The current status map and Roadmap 09 propagation are
+`2BA6FCF4E769D1BEA0966FF9D1CCB6D812591C0637726EA258C14C75623D681D`
+and
+`BA8BC9EC8456C2CCE2A0ECDE237217A930DC398FCFB6939D8AA79196CC57618A`.
+
+The Gate 22 contract remains pending same-reviewer closure of this final
+`G22-CR-006` rebound. Both prerequisite review layers are current and accepted.
+No Gate 22 implementation, integration, commit, publication, release, or Gate
+23 action is authorized or claimed.
+
+## 2026-08-22 Gate 22 contract/theory acceptance
+
+The retained Whole-Gate reviewer inspected exact semantic successor
+`26543CC939FE5AC7C8C9B95BEF041CC41071CCB469340920C6927F90B8657BDD`
+and returned **Accept** with no owner blocker or new acceptance-changing
+finding. `G22-CR-006` closed; `G22-CR-001..005` remained closed. The accepted
+contract therefore has no open finding.
+
+The final closure confirmed that zero-predecessor or ambiguous model-limit is
+generic Turn exhaustion, exact model-limit cursor attribution requires one
+unique immediate `continuation_pending` predecessor with no intervening work,
+Tool-limit uses its rejected exact Gate 22 envelope, and continuation validates
+immutable predecessor Part bytes/identity rather than a public self-checksum.
+Restart and new-Turn continuation retain the same fail-closed distinction.
+
+The same verdict preserved the independently accepted exact prerequisite
+package: 90 paths / 5,424,504 bytes / manifest
+`334CDCAEEA573A8257E8F3B67A8A4AE9550F06522B3E85645B974CE126C4CBE6`.
+Both prerequisite layers are current; no unrelated Gate 18 or deletion/restore
+behavior is reopened.
+
+The reviewer recorded three derived implementation/evidence obligations rather
+than contract blockers: cursor predecessor fingerprinting must cover canonical
+immutable Gate 22 result bytes instead of mutable whole-Part metadata; a
+pre-body rejected Tool envelope must pass the same closed Gate 22 input-schema
+validation before presenter attribution; and the primary-TUI matrix must
+exercise `cursor_source_unavailable` after legal predecessor deletion without
+trusting the caller token.
+
+This verdict accepts only Gate 22 contract/theory. The implementation/evidence
+layer is now active under the explicitly authorized Whole-Gate run and retains
+the same reviewer. No Gate 22 implementation/evidence acceptance, integration,
+commit, publication, release, Gate 23, model-reliability, or pedagogy claim
+follows.
+
 ## Historical evidence locators
 
 ### Pre-fork source audit
@@ -4073,3 +4935,318 @@ reproduce their aggregate claims are not retained.
 The complete Gate 3 contract and verification record remains
 `docs/research/opencode-fork-gate-03-repa-identity-isolation-2026-07-13.md`
 at the oracle tag. The active roadmap records its passing commit.
+
+## 2026-08-22 Gate 22 implementation/evidence candidate
+
+Under Whole-Gate review run `G22-WG-20260813-019ff8e2-01`, the top-level
+executor implemented the independently accepted Gate 22 contract on the same
+unintegrated checkout. The candidate is bound by
+[its implementation/evidence record](research/repa-gate-22-learning-native-tui-inspect-correct-implementation-evidence-2026-08-22.md)
+at 115 package paths / 6,548,841 bytes / manifest
+`599DE4B866D513D2B6548C89D881E604A97F7C6C59824E25ABA1958899B5A3BB`, on
+base and current `HEAD` `b8100d1c17cd31ec713062c8a1ca5254208899ec`.
+
+The retained reviewer's first implementation/evidence pass stopped before
+substantive review because the dispatch had reported digest
+`B9FACFDA36BA6D310CA4EB53F7909EC6E82869305184AE87CB9F001C3B5455FE`
+and status 127 entries / 38 untracked / zero staged, while its canonical
+recomputation produced the digest above and 130 / 41 / zero staged. The package
+bytes had not drifted. Both digests are exactly reproducible from the same 115
+paths, 6,548,841 bytes, and per-file hashes: the old digest used NUL-separated
+fields, lowercase file hashes, and a terminal LF; the canonical digest uses
+UTF-8 `path<TAB>byte-length<TAB>UPPERCASE-file-SHA-256` records joined by LF
+without a terminal LF. The status difference likewise came from Git's default
+collapse of the untracked `session-deletion/` and `session-presentation/`
+directories into two entries instead of five leaf files. Review identity now
+uses `--untracked-files=all` and the explicit canonical manifest encoding.
+
+The implementation preserves the registered Gate 18 reads as the only
+`exact_read` producers and adds optional same-snapshot owner inspection,
+record-first Context/read/citation and sealed deletion/admin consumers,
+root-only deletion truth, thin terminal-root discovery, bounded locator/range
+materialization, database-verified cumulative cursor/gap chaining, fail-closed
+model/tool exhaustion presentation, and the shared primary-TUI semantic
+decoder/renderer. Two versioned migrations add only rebuildable projection and
+index state and backfill producer-owned Context coverage.
+
+Fresh fast evidence passed Core, OpenCode, and TUI typechecks; migration
+generation parity; 4 cursor/authentication tests with 11 assertions; one
+generated-index/query-plan/65th-row test with 12 assertions; and six TUI owner/
+exhaustion tests with 57 assertions. `git diff --check` reported no whitespace
+error. At the maintainer's request for speed, an added full-current-schema test
+was removed after producing no result for 15 minutes; no interrupted execution
+is counted as passing. Existing frozen migration and OpenCode processor
+integration cases were updated but not rerun in this executor pass. The
+retained reviewer may execute them only if a different outcome could change its
+verdict.
+
+This is a review candidate, not acceptance. No integration, stage, commit,
+push, publication, release, Gate 23 transition, credentialed provider run, or
+pedagogy claim occurred.
+
+## 2026-08-23 Gate 22 first implementation review and repaired successor
+
+The retained Whole-Gate reviewer inspected exact 115-path predecessor
+`599DE4B866D513D2B6548C89D881E604A97F7C6C59824E25ABA1958899B5A3BB`
+and returned **Revise** with no owner blocker. Six findings were
+acceptance-blocking:
+
+- `G22-IR-001`: missing Context coverage could fabricate `not_entered`, live
+  empty results never became a valid finite negative, aggregate coverage was
+  absent, and an unbound audit miss was overstated;
+- `G22-IR-002`: sole FutureAttention binding lacked complete owner/control
+  identity, and an earlier Tool-only operation inherited the whole Turn's later
+  completion;
+- `G22-IR-003`: optional range predecessors and arbitrary offsets could erase
+  prior coverage;
+- `G22-IR-004`: client-side exhaustion inference rejected valid ancestor chains,
+  trusted copied Tool metadata, overclaimed a missing Part as a wrong
+  predecessor, and depended on the last 100 hydrated Messages;
+- `G22-IR-005`: owner-arm decoding, per-item rendering, Context/steering arms,
+  direct-run/ACP parity, and real released-v1 inspection/correction evidence
+  were absent; and
+- `G22-IR-006`: oversized metadata retained the full projection, cancellation/
+  deadline and work accounting were incomplete, the query-plan oracle used a
+  toy schema, and frozen migration plus processor evidence was unqualified.
+
+The repaired successor binds every live negative to one finite one-snapshot
+operation scope with complete Context and terminal seals; exposes exact section
+coverage; leaves a raw audit miss unknown; and permits a scoped audit negative
+only after exact-root count preflight and complete bundle validation.
+FutureAttention binding now joins the exact owner snapshot at the immutable
+Context frontier and carries transition/version, source, target, scope,
+selection, and control identities. Learner-visible action is classified from
+the exact Assistant or learner-usable Tool operation, never the enclosing
+Turn's later state.
+
+Range continuation now requires offset zero or the verified predecessor's exact
+`nextOffset`; explicit forward access permanently records a range gap. A
+missing predecessor Part is `cursor_source_unavailable_or_unresolved` because
+the caller token cannot prove prior existence or deletion; no tombstone or
+retention field was added. Core derives model/tool exhaustion from durable
+Turn/candidate/invocation/Part rows, verifies the persisted rejected envelope,
+selects the exact immediate model predecessor despite older pending ancestors,
+and exposes one typed Turn projection that survives restart without transcript-
+window inference.
+
+One strict decoder now binds every owner arm to its legal owner/record kind.
+Current Context, retained-steering cut, and retained-steering-history
+unsupportedness have real Interaction Tool paths. Primary TUI, direct-run, and
+ACP share per-item semantic lines. The bounded released-v1 trace covers real
+Goal `includeInspection`, Context, retained steering, Interaction search, stale
+cursor, owner correction and fresh read without per-record causal attribution.
+
+Bounds now replace oversized output and metadata with one small typed failure,
+propagate cancellation plus a five-second deadline, account the second locator
+projection pass, preflight audit bundle size, and use production Drizzle query
+builders against the real migrated schema. The v24 backfill uses a frozen v1
+decoder and its focused v24→v34 test passes. The pinned JavaScript generator now
+runs `@hey-api/openapi-ts` under its supported local Node 22 runtime, avoiding
+the Bun 1.3.14 Windows native crash while retaining existing post-processing;
+full SDK generation and typecheck pass.
+
+The exact repaired package is 131 paths / 7,049,375 bytes / canonical manifest
+`E075C11974FB8822D311F1917CF20031FBBB3AF22AAFB3476B6C4A7DFD976535`.
+Focused evidence is indexed in the implementation/evidence record. This
+candidate awaits same-reviewer closure of `G22-IR-001..006`; it is not accepted,
+integrated, staged, committed, pushed, published, or released, and no Gate 23
+claim follows.
+
+## 2026-08-23 Gate 22 second implementation review and bounded repair successor
+
+The retained reviewer re-read the exact `E075C119...D976535` successor and
+returned **Revise**, again with no owner blocker. `G22-IR-001..006` remained
+open in narrower production-path forms, and `G22-IR-007` identified the sole
+status map's obsolete `B9FACFDA...B5455FE` current-candidate claim:
+
+- a root-bound deletion cursor did not bind or display root/bundle/deletion
+  time, so a cursor from another root could fabricate a scoped miss;
+- final action qualification still admitted nonterminal/ineligible output, and
+  FutureAttention finalization omitted the exact member reason and current
+  concern disposition;
+- predecessor-free `read_range` could restart offset zero after a same-Turn
+  gap;
+- model exhaustion selected the latest pending result without proving that
+  competing pending results belonged to its ancestry;
+- nested administrative and optional semantic objects plus owner meaning/
+  effects/correction route were not closed by the shared decoder, while the
+  evidence did not yet traverse the actual Tool-Part-to-primary-TUI body;
+- locator/range work still reconstructed or decoded a whole Turn before
+  enforcing the caller's row boundary, and visible results omitted database
+  work; and
+- `docs/README.md` named both the repaired and obsolete manifests as current.
+
+The current repair signs and renders the exact deletion audit scope and rejects
+cross-scope continuation before lookup. A completed learner-visible action now
+requires the terminal Turn's final model operation plus a committed eligible
+nonempty Assistant or learner-usable Tool presentation. FutureAttention output
+adds the exact served/not-served member arm, failure reason or service identity,
+and current concern transition/disposition.
+
+Range reset checks now apply to predecessor-free exact range reads as well as
+directory page one. Model-limit attribution walks stored
+`parentOutputFingerprint` ancestry and leaves independent pending page-one
+chains generic. One canonical owner-semantics table feeds both producer and
+decoder; the decoder rejects extra or malformed nested projection shapes. The
+actual primary session route delegates its Tool Part to the tested decoder/body
+component, and the exhaustion body is likewise shared with its component
+oracle.
+
+Locator materialization now spends one remaining-row allowance across its
+queries and stops on the first over-bound row; it no longer performs a second
+whole-Turn projection. Exact range reads refuse locators above the admitted
+512-row ceiling and fetch only the requested canonical Message/Part page.
+Visible Interaction facts include search status, cumulative gaps, predecessor,
+capacity, `visitedRows`, and `decodedBytes`. The five-second wrapper is recorded
+only as cooperative outer/cross-statement cancellation, not as a claim that a
+synchronous SQLite statement is interrupted mid-call.
+
+Focused evidence now includes the signed cross-root audit conflict, earlier
+learner-usable Tool-only action, linked versus independent model-limit chains,
+file-database exhaustion restart, one-pass locator first-over-bound and
+one-item-page work, production range query plans with 66-root continuation,
+malformed nested decoder rejection, actual Tool-Part-to-primary-TUI rendering,
+exact exhaustion-gap rendering, and the released-v1 stale-no-write plus one
+explicit correction trace. The quiescent successor is exactly 132 package paths
+/ 7,097,071 bytes / canonical manifest
+`9A9F3822CB1E9534D9C9B4BE1CAB631501F465EDA4C29BBCA0A0FD08A8287674`;
+expanded status is 147 entries / 49 untracked / zero staged. This successor
+awaits same-reviewer closure of `G22-IR-001..007`; it is not accepted,
+integrated, staged, committed, pushed, published, or released, and no Gate 23
+claim follows.
+
+## 2026-08-23 Gate 22 third implementation review and exact-pagination successor
+
+The retained reviewer re-read exact `9A9F3822...287674`, closed
+`G22-IR-003/007`, retained narrower `G22-IR-001/002/004/005/006`, and added
+`G22-IR-008` for partial-page mutation. The verdict remained **Revise** with no
+owner blocker:
+
+- the audit cursor carried root/bundle/time but its public checksum still let a
+  caller invent a high same-bundle operation position;
+- a durable FutureAttention finalization with a missing member or unavailable
+  current concern was silently omitted;
+- the ancestry read capped its newest-row scan at 257 even though public Turn
+  Tool limits can legally exceed 256;
+- owner semantics and nested keys were closed, but lineage records could belong
+  to another owner record and deletion/administrative fields could contradict
+  their status; the literal TUI request and correction/restart/large-history
+  composition evidence was incomplete;
+- late SQL `OFFSET` pages reported only returned rows; and
+- a locator's whole-range fingerprint could detect a full-range mutation but
+  not a changed body in a partial middle page.
+
+The current successor makes each reverse-read page cursor name its predecessor
+Part and accepts it only when the exact cursor bytes survive in that completed
+Part's typed inspection projection. The checksum remains corruption detection,
+not authority. A recomputed same-scope high position and a cross-root cursor now
+conflict before audit lookup without adding retained cursor state.
+
+FutureAttention finalization now has one normalized exact-member decoder. If a
+durable finalization exists but its member or current concern cannot be
+validated, the dependent lineage section and top-level projection become typed
+`integrity_validation_unavailable`. The shared projection decoder additionally
+requires every lineage/audit record to belong to the owner record set and binds
+Session-deletion/administrative field presence, lifecycle status, and Session
+identity.
+
+Model-limit attribution returns generic `inspection_ancestry_over_budget`
+before scanning when the actual Tool count exceeds 256; a supported 258-Tool
+Turn exercises that path. Current Interaction locators contain contiguous
+eight-item Message and Part integrity chunks. A range read loads only complete
+chunks intersecting the requested page, validates them, and detects partial-page
+mutation. Legacy immutable Context locators remain historically readable but
+cannot satisfy the current exact-range input schema. Visible work counts every
+row walked by SQL `OFFSET`; the late one-item offset-250 oracle reports 258
+visits rather than three.
+
+Evidence now includes the actual primary-TUI Session-start request with no
+internal Goal/revision ID; the released-v1 stale-no-write, one explicit
+correction, fresh revision-2 read and durable snapshot reopen; and one mounted
+TUI composition for 64-of-66 continuation, locator over-budget, explicit skip
+gap, and database-owned exhaustion. Producer-level replay/cursor tests retain
+the immutable predecessor oracle.
+
+The quiescent successor is exactly 134 package paths / 7,315,647 bytes /
+canonical manifest
+`605A1167F1E591AA430AF3C16C1B93079CEFE2CA2C4FA76552992D976B42541D`;
+expanded status is 149 entries / 49 untracked / zero staged. It awaits
+same-reviewer closure of open `G22-IR-001/002/004/005/006/008` and confirmation
+that closed `G22-IR-003/007` did not regress. It is not accepted, integrated,
+staged, committed, pushed, published, or released, and no Gate 23 claim follows.
+
+## 2026-08-23 Gate 22 fourth implementation review and real-composition successor
+
+The retained reviewer re-read exact `605A1167...B42541D`, closed
+`G22-IR-001/002/004/008`, kept `G22-IR-003/007` closed, and retained only
+`G22-IR-005/006`. No owner blocker or new finding appeared.
+
+`G22-IR-005` remained open because prior evidence still composed separate
+production and constructed-renderer observations. The stale case was an
+inspection-cursor conflict rather than a real stale owner mutation, the restart
+read only the current Goal head, and the large-history frame used synthetic
+Parts/facts. `G22-IR-006` remained open because Session-index outer scans with
+correlated Turn-membership predicates could inspect unrelated rows while the
+visible work field counted only matching `OFFSET` rows.
+
+The current range reader forms exact message membership from `turn_input` and
+`turn_model_operation`, joins Message/Part rows by primary/exact-message index,
+and contains no Session outer scan or correlated subquery. Bun SQLite does not
+expose a stable physical statement row counter, so the projection now reports a
+conservative `databaseRowsUpperBound` with explicit
+`exact_turn_membership_v1` basis rather than a fabricated exact visit count.
+Production `EXPLAIN QUERY PLAN` proves the exact membership direction. A scale
+oracle executes a one-item late page over a 261-Part Turn after adding 500
+unrelated rows to the same Session; the 1,086-row upper bound and result do not
+depend on those rows.
+
+The released-v1 Goal trace now submits an actual stale Goal correction, renders
+its typed rejection, proves no owner version change or automatic second write,
+re-reads revision 1, then performs exactly one separately admitted correction
+and re-reads revision 2. A fresh Database service over a durable snapshot proves
+revision-1/2 history and both old/new persisted inspection relations. The exact
+persisted runtime Parts are reloaded from SQLite and passed to the actual TUI
+component.
+
+A second production trace creates 70 terminal roots and runs real
+`learning_interaction_read` calls through two 32-item pages, the real 65th
+oversized candidate, bounded materialization, exact persisted-Part replay,
+explicit skip gap, next-page continuation, and model-limit exhaustion. It then
+reloads every exact Part and the Turn projection from SQLite and renders them
+with the primary-TUI components. The earlier synthetic large-history component
+case was removed.
+
+The quiescent successor is exactly 134 package paths / 7,338,855 bytes /
+canonical manifest
+`57A15F358CF9C1AF8FA8F79A956D8DD8769A1DF69957AB1F611DE998F418F3BB`;
+expanded status remains 149 entries / 49 untracked / zero staged. It awaits
+same-reviewer closure of `G22-IR-005/006` and confirmation that all other
+findings remain closed. It is not accepted, integrated, staged, committed,
+pushed, published, or released, and no Gate 23 claim follows.
+
+## 2026-08-23 Gate 22 Whole-Gate acceptance
+
+The retained independent reviewer task
+`019ff945-7b10-7f53-999f-b92dfa68d30c` re-read exact fourth-review successor
+`57A15F358CF9C1AF8FA8F79A956D8DD8769A1DF69957AB1F611DE998F418F3BB`
+under run `G22-WG-20260813-019ff8e2-01` and returned **Accept** for Gate 22
+implementation/evidence. It closed `G22-IR-005/006`, confirmed
+`G22-IR-001/002/003/004/007/008` remained closed, opened no superseding,
+replacement, or new finding, and reported no owner blocker or material
+acceptance-changing unknown.
+
+The accepted implementation package is exactly 134 paths / 7,338,855 bytes at
+the manifest above. Focused acceptance evidence includes the exact-Turn query
+plan and executed 261-Part/500-unrelated-row late page; the real stale Goal
+correction/rejection/re-resolution/revision-history snapshot; the real 70-root
+paging/materialize/persisted-replay/skip/exhaustion sequence whose exact SQLite
+Parts and Turn projection pass through the primary-TUI components; literal TUI
+input and decoder discriminants; and current Core/OpenCode/TUI/SDK typechecks.
+The reviewer intentionally did not duplicate broad suites.
+
+Gate 22 contract/theory had already been accepted. Both Gate layers are now
+accepted, so Gate 22 as a whole is ready only for its separately governed
+integration step. The working tree remains unintegrated and unstaged. This
+closure performs or authorizes no integration, commit, publication, release,
+Gate 23 work, provider-reliability claim, or pedagogy claim. The reviewer is
+retired from further Gate work and remains visible as durable review evidence.

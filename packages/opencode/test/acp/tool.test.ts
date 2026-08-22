@@ -1,5 +1,7 @@
 import { resolve } from "path"
 import { describe, expect, test } from "bun:test"
+import { LearningInspectionSchema as LearningInspection } from "@opencode-ai/core/learning-inspection-schema"
+import { LearningInspectionOwner } from "@opencode-ai/core/learning-inspection-owner"
 import {
   completedToolContent,
   completedToolUpdate,
@@ -13,6 +15,52 @@ import {
 } from "../../src/acp/tool"
 
 describe("acp tool conversion", () => {
+  test("uses the shared typed inspection decoder output instead of raw Tool JSON", () => {
+    const value: LearningInspection.Projection = {
+      schemaVersion: 1,
+      status: "available",
+      source: {
+        learnerHomeID: "lhm_test",
+        partID: "prt_test",
+        tool: "learning_interaction_read",
+        action: "inspect_current_context",
+        assistantMessageID: "msg_test",
+        turnID: "trn_test" as LearningInspection.Projection["source"]["turnID"],
+        inputID: "tri_test" as LearningInspection.Projection["source"]["inputID"],
+        currentFrontier: { sequence: 1, time: 10 },
+      },
+      owner: {
+        kind: "learning_context",
+        ...LearningInspectionOwner.inspectionOwner("learning_context", "exact immutable operation Context cut"),
+        capabilityID: "learning_interaction_read",
+        action: "inspect_current_context",
+        records: [],
+      },
+      lineage: {
+        coverage: "non_atomic_search_incomplete",
+        scope: { status: "continued_fresh_cut", operationCount: 0, terminalSealedCount: 0 },
+        contextCoverage: [],
+        items: [],
+        omitted: false,
+        pendingGap: false,
+      },
+      deletionAudit: { status: "unknown", items: [], omitted: false },
+      sessionDeletion: { status: "not_applicable" },
+      administrativeHistory: { status: "not_applicable", members: [], laterLocalMessages: [], omitted: false },
+      nonCausality: "operational_lineage_not_per_record_answer_causality",
+    }
+    const update = completedToolUpdate({
+      toolCallId: "tool-inspect",
+      toolName: "learning_interaction_read",
+      state: { status: "completed", input: {}, output: "raw internal JSON" },
+      inspection: { type: "valid", value },
+    })
+    expect(update).toMatchObject({ title: "Learning inspection — Available" })
+    expect(JSON.stringify(update.content)).toContain("Owner relation: learning_context")
+    expect(JSON.stringify(update.content)).toContain("does not prove that one record caused")
+    expect(JSON.stringify(update.content)).not.toContain("raw internal JSON")
+  })
+
   test("maps OpenCode tool ids to ACP tool kinds", () => {
     expect(toToolKind("bash")).toBe("execute")
     expect(toToolKind("shell")).toBe("execute")

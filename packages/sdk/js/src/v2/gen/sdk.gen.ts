@@ -153,7 +153,15 @@ import type {
   SessionDeleteErrors,
   SessionDeleteMessageErrors,
   SessionDeleteMessageResponses,
+  SessionDeleteProposalErrors,
+  SessionDeleteProposalResponses,
   SessionDeleteResponses,
+  SessionDeletionAuditPurgeErrors,
+  SessionDeletionAuditPurgeProposalErrors,
+  SessionDeletionAuditPurgeProposalResponses,
+  SessionDeletionAuditPurgeResponses,
+  SessionDeletionProjectionErrors,
+  SessionDeletionProjectionResponses,
   SessionDiffErrors,
   SessionDiffResponses,
   SessionForkBasisErrors,
@@ -2461,12 +2469,23 @@ export class Session2 extends HeyApiClient {
   /**
    * Delete session
    *
-   * Delete a session and permanently remove all associated data, including messages and history.
+   * Commit one exact previously displayed Session-tree deletion proposal. The selected mode is immutable and replay-safe.
    */
   public delete<ThrowOnError extends boolean = false>(
     parameters: {
       sessionID: string
       directory?: string
+      schemaVersion: 1
+      requestID: string
+      rootSessionID: string
+      targets: Array<{
+        sessionID: string
+        parentSessionID: string | null
+      }>
+      subtreeCount: number
+      subtreeFingerprint: string
+      mode: "full" | "minimal_audit"
+      requestFingerprint: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -2477,6 +2496,14 @@ export class Session2 extends HeyApiClient {
           args: [
             { in: "path", key: "sessionID" },
             { in: "query", key: "directory" },
+            { in: "body", key: "schemaVersion" },
+            { in: "body", key: "requestID" },
+            { in: "body", key: "rootSessionID" },
+            { in: "body", key: "targets" },
+            { in: "body", key: "subtreeCount" },
+            { in: "body", key: "subtreeFingerprint" },
+            { in: "body", key: "mode" },
+            { in: "body", key: "requestFingerprint" },
           ],
         },
       ],
@@ -2485,6 +2512,11 @@ export class Session2 extends HeyApiClient {
       url: "/session/{sessionID}",
       ...options,
       ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
     })
   }
 
@@ -2794,6 +2826,166 @@ export class Session2 extends HeyApiClient {
       url: "/session/{sessionID}/message/{messageID}",
       ...options,
       ...params,
+    })
+  }
+
+  /**
+   * Prepare Session deletion
+   *
+   * Return the exact root, complete descendant scope, and selected retention mode that must be shown before deletion is committed. Learner-managed local export files are outside this deletion and are not removed.
+   */
+  public deleteProposal<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+      mode: "full" | "minimal_audit"
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "mode" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      SessionDeleteProposalResponses,
+      SessionDeleteProposalErrors,
+      ThrowOnError
+    >({
+      url: "/session/{sessionID}/deletion/proposal",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Read Session deletion state
+   *
+   * Read the immutable deletion settlement and, when retained, its body-free non-causal audit projection.
+   */
+  public deletionProjection<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      SessionDeletionProjectionResponses,
+      SessionDeletionProjectionErrors,
+      ThrowOnError
+    >({
+      url: "/session/{sessionID}/deletion",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Prepare deletion-audit purge
+   *
+   * Bind a separate destructive request to the exact retained audit bundle before it is purged.
+   */
+  public deletionAuditPurgeProposal<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      SessionDeletionAuditPurgeProposalResponses,
+      SessionDeletionAuditPurgeProposalErrors,
+      ThrowOnError
+    >({
+      url: "/session/{sessionID}/deletion/audit/purge/proposal",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Purge retained deletion audit
+   *
+   * Commit one exact purge proposal without rewriting the original Session deletion settlement or releasing its retired root identity.
+   */
+  public deletionAuditPurge<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+      schemaVersion: 1
+      requestID: string
+      rootSessionID: string
+      deletionRequestID: string
+      auditBundleID: string
+      requestFingerprint: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "schemaVersion" },
+            { in: "body", key: "requestID" },
+            { in: "body", key: "rootSessionID" },
+            { in: "body", key: "deletionRequestID" },
+            { in: "body", key: "auditBundleID" },
+            { in: "body", key: "requestFingerprint" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).delete<
+      SessionDeletionAuditPurgeResponses,
+      SessionDeletionAuditPurgeErrors,
+      ThrowOnError
+    >({
+      url: "/session/{sessionID}/deletion/audit",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
     })
   }
 

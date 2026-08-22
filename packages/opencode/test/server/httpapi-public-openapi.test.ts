@@ -8,6 +8,7 @@ type OpenApiSchema = {
   readonly anyOf?: ReadonlyArray<OpenApiSchema>
   readonly type?: string
   readonly enum?: readonly unknown[]
+  readonly items?: OpenApiSchema
   readonly properties?: Record<string, OpenApiSchema>
   readonly required?: readonly string[]
   readonly contentSchema?: OpenApiSchema
@@ -26,7 +27,10 @@ type OpenApiOperation = {
     readonly schema?: OpenApiSchema
   }>
   readonly responses?: Record<string, OpenApiResponse>
-  readonly requestBody?: { readonly required?: boolean }
+  readonly requestBody?: {
+    readonly required?: boolean
+    readonly content?: Record<string, { readonly schema?: OpenApiSchema }>
+  }
   readonly security?: unknown
 }
 type OpenApiPathItem = Partial<Record<Method, OpenApiOperation>>
@@ -237,6 +241,50 @@ describe("PublicApi OpenAPI v2 errors", () => {
     ]) {
       expect(spec.paths[path]?.post?.requestBody?.required, path).toBe(true)
     }
+  })
+
+  test("preserves the exact Session deletion carrier schema", () => {
+    const spec = OpenApi.fromApi(PublicApi) as OpenApiSpec
+    const commit = spec.paths["/session/{sessionID}"]?.delete
+    const proposal = spec.paths["/session/{sessionID}/deletion/proposal"]?.post
+    const purge = spec.paths["/session/{sessionID}/deletion/audit"]?.delete
+    const commitBody = commit?.requestBody?.content?.["application/json"]?.schema
+    const proposalBody = proposal?.requestBody?.content?.["application/json"]?.schema
+    const purgeBody = purge?.requestBody?.content?.["application/json"]?.schema
+    const proposalResult = proposal?.responses?.["200"]?.content?.["application/json"]?.schema?.anyOf?.find(
+      (schema) => schema.properties?.targets,
+    )
+
+    expect(commit?.requestBody?.required).toBe(true)
+    expect(commitBody?.required).toEqual([
+      "schemaVersion",
+      "requestID",
+      "rootSessionID",
+      "targets",
+      "subtreeCount",
+      "subtreeFingerprint",
+      "mode",
+      "requestFingerprint",
+    ])
+    expect(commitBody?.properties?.targets?.items?.properties?.parentSessionID?.anyOf).toContainEqual({
+      type: "null",
+    })
+
+    expect(proposal?.requestBody?.required).toBe(true)
+    expect(proposalBody?.required).toEqual(["mode"])
+    expect(proposalResult?.properties?.targets?.items?.properties?.parentSessionID?.anyOf).toContainEqual({
+      type: "null",
+    })
+
+    expect(purge?.requestBody?.required).toBe(true)
+    expect(purgeBody?.required).toEqual([
+      "schemaVersion",
+      "requestID",
+      "rootSessionID",
+      "deletionRequestID",
+      "auditBundleID",
+      "requestFingerprint",
+    ])
   })
 
   test("documents integration discovery and connection routes", () => {

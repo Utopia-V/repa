@@ -2702,6 +2702,11 @@ export type SessionTreeBusyError = {
   message: string
 }
 
+export type SessionTreeChangedError = {
+  _tag: "SessionTreeChangedError"
+  sessionID: string
+}
+
 export type TextPartInput = {
   id?: string
   type: "text"
@@ -2778,9 +2783,29 @@ export type TurnNotSteerableError = {
   state: "running" | "completed" | "failed" | "interrupted" | "exhausted"
 }
 
-export type SessionTreeChangedError = {
-  _tag: "SessionTreeChangedError"
+export type SessionIdRetiredError = {
+  _tag: "SessionIDRetiredError"
   sessionID: string
+  deletionRequestID: string
+  mode: "full" | "minimal_audit"
+  deletionTime: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  settlement: {
+    schemaVersion: 1
+    requestID: string
+    requestFingerprint: string
+    rootSessionID: string
+    subtreeCount: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    subtreeFingerprint: string
+    mode: "full" | "minimal_audit"
+    permissionDecisionFingerprint: string
+    proposalSchemaVersion: 1
+    outcome: "applied"
+    deletionTime: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    sessionBodiesDeleted: true
+  }
+  settlementBytes: string
+  auditAvailable: boolean
+  message: string
 }
 
 export type TurnSourceUnavailableError = {
@@ -3349,6 +3374,30 @@ export type TurnTerminal2 = {
   exhaustion?: TurnExhaustion
 }
 
+export type TurnInspectionExhaustion =
+  | {
+      schemaVersion: 1
+      type: "generic"
+      counter: "model" | "tool"
+      reason: string
+    }
+  | {
+      schemaVersion: 1
+      type: "predecessor_continuation_exhausted" | "rejected_tool_continuation_exhausted"
+      counter: "model" | "tool"
+      predecessorPartID: string
+      queryFingerprint: string
+      outputFingerprint: string
+      completeSoFar: boolean
+      gapCounts: {
+        oversizedCandidateSkipped: number
+        rangeItemsSkipped: number
+      }
+      gapFingerprint: string
+      continuationPending: boolean
+      rangeNextOffset?: number
+    }
+
 export type TurnInfo = {
   id: string
   sessionID: string
@@ -3363,6 +3412,7 @@ export type TurnInfo = {
   timeAdmitted: number
   causalTime: number
   terminal?: TurnTerminal2
+  inspectionExhaustion?: TurnInspectionExhaustion
 }
 
 export type TurnInput = {
@@ -4345,6 +4395,38 @@ export type PtyTicketConnectToken = {
   expires_in: number
 }
 
+export type SessionPresentationAdministrativeHistoryIntegrityError = {
+  _tag: "SessionPresentation.AdministrativeHistoryIntegrityError"
+  sessionID: string
+  reason: string
+  message: string
+}
+
+export type SessionDeletionInvocationConflictError = {
+  _tag: "SessionDeletion.InvocationConflictError"
+  requestID: string
+  message: string
+}
+
+export type SessionDeletionAuditProjectionError = {
+  _tag: "SessionDeletion.AuditProjectionError"
+  rootSessionID: string
+  reason: string
+  message: string
+}
+
+export type SessionDeletionAuditNotAvailableError = {
+  _tag: "SessionDeletion.AuditNotAvailableError"
+  rootSessionID: string
+  message: string
+}
+
+export type SessionPresentationFrontierUnrepresentableError = {
+  _tag: "SessionPresentation.FrontierUnrepresentableError"
+  sessionID: string
+  message: string
+}
+
 export type TurnUnavailableSource = {
   turnID: string
   sessionID: string
@@ -4380,6 +4462,13 @@ export type TurnUnavailableReceipt = {
   source: TurnUnavailableSource
   models: Array<TurnUnavailableModelMapping>
   tools: Array<TurnUnavailableToolMapping>
+}
+
+export type SessionPresentationHistoricalPresentationNotRevertibleError = {
+  _tag: "SessionPresentation.HistoricalPresentationNotRevertibleError"
+  sessionID: string
+  presentationID: string
+  message: string
 }
 
 export type LocationInfo = {
@@ -9970,7 +10059,19 @@ export type SessionStatusResponses = {
 export type SessionStatusResponse = SessionStatusResponses[keyof SessionStatusResponses]
 
 export type SessionDeleteData = {
-  body?: never
+  body: {
+    schemaVersion: 1
+    requestID: string
+    rootSessionID: string
+    targets: Array<{
+      sessionID: string
+      parentSessionID: string | null
+    }>
+    subtreeCount: number
+    subtreeFingerprint: string
+    mode: "full" | "minimal_audit"
+    requestFingerprint: string
+  }
   path: {
     sessionID: string
   }
@@ -9990,18 +10091,41 @@ export type SessionDeleteErrors = {
    */
   404: NotFoundError
   /**
-   * SessionBusyError | SessionTreeBusyError
+   * SessionBusyError | SessionTreeBusyError | SessionTreeChangedError | SessionDeletion.InvocationConflictError | SessionDeletion.AuditProjectionError
    */
-  409: SessionBusyError | SessionTreeBusyError
+  409:
+    | SessionBusyError
+    | SessionTreeBusyError
+    | SessionTreeChangedError
+    | SessionDeletionInvocationConflictError
+    | SessionDeletionAuditProjectionError
 }
 
 export type SessionDeleteError = SessionDeleteErrors[keyof SessionDeleteErrors]
 
 export type SessionDeleteResponses = {
   /**
-   * Successfully deleted session
+   * Durable Session deletion settlement
    */
-  200: boolean
+  200: {
+    type: "applied" | "replayed" | "already_deleted" | "deletion_mode_conflict"
+    settlement: {
+      schemaVersion: 1
+      requestID: string
+      requestFingerprint: string
+      rootSessionID: string
+      subtreeCount: number
+      subtreeFingerprint: string
+      mode: "full" | "minimal_audit"
+      permissionDecisionFingerprint: string
+      proposalSchemaVersion: 1
+      outcome: "applied"
+      deletionTime: number
+      sessionBodiesDeleted: true
+    }
+    settlementBytes: string
+    auditAvailable: boolean
+  }
 }
 
 export type SessionDeleteResponse = SessionDeleteResponses[keyof SessionDeleteResponses]
@@ -10069,9 +10193,9 @@ export type SessionUpdateErrors = {
    */
   404: NotFoundError
   /**
-   * SessionBusyError
+   * SessionBusyError | SessionPresentation.AdministrativeHistoryIntegrityError
    */
-  409: SessionBusyError
+  409: SessionBusyError | SessionPresentationAdministrativeHistoryIntegrityError
 }
 
 export type SessionUpdateError = SessionUpdateErrors[keyof SessionUpdateErrors]
@@ -10203,6 +10327,10 @@ export type SessionMessagesErrors = {
    * NotFoundError
    */
   404: NotFoundError
+  /**
+   * SessionPresentation.AdministrativeHistoryIntegrityError
+   */
+  409: SessionPresentationAdministrativeHistoryIntegrityError
 }
 
 export type SessionMessagesError = SessionMessagesErrors[keyof SessionMessagesErrors]
@@ -10293,9 +10421,9 @@ export type SessionDeleteMessageErrors = {
    */
   404: NotFoundError
   /**
-   * SessionBusyError
+   * SessionBusyError | SessionPresentation.AdministrativeHistoryIntegrityError
    */
-  409: SessionBusyError
+  409: SessionBusyError | SessionPresentationAdministrativeHistoryIntegrityError
 }
 
 export type SessionDeleteMessageError = SessionDeleteMessageErrors[keyof SessionDeleteMessageErrors]
@@ -10330,6 +10458,10 @@ export type SessionMessageErrors = {
    * NotFoundError
    */
   404: NotFoundError
+  /**
+   * SessionPresentation.AdministrativeHistoryIntegrityError
+   */
+  409: SessionPresentationAdministrativeHistoryIntegrityError
 }
 
 export type SessionMessageError = SessionMessageErrors[keyof SessionMessageErrors]
@@ -10345,6 +10477,287 @@ export type SessionMessageResponses = {
 }
 
 export type SessionMessageResponse = SessionMessageResponses[keyof SessionMessageResponses]
+
+export type SessionDeleteProposalData = {
+  body: {
+    mode: "full" | "minimal_audit"
+  }
+  path: {
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/session/{sessionID}/deletion/proposal"
+}
+
+export type SessionDeleteProposalErrors = {
+  /**
+   * BadRequest | InvalidRequestError
+   */
+  400: EffectHttpApiErrorBadRequest | InvalidRequestError
+  /**
+   * NotFoundError
+   */
+  404: NotFoundError
+  /**
+   * SessionBusyError | SessionTreeBusyError
+   */
+  409: SessionBusyError | SessionTreeBusyError
+}
+
+export type SessionDeleteProposalError = SessionDeleteProposalErrors[keyof SessionDeleteProposalErrors]
+
+export type SessionDeleteProposalResponses = {
+  /**
+   * Exact Session-tree deletion proposal or current immutable deletion settlement
+   */
+  200:
+    | {
+        schemaVersion: 1
+        requestID: string
+        rootSessionID: string
+        targets: Array<{
+          sessionID: string
+          parentSessionID: string | null
+        }>
+        subtreeCount: number
+        subtreeFingerprint: string
+        mode: "full" | "minimal_audit"
+        requestFingerprint: string
+      }
+    | {
+        type: "already_deleted" | "deletion_mode_conflict"
+        settlement: {
+          schemaVersion: 1
+          requestID: string
+          requestFingerprint: string
+          rootSessionID: string
+          subtreeCount: number
+          subtreeFingerprint: string
+          mode: "full" | "minimal_audit"
+          permissionDecisionFingerprint: string
+          proposalSchemaVersion: 1
+          outcome: "applied"
+          deletionTime: number
+          sessionBodiesDeleted: true
+        }
+        settlementBytes: string
+        auditAvailable: boolean
+      }
+}
+
+export type SessionDeleteProposalResponse = SessionDeleteProposalResponses[keyof SessionDeleteProposalResponses]
+
+export type SessionDeletionProjectionData = {
+  body?: never
+  path: {
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/session/{sessionID}/deletion"
+}
+
+export type SessionDeletionProjectionErrors = {
+  /**
+   * BadRequest | InvalidRequestError
+   */
+  400: EffectHttpApiErrorBadRequest | InvalidRequestError
+  /**
+   * SessionDeletion.AuditProjectionError
+   */
+  409: SessionDeletionAuditProjectionError
+}
+
+export type SessionDeletionProjectionError = SessionDeletionProjectionErrors[keyof SessionDeletionProjectionErrors]
+
+export type SessionDeletionProjectionResponses = {
+  /**
+   * Body-free Session deletion and optional audit state
+   */
+  200:
+    | {
+        schemaVersion: 1
+        state: "live"
+      }
+    | {
+        schemaVersion: 1
+        state: "missing"
+      }
+    | {
+        schemaVersion: 1
+        state: "deleted_full" | "deleted_minimal_audit_purged"
+        settlement: {
+          schemaVersion: 1
+          requestID: string
+          requestFingerprint: string
+          rootSessionID: string
+          subtreeCount: number
+          subtreeFingerprint: string
+          mode: "full" | "minimal_audit"
+          permissionDecisionFingerprint: string
+          proposalSchemaVersion: 1
+          outcome: "applied"
+          deletionTime: number
+          sessionBodiesDeleted: true
+        }
+        settlementBytes: string
+        auditAvailable: false
+      }
+    | {
+        schemaVersion: 1
+        state: "deleted_minimal_audit"
+        settlement: {
+          schemaVersion: 1
+          requestID: string
+          requestFingerprint: string
+          rootSessionID: string
+          subtreeCount: number
+          subtreeFingerprint: string
+          mode: "full" | "minimal_audit"
+          permissionDecisionFingerprint: string
+          proposalSchemaVersion: 1
+          outcome: "applied"
+          deletionTime: number
+          sessionBodiesDeleted: true
+        }
+        settlementBytes: string
+        auditAvailable: true
+        audit: {
+          schemaVersion: 1
+          bundleID: string
+          operationCount: number
+          operationFingerprint: string
+          relationCount: number
+          relationFingerprint: string
+          deletionTime: number
+          sessionBodiesDeleted: true
+          operations: Array<{
+            operationID: string
+            ordinal: number
+            terminalStatus: "completed" | "failed" | "interrupted"
+            records: Array<{
+              ownerKind:
+                | "course"
+                | "learning_navigation"
+                | "learner_goal"
+                | "learning_material"
+                | "learning_interaction"
+                | "learner_response_evidence"
+                | "future_attention"
+                | "assignment"
+                | "learner_state_judgment"
+                | "advisory_plan_suggestion"
+              recordID: string
+              revisionID: string
+              revisionVersion: number
+              contextClassification: "not_entered" | "locator_only" | "semantic_full"
+              exactRead: boolean
+              typedCitation: boolean
+            }>
+          }>
+        }
+      }
+}
+
+export type SessionDeletionProjectionResponse =
+  SessionDeletionProjectionResponses[keyof SessionDeletionProjectionResponses]
+
+export type SessionDeletionAuditPurgeProposalData = {
+  body?: never
+  path: {
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/session/{sessionID}/deletion/audit/purge/proposal"
+}
+
+export type SessionDeletionAuditPurgeProposalErrors = {
+  /**
+   * BadRequest | InvalidRequestError
+   */
+  400: EffectHttpApiErrorBadRequest | InvalidRequestError
+  /**
+   * SessionDeletion.AuditNotAvailableError
+   */
+  409: SessionDeletionAuditNotAvailableError
+}
+
+export type SessionDeletionAuditPurgeProposalError =
+  SessionDeletionAuditPurgeProposalErrors[keyof SessionDeletionAuditPurgeProposalErrors]
+
+export type SessionDeletionAuditPurgeProposalResponses = {
+  /**
+   * Exact Session deletion-audit purge proposal
+   */
+  200: {
+    schemaVersion: 1
+    requestID: string
+    rootSessionID: string
+    deletionRequestID: string
+    auditBundleID: string
+    requestFingerprint: string
+  }
+}
+
+export type SessionDeletionAuditPurgeProposalResponse =
+  SessionDeletionAuditPurgeProposalResponses[keyof SessionDeletionAuditPurgeProposalResponses]
+
+export type SessionDeletionAuditPurgeData = {
+  body: {
+    schemaVersion: 1
+    requestID: string
+    rootSessionID: string
+    deletionRequestID: string
+    auditBundleID: string
+    requestFingerprint: string
+  }
+  path: {
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/session/{sessionID}/deletion/audit"
+}
+
+export type SessionDeletionAuditPurgeErrors = {
+  /**
+   * BadRequest | InvalidRequestError
+   */
+  400: EffectHttpApiErrorBadRequest | InvalidRequestError
+  /**
+   * SessionDeletion.InvocationConflictError | SessionDeletion.AuditNotAvailableError
+   */
+  409: SessionDeletionInvocationConflictError | SessionDeletionAuditNotAvailableError
+}
+
+export type SessionDeletionAuditPurgeError = SessionDeletionAuditPurgeErrors[keyof SessionDeletionAuditPurgeErrors]
+
+export type SessionDeletionAuditPurgeResponses = {
+  /**
+   * Durable deletion-audit purge settlement
+   */
+  200: {
+    type: "applied" | "replayed" | "already_purged"
+    settlement: {
+      schemaVersion: 1
+      requestID: string
+      requestFingerprint: string
+      deletionRequestID: string
+      outcome: "applied"
+      purgeTime: number
+    }
+    settlementBytes: string
+  }
+}
+
+export type SessionDeletionAuditPurgeResponse =
+  SessionDeletionAuditPurgeResponses[keyof SessionDeletionAuditPurgeResponses]
 
 export type SessionForkBasisData = {
   body?: never
@@ -10403,7 +10816,7 @@ export type SessionTurnsErrors = {
    */
   404: NotFoundError | TurnNotFoundError
   /**
-   * SessionBusyError | TurnAdmissionConflictError | TurnAlreadyRunningError | TurnSessionMismatchError | TurnNoActiveError | TurnActiveMismatchError | TurnNotSteerableError | SessionTreeBusyError | SessionTreeChangedError
+   * SessionBusyError | TurnAdmissionConflictError | TurnAlreadyRunningError | TurnSessionMismatchError | TurnNoActiveError | TurnActiveMismatchError | TurnNotSteerableError | SessionTreeBusyError | SessionTreeChangedError | SessionIDRetiredError | SessionPresentation.AdministrativeHistoryIntegrityError | SessionPresentation.FrontierUnrepresentableError
    */
   409:
     | SessionBusyError
@@ -10415,6 +10828,9 @@ export type SessionTurnsErrors = {
     | TurnNotSteerableError
     | SessionTreeBusyError
     | SessionTreeChangedError
+    | SessionIdRetiredError
+    | SessionPresentationAdministrativeHistoryIntegrityError
+    | SessionPresentationFrontierUnrepresentableError
   /**
    * TurnSourceUnavailableError
    */
@@ -10487,7 +10903,7 @@ export type SessionStartErrors = {
    */
   404: NotFoundError | TurnNotFoundError
   /**
-   * SessionBusyError | TurnAdmissionConflictError | TurnAlreadyRunningError | TurnSessionMismatchError | TurnNoActiveError | TurnActiveMismatchError | TurnNotSteerableError | SessionTreeBusyError | SessionTreeChangedError
+   * SessionBusyError | TurnAdmissionConflictError | TurnAlreadyRunningError | TurnSessionMismatchError | TurnNoActiveError | TurnActiveMismatchError | TurnNotSteerableError | SessionTreeBusyError | SessionTreeChangedError | SessionIDRetiredError | SessionPresentation.AdministrativeHistoryIntegrityError | SessionPresentation.FrontierUnrepresentableError
    */
   409:
     | SessionBusyError
@@ -10499,6 +10915,9 @@ export type SessionStartErrors = {
     | TurnNotSteerableError
     | SessionTreeBusyError
     | SessionTreeChangedError
+    | SessionIdRetiredError
+    | SessionPresentationAdministrativeHistoryIntegrityError
+    | SessionPresentationFrontierUnrepresentableError
   /**
    * TurnSourceUnavailableError
    */
@@ -10541,7 +10960,7 @@ export type SessionActiveTurnErrors = {
    */
   404: NotFoundError | TurnNotFoundError
   /**
-   * SessionBusyError | TurnAdmissionConflictError | TurnAlreadyRunningError | TurnSessionMismatchError | TurnNoActiveError | TurnActiveMismatchError | TurnNotSteerableError | SessionTreeBusyError | SessionTreeChangedError
+   * SessionBusyError | TurnAdmissionConflictError | TurnAlreadyRunningError | TurnSessionMismatchError | TurnNoActiveError | TurnActiveMismatchError | TurnNotSteerableError | SessionTreeBusyError | SessionTreeChangedError | SessionIDRetiredError | SessionPresentation.AdministrativeHistoryIntegrityError | SessionPresentation.FrontierUnrepresentableError
    */
   409:
     | SessionBusyError
@@ -10553,6 +10972,9 @@ export type SessionActiveTurnErrors = {
     | TurnNotSteerableError
     | SessionTreeBusyError
     | SessionTreeChangedError
+    | SessionIdRetiredError
+    | SessionPresentationAdministrativeHistoryIntegrityError
+    | SessionPresentationFrontierUnrepresentableError
   /**
    * TurnSourceUnavailableError
    */
@@ -10596,7 +11018,7 @@ export type SessionGetTurnErrors = {
    */
   404: NotFoundError | TurnNotFoundError
   /**
-   * SessionBusyError | TurnAdmissionConflictError | TurnAlreadyRunningError | TurnSessionMismatchError | TurnNoActiveError | TurnActiveMismatchError | TurnNotSteerableError | SessionTreeBusyError | SessionTreeChangedError
+   * SessionBusyError | TurnAdmissionConflictError | TurnAlreadyRunningError | TurnSessionMismatchError | TurnNoActiveError | TurnActiveMismatchError | TurnNotSteerableError | SessionTreeBusyError | SessionTreeChangedError | SessionIDRetiredError | SessionPresentation.AdministrativeHistoryIntegrityError | SessionPresentation.FrontierUnrepresentableError
    */
   409:
     | SessionBusyError
@@ -10608,6 +11030,9 @@ export type SessionGetTurnErrors = {
     | TurnNotSteerableError
     | SessionTreeBusyError
     | SessionTreeChangedError
+    | SessionIdRetiredError
+    | SessionPresentationAdministrativeHistoryIntegrityError
+    | SessionPresentationFrontierUnrepresentableError
   /**
    * TurnSourceUnavailableError
    */
@@ -10651,7 +11076,7 @@ export type SessionAwaitTurnErrors = {
    */
   404: NotFoundError | TurnNotFoundError
   /**
-   * SessionBusyError | TurnAdmissionConflictError | TurnAlreadyRunningError | TurnSessionMismatchError | TurnNoActiveError | TurnActiveMismatchError | TurnNotSteerableError | SessionTreeBusyError | SessionTreeChangedError
+   * SessionBusyError | TurnAdmissionConflictError | TurnAlreadyRunningError | TurnSessionMismatchError | TurnNoActiveError | TurnActiveMismatchError | TurnNotSteerableError | SessionTreeBusyError | SessionTreeChangedError | SessionIDRetiredError | SessionPresentation.AdministrativeHistoryIntegrityError | SessionPresentation.FrontierUnrepresentableError
    */
   409:
     | SessionBusyError
@@ -10663,6 +11088,9 @@ export type SessionAwaitTurnErrors = {
     | TurnNotSteerableError
     | SessionTreeBusyError
     | SessionTreeChangedError
+    | SessionIdRetiredError
+    | SessionPresentationAdministrativeHistoryIntegrityError
+    | SessionPresentationFrontierUnrepresentableError
   /**
    * TurnSourceUnavailableError
    */
@@ -10721,7 +11149,7 @@ export type SessionSteerErrors = {
    */
   404: NotFoundError | TurnNotFoundError
   /**
-   * SessionBusyError | TurnAdmissionConflictError | TurnAlreadyRunningError | TurnSessionMismatchError | TurnNoActiveError | TurnActiveMismatchError | TurnNotSteerableError | SessionTreeBusyError | SessionTreeChangedError
+   * SessionBusyError | TurnAdmissionConflictError | TurnAlreadyRunningError | TurnSessionMismatchError | TurnNoActiveError | TurnActiveMismatchError | TurnNotSteerableError | SessionTreeBusyError | SessionTreeChangedError | SessionIDRetiredError | SessionPresentation.AdministrativeHistoryIntegrityError | SessionPresentation.FrontierUnrepresentableError
    */
   409:
     | SessionBusyError
@@ -10733,6 +11161,9 @@ export type SessionSteerErrors = {
     | TurnNotSteerableError
     | SessionTreeBusyError
     | SessionTreeChangedError
+    | SessionIdRetiredError
+    | SessionPresentationAdministrativeHistoryIntegrityError
+    | SessionPresentationFrontierUnrepresentableError
   /**
    * TurnSourceUnavailableError
    */
@@ -10776,7 +11207,7 @@ export type SessionInterruptTurnErrors = {
    */
   404: NotFoundError | TurnNotFoundError
   /**
-   * SessionBusyError | TurnAdmissionConflictError | TurnAlreadyRunningError | TurnSessionMismatchError | TurnNoActiveError | TurnActiveMismatchError | TurnNotSteerableError | SessionTreeBusyError | SessionTreeChangedError
+   * SessionBusyError | TurnAdmissionConflictError | TurnAlreadyRunningError | TurnSessionMismatchError | TurnNoActiveError | TurnActiveMismatchError | TurnNotSteerableError | SessionTreeBusyError | SessionTreeChangedError | SessionIDRetiredError | SessionPresentation.AdministrativeHistoryIntegrityError | SessionPresentation.FrontierUnrepresentableError
    */
   409:
     | SessionBusyError
@@ -10788,6 +11219,9 @@ export type SessionInterruptTurnErrors = {
     | TurnNotSteerableError
     | SessionTreeBusyError
     | SessionTreeChangedError
+    | SessionIdRetiredError
+    | SessionPresentationAdministrativeHistoryIntegrityError
+    | SessionPresentationFrontierUnrepresentableError
   /**
    * TurnSourceUnavailableError
    */
@@ -10838,9 +11272,13 @@ export type SessionShellErrors = {
    */
   404: NotFoundError
   /**
-   * SessionBusyError
+   * SessionBusyError | SessionPresentation.AdministrativeHistoryIntegrityError | SessionPresentation.HistoricalPresentationNotRevertibleError | SessionPresentation.FrontierUnrepresentableError
    */
-  409: SessionBusyError
+  409:
+    | SessionBusyError
+    | SessionPresentationAdministrativeHistoryIntegrityError
+    | SessionPresentationHistoricalPresentationNotRevertibleError
+    | SessionPresentationFrontierUnrepresentableError
 }
 
 export type SessionShellError = SessionShellErrors[keyof SessionShellErrors]
@@ -10881,9 +11319,12 @@ export type SessionRevertErrors = {
    */
   404: NotFoundError
   /**
-   * SessionBusyError
+   * SessionBusyError | SessionPresentation.AdministrativeHistoryIntegrityError | SessionPresentation.HistoricalPresentationNotRevertibleError
    */
-  409: SessionBusyError
+  409:
+    | SessionBusyError
+    | SessionPresentationAdministrativeHistoryIntegrityError
+    | SessionPresentationHistoricalPresentationNotRevertibleError
 }
 
 export type SessionRevertError = SessionRevertErrors[keyof SessionRevertErrors]
@@ -10918,9 +11359,12 @@ export type SessionUnrevertErrors = {
    */
   404: NotFoundError
   /**
-   * SessionBusyError
+   * SessionBusyError | SessionPresentation.AdministrativeHistoryIntegrityError | SessionPresentation.HistoricalPresentationNotRevertibleError
    */
-  409: SessionBusyError
+  409:
+    | SessionBusyError
+    | SessionPresentationAdministrativeHistoryIntegrityError
+    | SessionPresentationHistoricalPresentationNotRevertibleError
 }
 
 export type SessionUnrevertError = SessionUnrevertErrors[keyof SessionUnrevertErrors]
@@ -10993,9 +11437,9 @@ export type PartDeleteErrors = {
    */
   404: NotFoundError
   /**
-   * SessionBusyError
+   * SessionBusyError | SessionPresentation.AdministrativeHistoryIntegrityError
    */
-  409: SessionBusyError
+  409: SessionBusyError | SessionPresentationAdministrativeHistoryIntegrityError
 }
 
 export type PartDeleteError = PartDeleteErrors[keyof PartDeleteErrors]
@@ -11032,9 +11476,12 @@ export type PartUpdateErrors = {
    */
   404: NotFoundError
   /**
-   * SessionBusyError
+   * SessionBusyError | SessionPresentation.AdministrativeHistoryIntegrityError | SessionPresentation.FrontierUnrepresentableError
    */
-  409: SessionBusyError
+  409:
+    | SessionBusyError
+    | SessionPresentationAdministrativeHistoryIntegrityError
+    | SessionPresentationFrontierUnrepresentableError
 }
 
 export type PartUpdateError = PartUpdateErrors[keyof PartUpdateErrors]
@@ -11583,6 +12030,10 @@ export type V2SessionCreateErrors = {
    * UnauthorizedError
    */
   401: UnauthorizedError
+  /**
+   * SessionIDRetiredError
+   */
+  409: SessionIdRetiredError
 }
 
 export type V2SessionCreateError = V2SessionCreateErrors[keyof V2SessionCreateErrors]

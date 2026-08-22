@@ -5,7 +5,12 @@ import { MaterialMap } from "@opencode-ai/core/material-map"
 import { PositiveInt } from "@opencode-ai/core/schema"
 import { Effect, Schema } from "effect"
 import { ToolJsonSchema } from "./json-schema"
-import { learningContextReadResult } from "./learning-context-read"
+import {
+  learningContextReadResult,
+  learningInspectionInput,
+  learningInspectionReadResult,
+} from "./learning-context-read"
+import { inspectionOwner } from "@opencode-ai/core/learning-inspection-owner"
 import { Tool } from "./tool"
 
 export const LEARNER_RESPONSE_EVIDENCE_READ_TOOL_ID = LearnerResponseEvidence.READ_CAPABILITY
@@ -15,10 +20,16 @@ const Page = {
   cursor: Schema.optional(Schema.String),
   limit: Schema.optional(PositiveInt.check(Schema.isLessThanOrEqualTo(LearnerResponseEvidence.MAX_READ_ITEMS))),
 }
+const Inspection = learningInspectionInput
 
 const LearnerResponseEvidenceReadInput = Schema.Union([
-  Schema.Struct({ action: Schema.Literal("record"), recordID: LearnerResponseEvidence.RecordID }),
-  Schema.Struct({ action: Schema.Literal("history"), recordID: LearnerResponseEvidence.RecordID, ...Page }),
+  Schema.Struct({ action: Schema.Literal("record"), recordID: LearnerResponseEvidence.RecordID, ...Inspection }),
+  Schema.Struct({
+    action: Schema.Literal("history"),
+    recordID: LearnerResponseEvidence.RecordID,
+    ...Page,
+    ...Inspection,
+  }),
   Schema.Struct({
     action: Schema.Literal("course"),
     target: Schema.Struct({
@@ -28,12 +39,14 @@ const LearnerResponseEvidenceReadInput = Schema.Union([
       itemID: Course.ItemID,
     }),
     ...Page,
+    ...Inspection,
   }),
   Schema.Struct({
     action: Schema.Literal("selector"),
     mapID: MaterialMap.MapID,
     selectorID: MaterialMap.SelectorID,
     ...Page,
+    ...Inspection,
   }),
 ]).annotate({ parseOptions: { onExcessProperty: "error" } })
 
@@ -47,30 +60,29 @@ export const LearnerResponseEvidenceReadTool = Tool.define<
     const database = yield* Database.Service
     return {
       description:
-        "Read the authoritative narrow learner-response evidence owner without changing it. Get one current record, page its immutable correction history, or page records for one exact Course membership or Material selector. Results report source availability and current target relations; a recorded supports/does_not_support relation remains fallible occurrence-bound evidence and never means mastery, understanding, retention, or a mandatory next action. Reads are limited to 64 items and 32 KiB with query-bound truthful cursors.",
+        "Read the authoritative narrow learner-response evidence owner without changing it. Get one current record, page its immutable correction history, or page records for one exact Course membership or Material selector. Set includeInspection to true for a same-snapshot typed TUI projection of exact operational lineage and owner-native potential scope. Results report source availability and current target relations; a recorded supports/does_not_support relation remains fallible occurrence-bound evidence and never means mastery, understanding, retention, or a mandatory next action. Reads are limited to 64 items and 32 KiB with query-bound truthful cursors.",
       parameters: LearnerResponseEvidenceReadInput,
       jsonSchema: ToolJsonSchema.fromSchema(LearnerResponseEvidenceReadInput, { additionalProperties: false }),
-      execute: (input) =>
+      execute: (input, context) =>
         database.db
           .transaction((tx) =>
-            LearnerResponseEvidence.read(
-              tx,
-              input.action === "record" || input.action === "history"
-                ? { type: input.action, recordID: input.recordID }
-                : input.action === "course"
-                  ? { type: "course", target: input.target }
-                  : { type: "selector", mapID: input.mapID, selectorID: input.selectorID },
-              "cursor" in input
-                ? {
-                    ...(input.cursor === undefined ? {} : { cursor: input.cursor }),
-                    ...(input.limit === undefined ? {} : { limit: input.limit }),
-                  }
-                : undefined,
-            ),
-          )
-          .pipe(
-            Effect.map((page) =>
-              learningContextReadResult({
+            Effect.gen(function* () {
+              const page = yield* LearnerResponseEvidence.read(
+                tx,
+                input.action === "record" || input.action === "history"
+                  ? { type: input.action, recordID: input.recordID }
+                  : input.action === "course"
+                    ? { type: "course", target: input.target }
+                    : { type: "selector", mapID: input.mapID, selectorID: input.selectorID },
+                "cursor" in input
+                  ? {
+                      ...(input.cursor === undefined ? {} : { cursor: input.cursor }),
+                      ...(input.limit === undefined ? {} : { limit: input.limit }),
+                    }
+                  : undefined,
+              )
+              const read = {
+                capabilityID: LEARNER_RESPONSE_EVIDENCE_READ_TOOL_ID,
                 title: "Learner response evidence",
                 metadata: {
                   action: input.action,
@@ -80,10 +92,32 @@ export const LearnerResponseEvidenceReadTool = Tool.define<
                 },
                 value: { page },
                 itemCount: page.items.length,
-              }),
-            ),
-            Effect.orDie,
-          ),
+              } satisfies Parameters<typeof learningContextReadResult>[0]
+              if (!input.includeInspection) return learningContextReadResult(read)
+              return yield* learningInspectionReadResult(
+                tx,
+                read,
+                context,
+                inspectionOwner(
+                  "learner_response_evidence",
+                  input.action === "record"
+                    ? "exact current evidence record"
+                    : input.action === "history"
+                      ? "immutable correction history"
+                      : "bounded exact-target evidence page",
+                  [
+                    { label: "Returned owner rows", value: String(page.items.length) },
+                    {
+                      label: "Epistemic strength",
+                      value: "fallible supports/does_not_support evidence; never mastery",
+                    },
+                  ],
+                ),
+                input.includeInspection,
+              )
+            }),
+          )
+          .pipe(Effect.orDie),
     }
   }),
 )

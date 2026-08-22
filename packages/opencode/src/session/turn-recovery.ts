@@ -3,6 +3,7 @@ import { EventV2 } from "@opencode-ai/core/event"
 import { LearningFrontier } from "@opencode-ai/core/learning-frontier"
 import { MessageTable, PartTable } from "@opencode-ai/core/session/sql"
 import { TurnLifecycle } from "@opencode-ai/core/turn/turn"
+import { TurnLineage } from "@opencode-ai/core/turn-lineage"
 import { TurnModelOperationTable, TurnToolCandidateTable, TurnToolInvocationTable } from "@opencode-ai/core/turn/sql"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
 import { Turn } from "@opencode-ai/schema/turn"
@@ -132,6 +133,11 @@ export function recover(events: EventV2.Interface, time: number) {
                 state,
                 time: Math.max(recoveryTime, assistant.time.completed ?? assistant.time.created),
               })
+              yield* TurnLineage.trySealOperation(
+                tx,
+                model.assistant_message_id,
+                DateTime.toEpochMillis(settled.timeSettled ?? settled.timeAdmitted),
+              )
               if (!completed) {
                 const timeCompleted = DateTime.toEpochMillis(settled.timeSettled ?? settled.timeAdmitted)
                 const recovered = decodeAssistant({
@@ -198,10 +204,11 @@ export function recover(events: EventV2.Interface, time: number) {
                     : recoveryTime,
                 ),
               })
+              const timeSettled = DateTime.toEpochMillis(settled.timeSettled ?? settled.timeAdmitted)
+              yield* TurnLineage.coverTerminalCandidate(tx, invocation.part_id, timeSettled)
+              yield* TurnLineage.trySealOperation(tx, invocation.assistant_message_id, timeSettled)
               if (part.state.status === "pending" || part.state.status === "running") {
-                prepared.push(
-                  partInterrupted(part, DateTime.toEpochMillis(settled.timeSettled ?? settled.timeAdmitted)),
-                )
+                prepared.push(partInterrupted(part, timeSettled))
               }
               prepared.push({
                 definition: TurnEvent.ToolSettled,
@@ -244,6 +251,16 @@ export function recover(events: EventV2.Interface, time: number) {
         const recovered = yield* TurnLifecycle.recoverRunning(tx, recoveryTime)
         const dispositions = yield* Effect.forEach(pending, (candidate) =>
           TurnLifecycle.candidate(tx, { turnID: candidate.turn_id, partID: candidate.part_id }),
+        )
+        yield* Effect.forEach(
+          dispositions,
+          (candidate) =>
+            Effect.gen(function* () {
+              const timeTerminal = DateTime.toEpochMillis(candidate.timeTerminal ?? candidate.timeRegistered)
+              yield* TurnLineage.coverTerminalCandidate(tx, candidate.partID, timeTerminal)
+              yield* TurnLineage.trySealOperation(tx, candidate.assistantMessageID, timeTerminal)
+            }),
+          { discard: true },
         )
         prepared.push(
           ...dispositions.map((candidate, index) =>

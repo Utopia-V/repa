@@ -61,6 +61,34 @@ export class SessionNotFoundError extends Schema.TaggedErrorClass<SessionNotFoun
   { httpApiStatus: 404 },
 ) {}
 
+export class SessionIDRetiredError extends Schema.TaggedErrorClass<SessionIDRetiredError>()(
+  "SessionIDRetiredError",
+  {
+    sessionID: Schema.String,
+    deletionRequestID: Schema.String,
+    mode: Schema.Literals(["full", "minimal_audit"]),
+    deletionTime: Schema.Number,
+    settlement: Schema.Struct({
+      schemaVersion: Schema.Literal(1),
+      requestID: Schema.String,
+      requestFingerprint: Schema.String,
+      rootSessionID: Schema.String,
+      subtreeCount: Schema.Number,
+      subtreeFingerprint: Schema.String,
+      mode: Schema.Literals(["full", "minimal_audit"]),
+      permissionDecisionFingerprint: Schema.String,
+      proposalSchemaVersion: Schema.Literal(1),
+      outcome: Schema.Literal("applied"),
+      deletionTime: Schema.Number,
+      sessionBodiesDeleted: Schema.Literal(true),
+    }),
+    settlementBytes: Schema.String,
+    auditAvailable: Schema.Boolean,
+    message: Schema.String,
+  },
+  { httpApiStatus: 409 },
+) {}
+
 export class MessageNotFoundError extends Schema.TaggedErrorClass<MessageNotFoundError>()(
   "MessageNotFoundError",
   {

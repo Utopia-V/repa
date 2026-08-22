@@ -1,7 +1,8 @@
 # Gate 18 learning context and Session continuation implementation/evidence record
 
-Status: **Accepted implementation/evidence layer.** Independent review returned
-an initial **Revise** on 2026-08-04 with `G18-IR-001..005`; corrective passes by
+Status: **exact current action-complete implementation/evidence successor
+accepted by the retained reviewer under `G22-CR-002`; not integrated.** Independent review
+returned an initial **Revise** on 2026-08-04 with `G18-IR-001..005`; corrective passes by
 the same reviewer closed those findings. The maintainer then explicitly
 authorized a bounded credential/cost-bearing released-model qualification. On
 2026-08-05 an isolated `openai/gpt-5.6-luna` run completed the accepted matrix
@@ -24,6 +25,37 @@ integration; the reviewed production/test projection plus post-verdict status
 records are committed at `284d2a4ae440fb01f0f5a32eca58a5948464cc5e` and
 integrated into `main` through a docs-only closure/status successor. No push,
 release, or later Gate is authorized or claimed.
+
+Current disposition notice (2026-08-13): this record remains exact evidence for
+the implementation at `284d2a4ae440fb01f0f5a32eca58a5948464cc5e` and every
+unaffected Gate 18 invariant. It does not evidence the later learner-selected
+minimal-audit mode. That Session-deletion/retention subsection is bounded-
+reopened by the contract/theory-accepted
+[Gates 5/8/12/18 deletion-choice and local-restore correction](repa-gate-05-08-12-18-session-deletion-choice-correction-2026-08-13.md).
+Its separate
+[implementation/evidence record](repa-gate-05-08-12-18-session-deletion-choice-correction-implementation-evidence-2026-08-14.md)
+is independently accepted under Whole-Gate run
+`G22-WG-20260813-019ff8e2-01` but remains unintegrated. This accepted
+snapshot likewise does not evidence that correction's new sealed
+administrative-history classification, imported-history Session frontier, or
+fresh Context ordering after exact restore/copy. In particular, it does not
+evidence active imported-revert refusal, imported Patch/revert non-executability,
+or the shared presentation frontier for direct shell/admin and every other
+non-Turn transcript writer.
+
+Current disposition notice (2026-08-22): Gate 22 contract review found that
+`learning_material_query`'s displayed production values and Gate 18's recursive
+exact-read projector did not agree. Artifact, exact Artifact Revision,
+Representation, and Map reads could produce no relation; flat alignment could
+be captured as selector. Therefore this record no longer proves that every
+registered material action produced the correct exact lineage, although all
+other recorded Gate 18 behavior and the closed catalog remain accepted. The
+working-tree successor uses an action-complete material projection version,
+passes its trusted lineage value separately from displayed/supplemental data,
+keeps historical version-1 results immutable, and fails unknown future actions
+closed. The retained Whole-Gate reviewer reproduced its focused evidence and
+exact 90-path manifest, closed `G22-CR-002`, and accepted it as the current
+bounded Gate 18/prerequisite implementation/evidence successor.
 
 ## Exact authority and candidate binding
 
@@ -594,6 +626,65 @@ useful failure-localization evidence, but they are no longer substitutes for
 accepted its exact immutable bundle. The same reviewer separately retested and
 closed the post-run `G18-IR-006..008` fallback-provenance, non-replacement, and
 MCP-collision paths without rerunning credentials or the external provider.
+
+## 2026-08-22 bounded material exact-read producer correction candidate
+
+Gate 22 contract finding `G22-CR-002` supplied a concrete counterexample to the
+accepted exact-read producer claim. `learning_material_query` passed its
+displayed result recursively into `TurnLineage.readProjection`, while the
+projector expected different field names and inspected selector shape before
+flat alignment identity. The current candidate corrects that narrow boundary:
+
+- `learningContextReadResult` accepts a separate trusted `lineageValue`; output
+  bytes and supplemental inspection objects are never recursively promoted to
+  exact-read identity;
+- `learning_material_query` derives identities for every registered action:
+  current/exact Artifact Revision, Representation, Map/list/successor/
+  disposition, outline node, selector, alignment/list/successor/disposition,
+  and pinned multi-record Artifact/Representation metadata;
+- `TurnLineage` decodes those tagged identities as material projection version
+  2, accepts version 2 through candidate and operation coverage, and preserves
+  version 1 as immutable historical producer truth; a completed material
+  version-1 candidate refuses minimal-audit sealing because the retained audit
+  cannot safely label its absent/wrong relation; and
+- alignment projection is tested with a simultaneously displayed selector ID
+  and must retain the alignment ID; disposition events combine their admitted
+  exact parent scope with returned version; pinned results retain every exact
+  alignment/Map/selector/target record; and an unknown future action fails
+  closed instead of sealing no-positive coverage.
+
+The complete unintegrated prerequisite successor remains 90 package paths,
+totals 5,424,504 bytes, and has ordinal path/byte-length/file-SHA-256 manifest
+`334CDCAEEA573A8257E8F3B67A8A4AE9550F06522B3E85645B974CE126C4CBE6`.
+The five files changed from accepted predecessor manifest
+`C18F06F7D10DD2C183AAD13036EA772B3D28DFE976DC4D852CEEF898D7C93474`
+are:
+
+| File | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `packages/core/src/turn-lineage.ts` | 45,294 | `D3563365F58F918BAE3FDDD5D9CD160B63D2725DA2AA011ED3CF743F97447719` |
+| `packages/core/test/turn.test.ts` | 231,161 | `D2483A28193C98A1785EAA7042F9B53AD0327464EF19A754C0A0194C73A87403` |
+| `packages/opencode/src/tool/learning-context-read.ts` | 1,800 | `F47BB84418CDD5E12AC3FFFD76A3F815B6BF1FD1C676FA5309F168A7301D6923` |
+| `packages/opencode/src/tool/learning-material-query.ts` | 26,944 | `0EEEACC47420C10EA5A82337997FDA6B6D7FEE1FCF7F73FC3CAB4416FC96C0BE` |
+| `packages/opencode/test/tool/learning-context-read.test.ts` | 11,949 | `61C242972712E88BD70C36A9757A50F57F83BBE2D2F015E26838C3783CB6589C` |
+
+Focused candidate evidence on Windows/Bun 1.3.14:
+
+| Check | Result | Distinct claim |
+| --- | --- | --- |
+| `packages/core`: `bun test test/turn.test.ts` | 36 pass, 323 assertions | The corrected producer/version rules preserve the complete owning Turn, coverage, deletion, recovery, constraint, and retained-steering suite. |
+| `packages/core`: `bun test test/turn.test.ts -t "decodes each action-specific learning-material exact-read identity"` | 1 pass, 6 assertions | Core distinguishes Artifact Revision, Representation, Map, outline node, selector, and alignment identities. |
+| `packages/opencode`: `bun test test/tool/learning-context-read.test.ts` | 6 pass, 44 assertions | All 19 registered action arms, Artifact/Representation pinned multi-record results, future-action fail-closed behavior, and supplemental fencing pass. |
+| `packages/core`: `bun test test/turn.test.ts -t "projects exact lazy-read lineage into the purgeable body-free deletion audit"` | 1 pass, 16 assertions | Historical material version 1 refuses a false minimal audit; version 2 seals candidate/operation coverage and survives only through the allowed audit. |
+| `packages/core`: `bun run typecheck` | pass | Core projector/version changes typecheck. |
+| `packages/opencode`: `bun run typecheck` | pass | Tool producer/fencing changes typecheck. |
+
+These began as executor-produced regression and integration observations. The
+same retained Whole-Gate reviewer reproduced the action-union/fencing and
+candidate→operation→minimal-audit cases, independently matched all five file
+hashes plus the complete package manifest, closed `G22-CR-002`, and returned
+`Accept` for this bounded producer/evidence successor. No broader Gate 18 or
+deletion/restore claim was re-run or changed.
 
 ## Fixed exclusions and review questions
 

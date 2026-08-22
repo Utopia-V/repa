@@ -350,7 +350,17 @@ export function removePresentation(
       .pipe(Effect.orDie)
     if (!presentation) return undefined
     if (presentation.provenance === "origin") {
-      yield* markSourceUnavailable(tx, { occurrenceID: presentation.occurrence_id, timeDeleted: input.timeDeleted })
+      const occurrence = yield* tx
+        .select({ timeAdmitted: AdmittedLearnerOccurrenceTable.time_admitted })
+        .from(AdmittedLearnerOccurrenceTable)
+        .where(eq(AdmittedLearnerOccurrenceTable.id, presentation.occurrence_id))
+        .get()
+        .pipe(Effect.orDie)
+      if (!occurrence) return yield* invalid("missing_presentation")
+      yield* markSourceUnavailable(tx, {
+        occurrenceID: presentation.occurrence_id,
+        timeDeleted: Math.max(input.timeDeleted, occurrence.timeAdmitted),
+      })
     }
     yield* tx
       .delete(LearnerOccurrencePresentationTable)

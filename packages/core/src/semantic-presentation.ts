@@ -8,6 +8,7 @@ import { LearningBootstrap } from "./learning-bootstrap"
 import { FutureAttention } from "./future-attention"
 import { LearnerResponseEvidence } from "./learner-response-evidence"
 import { LearnerStateJudgment } from "./learner-state-judgment"
+import { LearningInspectionSchema } from "./learning-inspection-schema"
 import { PermissionV1 } from "./v1/permission"
 
 export { SemanticPresentationV1 }
@@ -226,6 +227,138 @@ export function readResult(part: CompletedToolPart, required = requiresResult(pa
     return { type: "invalid" }
   }
   return { type: "valid", value: projection }
+}
+
+export function readInspection(part: CompletedToolPart): Read<LearningInspectionSchema.Projection> {
+  if (part.state.status !== "completed") return { type: "absent" }
+  const metadata = part.state.metadata
+  if (!isRecord(metadata) || !Object.hasOwn(metadata, LearningInspectionSchema.METADATA_KEY)) return { type: "absent" }
+  const value = metadata[LearningInspectionSchema.METADATA_KEY]
+  if (!LearningInspectionSchema.isProjection(value)) return { type: "invalid" }
+  if (
+    value.source.partID !== part.id ||
+    value.source.tool !== part.tool ||
+    value.source.assistantMessageID !== part.messageID
+  ) {
+    return { type: "invalid" }
+  }
+  return { type: "valid", value }
+}
+
+export function inspectionStatus(value: LearningInspectionSchema.Projection) {
+  if (value.status === "available") return "Available"
+  if (value.status === "not_found") return "Not found"
+  if (value.status === "stale_inspection") return "Stale"
+  if (value.status === "read_shape_unsupported") return "Unsupported"
+  if (value.status === "ambiguous_source") return "Ambiguous"
+  if (value.status === "integrity_validation_unavailable") return "Integrity unavailable"
+  if (value.status === "cursor_source_unavailable") return "Cursor source unavailable"
+  if (value.status === "cursor_source_unavailable_or_unresolved") return "Cursor source unavailable or unresolved"
+  if (value.status === "cursor_predecessor_conflict") return "Cursor conflict"
+  if (value.status === "cursor_reset_conflict") return "Cursor reset refused"
+  if (value.status === "interaction_locator_over_budget") return "Locator over budget"
+  if (value.status === "discovery_incomplete") return "Discovery incomplete"
+  return "Source unavailable"
+}
+
+export function inspectionLines(value: LearningInspectionSchema.Projection): readonly Fact[] {
+  const records = value.owner.records.map(
+    (record) => `${record.ownerKind}:${record.recordID}@${record.revisionID}#${record.revisionVersion}`,
+  )
+  return [
+    { label: "Owner relation", value: `${value.owner.arm} — ${value.owner.relation}` },
+    { label: "Exact record", value: records.length > 0 ? records.join(", ") : "No exact record projected" },
+    ...value.owner.facts,
+    {
+      label: "Potential scope",
+      value:
+        value.owner.potentialEffects.length > 0
+          ? value.owner.potentialEffects.join("; ")
+          : "No owner-native consumer scope advertised",
+    },
+    { label: "Correction", value: value.owner.correctionRoute },
+    {
+      label: "Live scope",
+      value: `${value.lineage.scope.status}; ${value.lineage.scope.terminalSealedCount}/${value.lineage.scope.operationCount} terminal operation seal(s); ${value.lineage.coverage}${value.lineage.omitted ? "; more omitted" : ""}${value.lineage.pendingGap ? "; pending gap" : ""}${value.lineage.cursor ? "; continuation available" : ""}`,
+    },
+    ...value.lineage.contextCoverage.map((coverage) => ({
+      label: `Context ${coverage.assistantMessageID}`,
+      value: `${coverage.sectionOwner}; ${coverage.coverage}; count ${coverage.countAtCut}; target records ${coverage.targetRecordCount}; omission ${JSON.stringify(coverage.omission)}`,
+    })),
+    ...value.lineage.items.flatMap((item) => [
+      {
+        label: `Interaction ${item.assistantMessageID}`,
+        value: `Session ${item.sessionID}; Turn ${item.turnID}; Input ${item.inputID}; ${recordLabel(item.record)}; Context ${item.contextClassification}; exact read ${yesNo(item.exactRead)}; typed citation ${yesNo(item.typedCitation)}; operation ${item.operationState}; Turn ${item.turnState}; action ${item.actionState}${item.action ? ` (${item.action.type}${item.action.partID ? ` ${item.action.partID}` : ""})` : ""}`,
+      },
+      ...(item.purposeBinding
+        ? [
+            {
+              label: `Current-purpose binding ${item.assistantMessageID}`,
+              value: `${item.purposeBinding.state}; scope ${item.purposeBinding.scope}; basis ${item.purposeBinding.selectionBasis}; cut ${item.purposeBinding.cutFingerprint}; interval ${JSON.stringify(item.purposeBinding.controlInterval)}${item.purposeBinding.sourceFingerprint ? `; source ${item.purposeBinding.sourceFingerprint}` : ""}${item.purposeBinding.targetFingerprint ? `; target ${item.purposeBinding.targetFingerprint}` : ""}; exact-request overlap remains separate`,
+            },
+          ]
+        : []),
+      ...(item.command
+        ? [
+            {
+              label: `Command ${item.assistantMessageID}`,
+              value: `occurrence ${item.command.occurrenceID}; Part ${item.command.invocationPartID}; receipt ${item.command.physicalReceiptID}; effect ${item.command.semanticEffectID}; group ${item.command.claimGroupID}`,
+            },
+          ]
+        : []),
+      ...(item.ownerFinalization
+        ? [
+            {
+              label: `Owner finalization ${item.assistantMessageID}`,
+              value: `${item.ownerFinalization.outcome}; receipt ${item.ownerFinalization.receiptID}; member ${item.ownerFinalization.member.ordinal} ${item.ownerFinalization.member.outcome}${item.ownerFinalization.member.outcome === "not_served" ? ` (${item.ownerFinalization.member.reason})` : ` (transition ${item.ownerFinalization.member.transitionID}; service receipt ${item.ownerFinalization.member.serviceReceiptID})`}; current concern ${item.ownerFinalization.currentConcern.disposition} at ${item.ownerFinalization.currentConcern.transitionID}#${item.ownerFinalization.currentConcern.version}; time ${item.ownerFinalization.timeFinalized}`,
+            },
+          ]
+        : []),
+    ]),
+    {
+      label: "Deletion audit",
+      value: `${value.deletionAudit.status}${value.deletionAudit.scope ? `; root ${value.deletionAudit.scope.rootSessionID}; bundle ${value.deletionAudit.scope.bundleID}; deletion time ${value.deletionAudit.scope.deletionTime}` : ""}; ${value.deletionAudit.items.length} retained relation(s)${value.deletionAudit.omitted ? "; more omitted" : ""}${value.deletionAudit.cursor ? "; continuation available" : ""}`,
+    },
+    ...value.deletionAudit.items.map((item) => ({
+      label: `Audit ${item.operationID}`,
+      value: `root ${item.rootSessionID}; bundle ${item.bundleID}; ${recordLabel(item.record)}; Context ${item.contextClassification}; exact read ${yesNo(item.exactRead)}; typed citation ${yesNo(item.typedCitation)}; operation ${item.terminalStatus}; deleted ${item.deletionTime}; body deleted`,
+    })),
+    {
+      label: "Session deletion",
+      value:
+        value.sessionDeletion.rootSessionID === undefined
+          ? value.sessionDeletion.status
+          : `${value.sessionDeletion.status}; root ${value.sessionDeletion.rootSessionID}${value.sessionDeletion.deletionTime === undefined ? "" : `; time ${value.sessionDeletion.deletionTime}`}${value.sessionDeletion.auditAvailable === undefined ? "" : `; audit ${value.sessionDeletion.auditAvailable ? "available" : "unavailable"}`}`,
+    },
+    {
+      label: "Administrative history",
+      value:
+        value.administrativeHistory.status === "available" || value.administrativeHistory.status === "partial"
+          ? `${value.administrativeHistory.kind}; Session ${value.administrativeHistory.sessionID}; historical-only and non-revertible; history frontier ${value.administrativeHistory.historyFrontierTime}; presentation frontier ${value.administrativeHistory.presentationFrontierTime}; ${value.administrativeHistory.members.length}/${(value.administrativeHistory.messageCount ?? 0) + (value.administrativeHistory.partCount ?? 0)} sealed member(s); ${value.administrativeHistory.laterLocalMessages.length} later local message(s)${value.administrativeHistory.cursor ? "; continuation available" : ""}`
+          : value.administrativeHistory.status,
+    },
+    ...value.administrativeHistory.members.map((item) => ({
+      label: `Administrative ${item.ordinal}`,
+      value: `${item.type} ${item.id}; sealed historical presentation`,
+    })),
+    ...value.administrativeHistory.laterLocalMessages.map((item) => ({
+      label: "Later local presentation",
+      value: `${item.id}; time ${item.timeCreated}; strict post-frontier suffix`,
+    })),
+    {
+      label: "Observation cut",
+      value: `LearnerHome ${value.source.learnerHomeID}; frontier ${value.source.currentFrontier.sequence}/${value.source.currentFrontier.time}`,
+    },
+    { label: "Causality", value: "Operational lineage does not prove that one record caused the Tutor's answer." },
+  ]
+}
+
+function recordLabel(value: LearningInspectionSchema.LineageItem["record"]) {
+  return `${value.ownerKind}:${value.recordID}@${value.revisionID}#${value.revisionVersion}`
+}
+
+function yesNo(value: boolean) {
+  return value ? "yes" : "no"
 }
 
 export function requiresPermission(capability: string) {
@@ -894,7 +1027,11 @@ function validLearnerStateJudgmentScope(
     ) ||
     !same(
       scope.anchorKinds,
-      [...new Set(scope.anchorRefs.flatMap((ref) => (isRecord(ref) && typeof ref.type === "string" ? [ref.type] : [])))].toSorted(),
+      [
+        ...new Set(
+          scope.anchorRefs.flatMap((ref) => (isRecord(ref) && typeof ref.type === "string" ? [ref.type] : [])),
+        ),
+      ].toSorted(),
     ) ||
     !same(scope.nonImplications, [
       "fallible_judgment_not_mastery_certification",
@@ -985,9 +1122,7 @@ export function advisoryPlanSuggestionScope(candidate: AdvisoryPlanSuggestion.Ca
     })),
     operationCount: command.intents.length,
     causeType: command.cause.type,
-    targetedSuggestionIDs: command.intents.flatMap((intent) =>
-      "suggestionID" in intent ? [intent.suggestionID] : [],
-    ),
+    targetedSuggestionIDs: command.intents.flatMap((intent) => ("suggestionID" in intent ? [intent.suggestionID] : [])),
     expectedHeads: command.intents.flatMap((intent) =>
       "suggestionID" in intent
         ? [
@@ -1106,7 +1241,9 @@ function validAdvisoryPlanSuggestionScope(
     }
     if ("snapshot" in intent && intent.snapshot) {
       const materializedAnchors =
-        isRecord(item.retrievalScope) && item.retrievalScope.type === "anchored" && Array.isArray(item.retrievalScope.anchors)
+        isRecord(item.retrievalScope) &&
+        item.retrievalScope.type === "anchored" &&
+        Array.isArray(item.retrievalScope.anchors)
           ? item.retrievalScope.anchors.flatMap((anchor) =>
               isRecord(anchor) && isRecord(anchor.exactBound) && isRecord(anchor.exactBound.ref)
                 ? [{ stableOwnerKey: anchor.stableOwnerKey, exactBoundRef: anchor.exactBound.ref }]
@@ -1193,14 +1330,7 @@ function assignmentScopeValue(
     sourceActions,
     finalDispositions,
     replacementTargets,
-    nonImplications: [
-      "activity",
-      "progress",
-      "mastery",
-      "learner_commitment",
-      "study_plan",
-      "selected_tutor_move",
-    ],
+    nonImplications: ["activity", "progress", "mastery", "learner_commitment", "study_plan", "selected_tutor_move"],
   }
 }
 
@@ -1337,10 +1467,7 @@ function validAssignmentSourceBasis(command: Assignment.CanonicalChangeSet, valu
   )
 }
 
-function validAssignmentMaterialized(
-  command: Assignment.CanonicalChangeSet,
-  values: AssignmentScope["materialized"],
-) {
+function validAssignmentMaterialized(command: Assignment.CanonicalChangeSet, values: AssignmentScope["materialized"]) {
   if (new Set(values.map((value) => value.ordinal)).size !== values.length) return false
   return values.every((value) => {
     const intent = command.intents[value.ordinal]
@@ -1686,9 +1813,7 @@ function projectProposal(
         fact("Cause", basis.scope.causeType),
         fact("Subject", `${basis.scope.subjectLabel}; scope ${basis.scope.scopeType}`),
         fact("Fallible judgment", basis.scope.judgmentBody),
-        ...(basis.scope.uncertaintyAndLimits
-          ? [fact("Uncertainty and limits", basis.scope.uncertaintyAndLimits)]
-          : []),
+        ...(basis.scope.uncertaintyAndLimits ? [fact("Uncertainty and limits", basis.scope.uncertaintyAndLimits)] : []),
         fact("Exact subject anchors", JSON.stringify(basis.scope.anchorRefs)),
         fact(
           "Exact basis for the whole judgment",
@@ -1792,7 +1917,9 @@ function projectProposal(
       basis,
       approval,
       "update_learner_response_evidence",
-      command.operation === "create" ? "Record this learner-response evidence" : "Correct this learner-response evidence",
+      command.operation === "create"
+        ? "Record this learner-response evidence"
+        : "Correct this learner-response evidence",
       "This configured capability approval is bound to one exact occurrence-and-selector assessment or one exact corrected head. It does not assert mastery or understanding.",
       [
         fact("Issuance", basis.issuance),
@@ -1809,7 +1936,9 @@ function projectProposal(
           "Target versions",
           `alignment ${target.alignmentDispositionVersion}; map ${target.mapDispositionVersion}; course ${target.courseVersion}; view ${target.viewVersion}; revision ${target.revisionVersion}`,
         ),
-        ...(command.operation === "create" ? [] : [fact("Expected record head", `${command.recordID} version ${command.expectedVersion}`)]),
+        ...(command.operation === "create"
+          ? []
+          : [fact("Expected record head", `${command.recordID} version ${command.expectedVersion}`)]),
         fact("Assessment scope", basis.scope.assessmentScope),
         fact("Program-bound basis", basis.scope.programBasis),
         fact("Program-bound disposition", basis.scope.programDisposition),
@@ -2960,7 +3089,7 @@ function projectResult(basis: SemanticPresentationV1.ResultBasis): ResultProject
                         `${basis.effect.judgmentID}/${basis.effect.revisionID} v${basis.effect.version}`,
                       ),
                     ]
-                : []),
+                  : []),
               fact(
                 "Epistemic status",
                 "Fallible, source-bearing whole-judgment memory; not mastery certification, per-clause proof, activity, progress, or a required Tutor move.",

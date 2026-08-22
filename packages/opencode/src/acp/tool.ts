@@ -105,19 +105,28 @@ export function completedToolContent(
   toolName: string,
   state: CompletedToolState,
   semantic?: SemanticPresentation.Read<SemanticPresentation.ResultProjection>,
+  inspection?: SemanticPresentation.Read<
+    import("@opencode-ai/core/learning-inspection-schema").LearningInspectionSchema.Projection
+  >,
 ): ToolCallContent[] {
   const text =
-    semantic?.type === "invalid"
-      ? "Consequential result unavailable: Repa could not verify this result, so no success is inferred."
-      : semantic?.type === "valid"
-        ? [
-            semantic.value.summary,
-            ...semantic.value.facts.map((item) => `${item.label}: ${item.value}`),
-            `Durable settlement: ${semantic.value.durablySettled ? "yes" : "no"}`,
-          ].join("\n")
-        : toolName.toLocaleLowerCase() === "read"
-          ? (readDisplayText(state.metadata) ?? state.output)
-          : state.output
+    inspection?.type === "invalid"
+      ? "Learning inspection unavailable: Repa could not verify this projection, so no owner or lineage truth is inferred."
+      : inspection?.type === "valid"
+        ? SemanticPresentation.inspectionLines(inspection.value)
+            .map((item) => `${item.label}: ${item.value}`)
+            .join("\n")
+        : semantic?.type === "invalid"
+          ? "Consequential result unavailable: Repa could not verify this result, so no success is inferred."
+          : semantic?.type === "valid"
+            ? [
+                semantic.value.summary,
+                ...semantic.value.facts.map((item) => `${item.label}: ${item.value}`),
+                `Durable settlement: ${semantic.value.durablySettled ? "yes" : "no"}`,
+              ].join("\n")
+            : toolName.toLocaleLowerCase() === "read"
+              ? (readDisplayText(state.metadata) ?? state.output)
+              : state.output
   const content: ToolCallContent[] = [
     {
       type: "content",
@@ -203,19 +212,26 @@ export function completedToolUpdate(input: {
   readonly toolName: string
   readonly state: CompletedToolState & { readonly title?: string }
   readonly semantic?: SemanticPresentation.Read<SemanticPresentation.ResultProjection>
+  readonly inspection?: SemanticPresentation.Read<
+    import("@opencode-ai/core/learning-inspection-schema").LearningInspectionSchema.Projection
+  >
   readonly cwd?: string
 }): ToolCallUpdate {
   return {
     toolCallId: input.toolCallId,
     status: "completed",
-    ...(input.semantic?.type === "invalid"
-      ? { title: "Consequential result unavailable" }
-      : input.semantic?.type === "valid"
-        ? { title: `${input.semantic.value.title} — ${semanticResultStatus(input.semantic.value.outcome)}` }
-        : input.state.title
-          ? { title: input.state.title }
-          : {}),
-    content: completedToolContent(input.toolName, input.state, input.semantic),
+    ...(input.inspection?.type === "invalid"
+      ? { title: "Learning inspection unavailable" }
+      : input.inspection?.type === "valid"
+        ? { title: `Learning inspection — ${SemanticPresentation.inspectionStatus(input.inspection.value)}` }
+        : input.semantic?.type === "invalid"
+          ? { title: "Consequential result unavailable" }
+          : input.semantic?.type === "valid"
+            ? { title: `${input.semantic.value.title} — ${semanticResultStatus(input.semantic.value.outcome)}` }
+            : input.state.title
+              ? { title: input.state.title }
+              : {}),
+    content: completedToolContent(input.toolName, input.state, input.semantic, input.inspection),
     rawOutput: completedToolRawOutput(input.state),
   }
 }

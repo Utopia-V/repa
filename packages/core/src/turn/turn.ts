@@ -2,18 +2,20 @@ export * as TurnLifecycle from "./turn"
 
 import { Turn } from "@opencode-ai/schema/turn"
 import { and, asc, desc, eq, gt, inArray, lt, max, ne, or, sql } from "drizzle-orm"
-import { DateTime, Effect } from "effect"
+import { DateTime, Effect, Schema } from "effect"
 import { isDeepStrictEqual } from "node:util"
 import type { Database } from "../database/database"
 import { LearningFrontier } from "../learning-frontier"
 import { LearningContext } from "../learning-context"
+import { LearningInspectionCursor } from "../learning-inspection-cursor-schema"
 import { markSourceUnavailable } from "../learning-command/occurrence"
 import type { OccurrenceID } from "../learning-command/occurrence-schema"
 import { LearnerOccurrencePresentationTable } from "../learning-command/occurrence.sql"
 import { garbageCollectOccurrences, removeNoEffectInvocationsForSession } from "../learning-command/physical"
 import { LearningCommandReceiptTable } from "../learning-command/sql"
 import { RetainedSteering } from "../retained-steering"
-import { SessionTable } from "../session/sql"
+import { PartTable, SessionTable } from "../session/sql"
+import { TurnLineage } from "../turn-lineage"
 import type { SessionSchema } from "../session/schema"
 import type { MessageID, PartID } from "../v1/session"
 import {
@@ -657,6 +659,9 @@ export function admitModel(tx: Transaction, input: ModelAdmission): Effect.Effec
           }),
       ),
     )
+    yield* TurnLineage.projectContextRelations(tx, input.assistantMessageID).pipe(
+      Effect.catchCause(() => integrity(input.turnID, "Learning context lineage projection failed")),
+    )
     const operation = yield* tx
       .select()
       .from(TurnModelOperationTable)
@@ -1102,7 +1107,9 @@ export function list(tx: Transaction, sessionID: SessionSchema.ID): Effect.Effec
             .all()
             .pipe(Effect.orDie)
     const byTurn = new Map(lineages.map((lineage) => [lineage.child_turn_id, lineage]))
-    return rows.map((row) => turnInfo(row, byTurn.get(row.id)))
+    return yield* Effect.forEach(rows, (row) =>
+      inspectionExhaustion(tx, row).pipe(Effect.map((inspection) => turnInfo(row, byTurn.get(row.id), inspection))),
+    )
   })
 }
 
@@ -1188,7 +1195,10 @@ export function lookup(tx: Transaction, turnID: Turn.ID): Effect.Effect<Lookup, 
         .where(eq(TurnChildLineageTable.child_turn_id, turnID))
         .get()
         .pipe(Effect.orDie)
-      return { type: "available" as const, turn: turnInfo(row, lineage) }
+      return {
+        type: "available" as const,
+        turn: turnInfo(row, lineage, yield* inspectionExhaustion(tx, row)),
+      }
     }
     const source = yield* tx
       .select()
@@ -2723,9 +2733,242 @@ function activeRow(tx: Transaction, sessionID: SessionSchema.ID) {
     .pipe(Effect.orDie)
 }
 
+function inspectionExhaustion(
+  tx: Transaction,
+  turn: typeof TurnTable.$inferSelect,
+): Effect.Effect<Turn.InspectionExhaustion | undefined> {
+  if (turn.state !== "exhausted" || !turn.exhaustion_counter) return Effect.succeed(undefined)
+  if (turn.exhaustion_counter === "model") {
+    if (turn.tool_count > 256) {
+      return Effect.succeed({
+        schemaVersion: 1,
+        type: "generic",
+        counter: "model",
+        reason: "inspection_ancestry_over_budget",
+      } satisfies Turn.InspectionExhaustion)
+    }
+    return Effect.gen(function* () {
+      const rows = yield* tx
+        .select({
+          part: PartTable,
+          candidate: TurnToolCandidateTable,
+          invocation: TurnToolInvocationTable,
+          operation: TurnModelOperationTable,
+        })
+        .from(TurnToolCandidateTable)
+        .innerJoin(TurnToolInvocationTable, eq(TurnToolInvocationTable.part_id, TurnToolCandidateTable.part_id))
+        .innerJoin(PartTable, eq(PartTable.id, TurnToolCandidateTable.part_id))
+        .innerJoin(
+          TurnModelOperationTable,
+          eq(TurnModelOperationTable.assistant_message_id, TurnToolCandidateTable.assistant_message_id),
+        )
+        .where(
+          and(
+            eq(TurnToolCandidateTable.turn_id, turn.id),
+            eq(TurnModelOperationTable.input_id, turn.current_input_id),
+            eq(TurnToolCandidateTable.tool, "learning_interaction_read"),
+            eq(TurnToolCandidateTable.state, "admitted"),
+            eq(TurnToolInvocationTable.state, "completed"),
+          ),
+        )
+        .orderBy(desc(TurnModelOperationTable.ordinal), desc(TurnToolInvocationTable.ordinal))
+        .limit(turn.tool_count + 1)
+        .all()
+        .pipe(Effect.orDie)
+      const verified = rows.flatMap((row) => {
+        const output = completedToolOutput(row.part.data, "learning_interaction_read")
+        const continuation = output ? searchContinuation(output) : undefined
+        if (
+          !output ||
+          !continuation ||
+          continuation.source.partID !== row.part.id ||
+          continuation.source.sessionID !== turn.session_id ||
+          continuation.source.turnID !== turn.id ||
+          continuation.source.inputID !== turn.current_input_id ||
+          row.operation.ordinal !== continuation.source.modelOrdinal ||
+          row.invocation.ordinal !== continuation.source.toolOrdinal ||
+          LearningInspectionCursor.verifyStoredSearch(output, continuation).type !== "verified"
+        ) {
+          return []
+        }
+        return [{ continuation }]
+      })
+      const immediate = verified.filter(
+        ({ continuation }) =>
+          continuation.continuationPending &&
+          continuation.source.modelOrdinal === turn.model_count - 1 &&
+          continuation.source.toolOrdinal === turn.tool_count - 1,
+      )
+      const exact = immediate.length === 1 ? immediate[0]!.continuation : undefined
+      const byFingerprint = new Map(
+        verified.map(({ continuation }) => [continuation.outputFingerprint, continuation] as const),
+      )
+      const ancestors = new Set<string>()
+      let cursor = exact
+      let ancestryComplete = Boolean(cursor)
+      while (cursor) {
+        if (ancestors.has(cursor.outputFingerprint)) {
+          ancestryComplete = false
+          break
+        }
+        ancestors.add(cursor.outputFingerprint)
+        if (!cursor.parentOutputFingerprint) break
+        const parent = byFingerprint.get(cursor.parentOutputFingerprint)
+        if (!parent) break
+        cursor = parent
+      }
+      const onePendingChain =
+        ancestryComplete &&
+        verified.every(
+          ({ continuation }) => !continuation.continuationPending || ancestors.has(continuation.outputFingerprint),
+        )
+      return exact && onePendingChain
+        ? inspectionExhaustionProjection("predecessor_continuation_exhausted", "model", exact)
+        : ({
+            schemaVersion: 1,
+            type: "generic",
+            counter: "model",
+            reason: "no_unique_immediate_database_predecessor",
+          } satisfies Turn.InspectionExhaustion)
+    })
+  }
+  return Effect.gen(function* () {
+    const rejected = yield* tx
+      .select({ candidate: TurnToolCandidateTable, part: PartTable })
+      .from(TurnToolCandidateTable)
+      .innerJoin(PartTable, eq(PartTable.id, TurnToolCandidateTable.part_id))
+      .where(
+        and(
+          eq(TurnToolCandidateTable.turn_id, turn.id),
+          eq(TurnToolCandidateTable.part_id, turn.exhaustion_attempt_id as PartID),
+        ),
+      )
+      .get()
+      .pipe(Effect.orDie)
+    const partData: unknown = rejected?.part.data
+    const state = isRecord(partData) && isRecord(partData.state) ? partData.state : undefined
+    const input = state?.input
+    const exactEnvelope = input === undefined ? undefined : { input }
+    if (
+      !rejected ||
+      rejected.candidate.tool !== "learning_interaction_read" ||
+      rejected.candidate.state !== "not_started_limit" ||
+      state?.status !== "error" ||
+      !Schema.is(LearningInspectionCursor.SearchInput)(input) ||
+      !turn.exhaustion_envelope ||
+      turn.exhaustion_envelope_fingerprint !== rejected.candidate.envelope_fingerprint ||
+      !isDeepStrictEqual(rejected.candidate.normalized_envelope, turn.exhaustion_envelope) ||
+      !isDeepStrictEqual(exactEnvelope, turn.exhaustion_envelope)
+    ) {
+      return {
+        schemaVersion: 1,
+        type: "generic",
+        counter: "tool",
+        reason: "rejected_tool_envelope_not_exact",
+      } satisfies Turn.InspectionExhaustion
+    }
+    const continuation = "predecessor" in input ? input.predecessor : undefined
+    if (!continuation) {
+      return {
+        schemaVersion: 1,
+        type: "generic",
+        counter: "tool",
+        reason: "rejected_tool_has_no_predecessor",
+      } satisfies Turn.InspectionExhaustion
+    }
+    const predecessor = yield* verifiedSearchPart(tx, continuation)
+    return predecessor
+      ? inspectionExhaustionProjection("rejected_tool_continuation_exhausted", "tool", continuation)
+      : ({
+          schemaVersion: 1,
+          type: "generic",
+          counter: "tool",
+          reason: "rejected_tool_predecessor_not_database_verified",
+        } satisfies Turn.InspectionExhaustion)
+  })
+}
+
+function verifiedSearchPart(tx: Transaction, continuation: LearningInspectionCursor.Continuation) {
+  return tx
+    .select({
+      part: PartTable,
+      candidate: TurnToolCandidateTable,
+      invocation: TurnToolInvocationTable,
+      operation: TurnModelOperationTable,
+    })
+    .from(PartTable)
+    .innerJoin(TurnToolCandidateTable, eq(TurnToolCandidateTable.part_id, PartTable.id))
+    .innerJoin(TurnToolInvocationTable, eq(TurnToolInvocationTable.part_id, PartTable.id))
+    .innerJoin(
+      TurnModelOperationTable,
+      eq(TurnModelOperationTable.assistant_message_id, TurnToolCandidateTable.assistant_message_id),
+    )
+    .where(eq(PartTable.id, continuation.source.partID as PartID))
+    .get()
+    .pipe(
+      Effect.orDie,
+      Effect.map((row) => {
+        if (
+          !row ||
+          row.candidate.tool !== "learning_interaction_read" ||
+          row.candidate.state !== "admitted" ||
+          row.invocation.state !== "completed" ||
+          row.operation.session_id !== continuation.source.sessionID ||
+          row.operation.turn_id !== continuation.source.turnID ||
+          row.operation.input_id !== continuation.source.inputID ||
+          row.operation.ordinal !== continuation.source.modelOrdinal ||
+          row.invocation.ordinal !== continuation.source.toolOrdinal
+        ) {
+          return false
+        }
+        const output = completedToolOutput(row.part.data, "learning_interaction_read")
+        return Boolean(output && LearningInspectionCursor.verifyStoredSearch(output, continuation).type === "verified")
+      }),
+    )
+}
+
+function inspectionExhaustionProjection(
+  type: "predecessor_continuation_exhausted" | "rejected_tool_continuation_exhausted",
+  counter: "model" | "tool",
+  continuation: LearningInspectionCursor.Continuation,
+): Turn.InspectionExhaustion {
+  return {
+    schemaVersion: 1,
+    type,
+    counter,
+    predecessorPartID: continuation.source.partID as PartID,
+    queryFingerprint: continuation.queryFingerprint,
+    outputFingerprint: continuation.outputFingerprint,
+    completeSoFar: continuation.completeSoFar,
+    gapCounts: continuation.gapCounts,
+    gapFingerprint: continuation.gapFingerprint,
+    continuationPending: continuation.continuationPending,
+    ...(continuation.rangeNextOffset === undefined ? {} : { rangeNextOffset: continuation.rangeNextOffset }),
+  }
+}
+
+function completedToolOutput(value: unknown, tool: string) {
+  if (!isRecord(value) || value.type !== "tool" || value.tool !== tool || !isRecord(value.state)) return
+  return value.state.status === "completed" && typeof value.state.output === "string" ? value.state.output : undefined
+}
+
+function searchContinuation(output: string) {
+  try {
+    const value: unknown = JSON.parse(output)
+    const owner = isRecord(value) && isRecord(value.ownerResult) ? value.ownerResult : value
+    const search = isRecord(owner) && isRecord(owner.search) ? owner.search : undefined
+    return search && Schema.is(LearningInspectionCursor.Continuation)(search.continuation)
+      ? search.continuation
+      : undefined
+  } catch {
+    return undefined
+  }
+}
+
 function turnInfo(
   row: typeof TurnTable.$inferSelect,
   lineage: typeof TurnChildLineageTable.$inferSelect | undefined,
+  inspection?: Turn.InspectionExhaustion,
 ): Turn.Info {
   const terminal =
     row.state === "running" || row.time_terminal === null || row.terminal_reason === null
@@ -2780,6 +3023,7 @@ function turnInfo(
     timeAdmitted: DateTime.makeUnsafe(row.time_admitted),
     causalTime: DateTime.makeUnsafe(row.causal_time),
     ...(terminal ? { terminal } : {}),
+    ...(inspection ? { inspectionExhaustion: inspection } : {}),
   }
 }
 
@@ -2962,6 +3206,10 @@ function stableStringify(value: unknown): string {
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([key, item]) => `${JSON.stringify(key)}:${stableStringify(item)}`)
     .join(",")}}`
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
 }
 
 function deferForeignKeys(tx: Transaction) {

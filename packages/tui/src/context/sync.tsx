@@ -18,6 +18,7 @@ import type {
   ProviderAuthMethod,
   VcsInfo,
   SnapshotFileDiff,
+  TurnInfo,
   Event,
 } from "@opencode-ai/sdk/v2"
 import { createStore, produce, reconcile } from "solid-js/store"
@@ -83,6 +84,9 @@ export const {
       active_turn: {
         [sessionID: string]: string | undefined
       }
+      turn_terminal: {
+        [sessionID: string]: TurnInfo | undefined
+      }
       session_diff: {
         [sessionID: string]: SnapshotFileDiff[]
       }
@@ -127,6 +131,7 @@ export const {
       session: [],
       session_status: {},
       active_turn: {},
+      turn_terminal: {},
       session_diff: {},
       todo: {},
       message: {},
@@ -465,6 +470,12 @@ export const {
           if (store.active_turn[event.properties.sessionID] === event.properties.turnID) {
             publishActiveTurn(event.properties.sessionID)
           }
+          void sdk.client.session
+            .getTurn({ sessionID: event.properties.sessionID, turnID: event.properties.turnID }, { throwOnError: true })
+            .then((response) => {
+              if (response.data) setStore("turn_terminal", event.properties.sessionID, response.data)
+            })
+            .catch(() => {})
           break
         }
 
@@ -660,6 +671,7 @@ export const {
           setStore("formatter", reconcile([]))
           setStore("session_status", reconcile({}))
           setStore("active_turn", reconcile({}))
+          setStore("turn_terminal", reconcile({}))
           setStore("provider_auth", reconcile({}))
           setStore("vcs", undefined)
           setStore("cache_directory", directory)
@@ -821,11 +833,12 @@ export const {
           const tracker = { messages: new Set<string>(), parts: new Set<string>() }
           hydratingSessions.set(sessionID, tracker)
           const task = (async () => {
-            const [session, messages, todo, diff] = await Promise.all([
+            const [session, messages, todo, diff, turns] = await Promise.all([
               sdk.client.session.get({ sessionID }, { throwOnError: true }),
               sdk.client.session.messages({ sessionID, limit: 100 }),
               sdk.client.session.todo({ sessionID }),
               sdk.client.session.diff({ sessionID }),
+              sdk.client.session.turns({ sessionID }),
             ])
             setStore(
               produce((draft) => {
@@ -877,6 +890,7 @@ export const {
                 for (const message of removed) delete draft.part[message.id]
                 draft.message[sessionID] = visible
                 draft.session_diff[sessionID] = diff.data ?? []
+                draft.turn_terminal[sessionID] = turns.data?.findLast((turn) => turn.terminal !== undefined)
               }),
             )
             fullSyncedSessions.set(sessionID, directory)

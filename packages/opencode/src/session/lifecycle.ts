@@ -48,6 +48,11 @@ export interface Interface {
     beforeClose: Effect.Effect<void, E2, R2>,
     effect: (markCommitted: Effect.Effect<void>) => Effect.Effect<A, E, R>,
   ) => Effect.Effect<A, E | E2 | BusyError, R | R2>
+  readonly closeIfIdle: <A, E, R>(
+    sessionID: SessionID,
+    effect: (markCommitted: Effect.Effect<void>) => Effect.Effect<A, E, R>,
+  ) => Effect.Effect<A, E | BusyError, R>
+  readonly awaitClosing: (sessionID: SessionID) => Effect.Effect<void>
   readonly phase: (sessionID: SessionID) => Effect.Effect<Phase>
 }
 
@@ -321,11 +326,62 @@ export const make = Effect.fn("SessionLifecycle.make")(function* () {
         ),
     )
 
+  const closeIfIdle: Interface["closeIfIdle"] = (sessionID, effect) =>
+    Effect.acquireUseRelease(
+      Effect.gen(function* () {
+        const entry = yield* get(sessionID)
+        yield* entry.control.withPermits(1)(
+          Effect.gen(function* () {
+            if (entry.phase !== "open") return yield* unavailable(sessionID)
+            if (yield* TxReentrantLock.readLocked(entry.gate)) return yield* unavailable(sessionID)
+            if (yield* TxReentrantLock.writeLocked(entry.gate)) return yield* unavailable(sessionID)
+            entry.phase = "closing"
+            yield* TxReentrantLock.acquireWrite(entry.gate)
+          }),
+        )
+        return { entry, committed: false }
+      }),
+      (resource) =>
+        effect(
+          resource.entry.control.withPermits(1)(
+            Effect.sync(() => {
+              resource.committed = true
+              resource.entry.phase = "closed"
+            }),
+          ),
+        ),
+      (resource, exit) =>
+        resource.entry.control.withPermits(1)(
+          Effect.gen(function* () {
+            yield* TxReentrantLock.releaseWrite(resource.entry.gate)
+            resource.entry.phase = resource.committed || Exit.isSuccess(exit) ? "closed" : "open"
+          }),
+        ),
+    )
+
+  const awaitClosing: Interface["awaitClosing"] = Effect.fn("SessionLifecycle.awaitClosing")(function* (sessionID) {
+    const entry = yield* get(sessionID)
+    const closing = yield* entry.control.withPermits(1)(Effect.sync(() => entry.phase === "closing"))
+    if (!closing) return
+    yield* TxReentrantLock.withReadLock(entry.gate, Effect.void)
+  })
+
   const phase = Effect.fn("SessionLifecycle.phase")(function* (sessionID: SessionID) {
     return (yield* get(sessionID)).phase
   })
 
-  return { shared, admit, handoff, mutateThenAdmit, mutateThenAdmitGuarded, idle, close, phase } satisfies Interface
+  return {
+    shared,
+    admit,
+    handoff,
+    mutateThenAdmit,
+    mutateThenAdmitGuarded,
+    idle,
+    close,
+    closeIfIdle,
+    awaitClosing,
+    phase,
+  } satisfies Interface
 })
 
 export * as SessionLifecycle from "./lifecycle"

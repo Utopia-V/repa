@@ -3,6 +3,9 @@ export * as DatabaseMigration from "./migration"
 import { sql } from "drizzle-orm"
 import { Effect, Semaphore } from "effect"
 import type { EffectDrizzleSqlite } from "@opencode-ai/effect-drizzle-sqlite"
+import { SessionPresentation } from "../session-presentation"
+import { SessionSchema } from "../session/schema"
+import { assertStoredIntegrity } from "../session-deletion/integrity"
 import { migrations } from "./migration.gen"
 import { DatabaseSchemaExtras, triggerStatements, viewStatements } from "./schema-extras"
 import schema from "./schema.gen"
@@ -88,6 +91,180 @@ function checks(db: Database | Transaction, path: string, version: number) {
     }
 
     if (version === currentVersion(migrations)) {
+      const learnerHomeIdentity = yield* db.all<{ id: string }>(sql`
+        SELECT id
+        FROM learner_home_identity
+        WHERE singleton = 1
+          AND length(id) = 36
+          AND substr(id, 1, 4) = 'lhm_'
+          AND substr(id, 5) NOT GLOB '*[^0-9a-f]*'
+      `)
+      if (learnerHomeIdentity.length !== 1) {
+        return yield* admissionError({
+          path,
+          reason: "corrupt",
+          detail: `The Repa database at ${path} has no valid durable LearnerHome identity`,
+          currentVersion: version,
+          observedVersion: version,
+        })
+      }
+
+      const overlaps = yield* db.all<{ id: string }>(sql`
+        SELECT session.id
+        FROM session
+        JOIN session_deletion_control_receipt AS receipt ON receipt.root_session_id = session.id
+        LIMIT 1
+      `)
+      if (overlaps.length > 0) {
+        return yield* admissionError({
+          path,
+          reason: "corrupt",
+          detail: `The Repa database at ${path} contains a live Session whose root identity is retired`,
+          currentVersion: version,
+          observedVersion: version,
+        })
+      }
+
+      const deletionReceipts = yield* db.all<{ id: string }>(sql`
+        SELECT root_session_id AS id
+        FROM session_deletion_control_receipt
+        ORDER BY root_session_id
+      `)
+      yield* Effect.forEach(
+        deletionReceipts,
+        (receipt) =>
+          assertStoredIntegrity(db as Transaction, SessionSchema.ID.make(receipt.id)).pipe(
+            Effect.catchCause((cause) =>
+              admissionError({
+                path,
+                reason: "corrupt",
+                detail: `The Repa database at ${path} contains an invalid Session deletion settlement or audit lifecycle for ${receipt.id}`,
+                currentVersion: version,
+                observedVersion: version,
+                cause,
+              }),
+            ),
+          ),
+        { discard: true },
+      )
+
+      const incompleteHistory = yield* db.all<{ id: string }>(sql`
+        SELECT history.session_id AS id
+        FROM session_administrative_history AS history
+        JOIN session ON session.id = history.session_id
+        LEFT JOIN session_presentation_frontier AS frontier ON frontier.session_id = history.session_id
+        WHERE session.revert IS NOT NULL
+          OR frontier.session_id IS NULL
+          OR frontier.frontier_time < history.history_frontier_time
+          OR (SELECT count(*) FROM session_administrative_history_message AS member
+              WHERE member.session_id = history.session_id) <> history.message_count
+          OR (
+            (SELECT count(*) FROM session_administrative_history_part AS member
+             WHERE member.session_id = history.session_id)
+            +
+            (SELECT count(*) FROM session_administrative_history_embedded_part AS member
+             WHERE member.session_id = history.session_id)
+          ) <> history.part_count
+          OR EXISTS (
+            SELECT 1 FROM session_administrative_history_message AS member
+            JOIN turn_input ON turn_input.message_id = member.message_id
+            WHERE member.session_id = history.session_id
+          )
+          OR EXISTS (
+            SELECT 1 FROM session_administrative_history_message AS member
+            JOIN turn_model_operation AS operation ON operation.assistant_message_id = member.message_id
+            WHERE member.session_id = history.session_id
+          )
+          OR EXISTS (
+            SELECT 1 FROM session_administrative_history_part AS member
+            JOIN turn_tool_candidate AS candidate ON candidate.part_id = member.part_id
+            WHERE member.session_id = history.session_id
+          )
+          OR EXISTS (
+            SELECT 1 FROM session_administrative_history_embedded_part AS member
+            JOIN turn_tool_candidate AS candidate ON candidate.part_id = member.part_id
+            WHERE member.session_id = history.session_id
+          )
+        LIMIT 1
+      `)
+      if (incompleteHistory.length > 0) {
+        return yield* admissionError({
+          path,
+          reason: "corrupt",
+          detail: `The Repa database at ${path} contains an incomplete or executable administrative-history seal`,
+          currentVersion: version,
+          observedVersion: version,
+        })
+      }
+
+      const administrativeHistories = yield* db.all<{ id: SessionSchema.ID }>(sql`
+        SELECT session_id AS id
+        FROM session_administrative_history
+        ORDER BY session_id
+      `)
+      yield* Effect.forEach(
+        administrativeHistories,
+        (history) =>
+          SessionPresentation.assertAdministrativeHistoryIntegrity(db as Transaction, history.id).pipe(
+            Effect.mapError((cause) =>
+              admissionError({
+                path,
+                reason: "corrupt",
+                detail: `The Repa database at ${path} contains an invalid administrative-history seal for Session ${history.id}`,
+                currentVersion: version,
+                observedVersion: version,
+                cause,
+              }),
+            ),
+          ),
+        { discard: true },
+      )
+
+      const invalidFrontier = yield* db.all<{ id: string }>(sql`
+        SELECT session.id
+        FROM session
+        LEFT JOIN session_presentation_frontier AS frontier ON frontier.session_id = session.id
+        WHERE frontier.session_id IS NULL
+          OR frontier.message_count <> (SELECT count(*) FROM message WHERE message.session_id = session.id)
+          OR frontier.frontier_time < COALESCE(
+            (SELECT max(message.time_created) FROM message WHERE message.session_id = session.id),
+            0
+          )
+        LIMIT 1
+      `)
+      if (invalidFrontier.length > 0) {
+        return yield* admissionError({
+          path,
+          reason: "corrupt",
+          detail: `The Repa database at ${path} contains an invalid Session presentation frontier`,
+          currentVersion: version,
+          observedVersion: version,
+        })
+      }
+
+      const incompleteContextLineage = yield* db.all<{ id: string }>(sql`
+        SELECT cut.assistant_message_id AS id
+        FROM turn_learning_context_cut AS cut
+        LEFT JOIN turn_lineage_context_coverage AS coverage
+          ON coverage.assistant_message_id = cut.assistant_message_id
+        WHERE coverage.assistant_message_id IS NULL
+          OR coverage.projection_schema_version <> 1
+          OR coverage.relation_count <> (
+            SELECT count(*) FROM turn_lineage_context_relation AS relation
+            WHERE relation.assistant_message_id = cut.assistant_message_id
+          )
+        LIMIT 1
+      `)
+      if (incompleteContextLineage.length > 0) {
+        return yield* admissionError({
+          path,
+          reason: "corrupt",
+          detail: `The Repa database at ${path} contains an incomplete Context lineage projection`,
+          currentVersion: version,
+          observedVersion: version,
+        })
+      }
+
       const expected = new Map(
         [...viewStatements, ...triggerStatements].map((statement) => {
           const match = /CREATE (?:TRIGGER|VIEW) IF NOT EXISTS ([^\s]+)/i.exec(statement)
@@ -153,6 +330,10 @@ function initialize(db: Database, path: string, input: readonly Migration[]) {
       Effect.gen(function* () {
         yield* schema.up(tx)
         yield* DatabaseSchemaExtras.install(tx)
+        yield* tx.run(sql`
+          INSERT INTO learner_home_identity(singleton, id)
+          VALUES (1, 'lhm_' || lower(hex(randomblob(16))))
+        `)
         yield* tx.run(sql`
           CREATE TABLE ${sql.identifier("repa_migration")} (
             version INTEGER PRIMARY KEY,

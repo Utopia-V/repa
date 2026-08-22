@@ -12,7 +12,7 @@ import { Plugin } from "@/plugin"
 import { Config } from "@/config/config"
 import { NotFoundError } from "@/storage/storage"
 
-import { Effect, Layer, Context } from "effect"
+import { Effect, Layer, Context, Exit } from "effect"
 import { InstanceState } from "@/effect/instance-state"
 import { isOverflow as overflow, usable } from "./overflow"
 import { serviceUse } from "@opencode-ai/core/effect/service-use"
@@ -24,6 +24,7 @@ import { buildPrompt } from "@opencode-ai/core/session/compaction"
 import { SessionCompactionEvent } from "@opencode-ai/schema/session-compaction-event"
 import { LearningContext } from "@opencode-ai/core/learning-context"
 import { Database } from "@opencode-ai/core/database/database"
+import { SessionPresentation } from "@opencode-ai/core/session-presentation"
 
 export const Event = SessionCompactionEvent
 
@@ -50,6 +51,11 @@ type CompletedCompaction = {
   assistantIndex: number
   summary: string | undefined
 }
+
+type PresentationMutationError =
+  | Session.BusyError
+  | SessionPresentation.AdministrativeHistoryIntegrityError
+  | SessionPresentation.FrontierUnrepresentableError
 
 export type OverflowSelection = Readonly<{
   tailStartMessageID: MessageID
@@ -145,7 +151,9 @@ export interface Interface {
     tokens: SessionV1.Assistant["tokens"]
     model: Provider.Model
   }) => Effect.Effect<boolean>
-  readonly prune: (input: { sessionID: SessionID }) => Effect.Effect<void>
+  readonly prune: (
+    input: { sessionID: SessionID },
+  ) => Effect.Effect<void, PresentationMutationError>
   /** Exact prefix the compaction owner may replace while retaining a tail. */
   readonly compactable: (input: {
     messages: SessionV1.WithParts[]
@@ -157,7 +165,7 @@ export interface Interface {
     sessionID: SessionID
     auto: boolean
     overflow?: boolean
-  }) => Effect.Effect<"continue" | "stop">
+  }) => Effect.Effect<"continue" | "stop", PresentationMutationError>
   readonly create: (input: {
     sessionID: SessionID
     agent: string
@@ -168,7 +176,7 @@ export interface Interface {
       sourceAssistantMessageID: MessageID
       selection: OverflowSelection
     }>
-  }) => Effect.Effect<void>
+  }) => Effect.Effect<void, PresentationMutationError>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/SessionCompaction") {}
@@ -306,14 +314,20 @@ const layer = Layer.effect(
         .messages({ sessionID: input.sessionID })
         .pipe(Effect.catchIf(NotFoundError.isInstance, () => Effect.succeed(undefined)))
       if (!msgs) return
+      const administrativeHistory = new Set(
+        yield* database.db
+          .transaction((tx) => SessionPresentation.historicalMessageIDs(tx, input.sessionID))
+          .pipe(Effect.catchTag("SqlError", Effect.die)),
+      )
+      const mutableMessages = msgs.filter((message) => !administrativeHistory.has(message.info.id))
 
       let total = 0
       let pruned = 0
       const toPrune: SessionV1.ToolPart[] = []
       let turns = 0
 
-      loop: for (let msgIndex = msgs.length - 1; msgIndex >= 0; msgIndex--) {
-        const msg = msgs[msgIndex]
+      loop: for (let msgIndex = mutableMessages.length - 1; msgIndex >= 0; msgIndex--) {
+        const msg = mutableMessages[msgIndex]
         if (msg.info.role === "user") turns++
         if (turns < 2) continue
         if (msg.info.role === "assistant" && msg.info.summary) break loop
@@ -439,22 +453,6 @@ const layer = Layer.effect(
         }
         return { head, tail_start_id: tail }
       })
-      // Plugins may extend the task input, but the program-owned compaction contract remains fixed in the system prompt.
-      const compacting = yield* plugin.trigger(
-        "experimental.session.compacting",
-        { sessionID: input.sessionID },
-        { context: [], prompt: undefined },
-      )
-      const nextPrompt = buildPrompt({
-        previousSummary,
-        context: [...compacting.context, ...(compacting.prompt ? [compacting.prompt] : [])],
-      })
-      const msgs = structuredClone(selected.head)
-      yield* plugin.trigger("experimental.chat.messages.transform", {}, { messages: msgs })
-      const modelMessages = yield* MessageV2.toModelMessagesEffect(msgs, model, {
-        stripMedia: true,
-        toolOutputMaxChars: TOOL_OUTPUT_MAX_CHARS,
-      })
       const ctx = yield* InstanceState.context
       const msg: SessionV1.Assistant = {
         id: MessageID.ascending(),
@@ -483,11 +481,38 @@ const layer = Layer.effect(
         },
       }
       yield* session.updateMessage(msg)
-      const processor = yield* processors.create({
-        assistantMessage: msg,
-        sessionID: input.sessionID,
-        model,
-      })
+      // Reserve and persist the summary presentation before any plugin or model
+      // effect. A frontier refusal therefore cannot run external compaction work.
+      const prepared = yield* Effect.gen(function* () {
+        const compacting = yield* plugin.trigger(
+          "experimental.session.compacting",
+          { sessionID: input.sessionID },
+          { context: [], prompt: undefined },
+        )
+        const nextPrompt = buildPrompt({
+          previousSummary,
+          context: [...compacting.context, ...(compacting.prompt ? [compacting.prompt] : [])],
+        })
+        const msgs = structuredClone(selected.head)
+        yield* plugin.trigger("experimental.chat.messages.transform", {}, { messages: msgs })
+        const modelMessages = yield* MessageV2.toModelMessagesEffect(msgs, model, {
+          stripMedia: true,
+          toolOutputMaxChars: TOOL_OUTPUT_MAX_CHARS,
+        })
+        const processor = yield* processors.create({
+          assistantMessage: msg,
+          sessionID: input.sessionID,
+          model,
+        })
+        return { modelMessages, nextPrompt, processor }
+      }).pipe(
+        Effect.onExit((exit) =>
+          Exit.isFailure(exit)
+            ? session.removeMessage({ sessionID: input.sessionID, messageID: msg.id }).pipe(Effect.orDie)
+            : Effect.void,
+        ),
+      )
+      const { modelMessages, nextPrompt, processor } = prepared
       const result = yield* processor.process({
         composition: { type: "internal", purpose: "compaction" },
         user: userMessage,

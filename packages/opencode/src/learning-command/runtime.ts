@@ -44,6 +44,7 @@ import { SemanticPresentation } from "@opencode-ai/core/semantic-presentation"
 import { SessionProjector } from "@opencode-ai/core/session/projector"
 import { PartTable } from "@opencode-ai/core/session/sql"
 import { TurnLifecycle } from "@opencode-ai/core/turn/turn"
+import { TurnLineage } from "@opencode-ai/core/turn-lineage"
 import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
 import { Turn } from "@opencode-ai/schema/turn"
@@ -3039,6 +3040,12 @@ function completeAssignment(
           settlement: yield* settlementMetadata(tx, registration.sessionID, state.timeAdmitted),
         })
         if (settled.settlement.outcome === "applied") {
+          yield* TurnLineage.projectAppliedCitation(tx, {
+            commandName: LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+            assistantMessageID: registration.assistantMessageID,
+            partID: registration.partID,
+            time: requirePhysicalSettlement(settled.settlement).settlementTime,
+          })
           yield* TurnLifecycle.recordToolResultingFrontier(tx, {
             partID: registration.partID,
             frontier: yield* LearningFrontier.read(tx),
@@ -3581,6 +3588,12 @@ function completeLearnerStateJudgment(
           settlement: yield* settlementMetadata(tx, registration.sessionID, state.timeAdmitted),
         })
         if (settled.settlement.outcome === "applied") {
+          yield* TurnLineage.projectAppliedCitation(tx, {
+            commandName: LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY,
+            assistantMessageID: registration.assistantMessageID,
+            partID: registration.partID,
+            time: requirePhysicalSettlement(settled.settlement).settlementTime,
+          })
           yield* TurnLifecycle.recordToolResultingFrontier(tx, {
             partID: registration.partID,
             frontier: yield* LearningFrontier.read(tx),
@@ -4099,6 +4112,12 @@ function completeAdvisoryPlanSuggestion(
           settlement: yield* settlementMetadata(tx, registration.sessionID, state.timeAdmitted),
         })
         if (settled.settlement.outcome === "applied") {
+          yield* TurnLineage.projectAppliedCitation(tx, {
+            commandName: LearningCommand.UPDATE_ADVISORY_PLAN_SUGGESTION_CAPABILITY,
+            assistantMessageID: registration.assistantMessageID,
+            partID: registration.partID,
+            time: requirePhysicalSettlement(settled.settlement).settlementTime,
+          })
           yield* TurnLifecycle.recordToolResultingFrontier(tx, {
             partID: registration.partID,
             frontier: yield* LearningFrontier.read(tx),

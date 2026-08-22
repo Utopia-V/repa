@@ -3782,8 +3782,32 @@ function nullableInteger(value: unknown) {
 
 function rangeShape(value: unknown) {
   if (!record(value) || !integer(value.count) || !digest(value.fingerprint)) return false
-  if (value.count === 0) return keys(value, ["count", "fingerprint"])
-  return keys(value, ["first", "last", "count", "fingerprint"]) && nonempty(value.first) && nonempty(value.last)
+  if (value.chunks === undefined) {
+    if (value.count === 0) return keys(value, ["count", "fingerprint"])
+    return keys(value, ["first", "last", "count", "fingerprint"]) && nonempty(value.first) && nonempty(value.last)
+  }
+  if (
+    !Array.isArray(value.chunks) ||
+    !value.chunks.every(
+      (chunk, index) =>
+        record(chunk) &&
+        keys(chunk, ["offset", "count", "fingerprint"]) &&
+        chunk.offset === index * 8 &&
+        integer(chunk.count) &&
+        chunk.count >= 1 &&
+        chunk.count <= 8 &&
+        digest(chunk.fingerprint),
+    ) ||
+    value.chunks.reduce((total, chunk) => total + Number((chunk as Record<string, unknown>).count), 0) !== value.count
+  )
+    return false
+  if (value.count === 0) return keys(value, ["count", "fingerprint", "chunks"]) && value.chunks.length === 0
+  return (
+    keys(value, ["first", "last", "count", "fingerprint", "chunks"]) &&
+    nonempty(value.first) &&
+    nonempty(value.last) &&
+    value.chunks.length > 0
+  )
 }
 
 function bounded(value: unknown) {

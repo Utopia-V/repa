@@ -2566,6 +2566,10 @@ function requireRepresentationInfo(source: Queryable, revisionID: RevisionID) {
   })
 }
 
+export function readRepresentationInfoInTransaction(source: Queryable, revisionID: RevisionID) {
+  return requireRepresentationInfo(source, revisionID)
+}
+
 function requireGrantRow(source: Queryable, grantID: ContinuedUseGrantID) {
   return Effect.gen(function* () {
     const row = yield* source

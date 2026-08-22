@@ -174,7 +174,7 @@ function withContext<A, E>(
                   Effect.gen(function* () {
                     yield* svc.updateMessage(info)
                     yield* svc.updatePart(part)
-                  }),
+                  }).pipe(Effect.orDie),
                 ),
               )
               return { info, part }

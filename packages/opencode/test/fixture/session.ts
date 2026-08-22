@@ -110,11 +110,12 @@ export const materializeTestSession = Effect.fn("Test.materializeSession")(funct
       })
       const commit = () =>
         Effect.gen(function* () {
+          const presentationTime = user.time.created
           const occurrence = yield* Occurrence.admit(tx, {
-            admission: LearnerAdmission.interactive({ instant: time }),
+            admission: LearnerAdmission.interactive({ instant: presentationTime }),
             sessionID,
             messageID,
-            timeAdmitted: time,
+            timeAdmitted: presentationTime,
           })
           admitted = yield* TurnLifecycle.admit(tx, {
             kind: "learner",
@@ -126,14 +127,14 @@ export const materializeTestSession = Effect.fn("Test.materializeSession")(funct
             limits: input?.limits ?? { model: 8, tool: 16 },
             envelope: { source: "test_fixture" },
             policyBasis: { source: "test_fixture" },
-            timeAdmitted: time,
+            timeAdmitted: presentationTime,
           })
           if (input?.settle !== false) {
             terminal = yield* TurnLifecycle.settle(tx, {
               turnID,
               outcome: "interrupted",
               reason: "learner_interrupt",
-              time,
+              time: presentationTime,
             })
           }
         }).pipe(Effect.orDie)
@@ -260,11 +261,12 @@ const materializeTestChildSession = Effect.fn("Test.materializeChildSession")(fu
     Effect.gen(function* () {
       const admitParent = () =>
         Effect.gen(function* () {
+          const presentationTime = parentUser.time.created
           const occurrence = yield* Occurrence.admit(tx, {
-            admission: LearnerAdmission.interactive({ instant: time }),
+            admission: LearnerAdmission.interactive({ instant: presentationTime }),
             sessionID: parent.id,
             messageID: parentMessageID,
-            timeAdmitted: time,
+            timeAdmitted: presentationTime,
           })
           parentAdmission = yield* TurnLifecycle.admit(tx, {
             kind: "learner",
@@ -276,7 +278,7 @@ const materializeTestChildSession = Effect.fn("Test.materializeChildSession")(fu
             limits: { model: 1, tool: 1 },
             envelope: { source: "test_fixture_child_parent" },
             policyBasis: { source: "test_fixture" },
-            timeAdmitted: time,
+            timeAdmitted: presentationTime,
           })
         }).pipe(Effect.orDie)
       const admitModel = () =>
@@ -287,7 +289,7 @@ const materializeTestChildSession = Effect.fn("Test.materializeChildSession")(fu
           requestEnvelope: { source: "test_fixture_child_parent" },
           contextFingerprint: TurnLifecycle.envelopeFingerprint({ source: "test_fixture_child_parent_context" }),
           snapshotFrontier: { sequence: 0, time: 0 },
-          timeAdmitted: time + 1,
+          timeAdmitted: parentAssistant.time.created,
         }).pipe(
           Effect.flatMap((result) => {
             if (result.type !== "admitted") return Effect.die("Test parent model operation exhausted unexpectedly")
@@ -299,6 +301,7 @@ const materializeTestChildSession = Effect.fn("Test.materializeChildSession")(fu
         )
       const sealTask = () =>
         Effect.gen(function* () {
+          const modelTime = parentAssistant.time.created
           yield* TurnLifecycle.sealCandidateSet(tx, {
             turnID: parentTurnID,
             sessionID: parent.id,
@@ -311,13 +314,13 @@ const materializeTestChildSession = Effect.fn("Test.materializeChildSession")(fu
                 envelope: { description: "materialize test child" },
               },
             ],
-            timeSealed: time + 2,
+            timeSealed: modelTime,
           })
           yield* TurnLifecycle.settleModel(tx, {
             turnID: parentTurnID,
             assistantMessageID: parentAssistantMessageID,
             state: "completed",
-            time: time + 2,
+            time: modelTime,
           })
         }).pipe(Effect.orDie)
       return {
@@ -382,7 +385,7 @@ const materializeTestChildSession = Effect.fn("Test.materializeChildSession")(fu
         sessionID: parent.id,
         assistantMessageID: parentAssistantMessageID,
         partID: parentTaskPartID,
-        timeAdmitted: time + 2,
+        timeAdmitted: parentAssistant.time.created,
       }).pipe(Effect.orDie)
       if (admission.type !== "admitted") return yield* Effect.die("Test parent Task invocation was not admitted")
       const candidate = yield* TurnLifecycle.candidate(tx, {

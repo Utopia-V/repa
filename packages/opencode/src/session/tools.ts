@@ -118,7 +118,7 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
               time: { start: Date.now() },
             },
           }
-        }),
+        }).pipe(Effect.asVoid, Effect.orDie),
       ask: (req) =>
         permission
           .ask({

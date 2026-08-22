@@ -1,11 +1,74 @@
 import { describe, expect, test } from "bun:test"
 import {
+  createSessionDeletionProposalView,
   createDialogSessionListQuery,
   loadDialogSessionList,
   selectDialogSessionList,
+  sessionDeletionModeOptions,
 } from "../../src/component/dialog-session-list"
 
 describe("dialog session list", () => {
+  test("requires an explicit learner choice between the two deletion behaviors", () => {
+    expect(sessionDeletionModeOptions).toEqual([
+      {
+        title: "Delete bodies; keep minimal inspection lineage",
+        value: "minimal_audit",
+        description: "Retains a body-free, non-causal audit until you purge it",
+      },
+      {
+        title: "Delete bodies and inspection lineage",
+        value: "full",
+        description: "Only the immutable deletion-control receipt remains",
+      },
+    ])
+    expect(sessionDeletionModeOptions.every((option) => !("default" in option))).toBe(true)
+  })
+
+  test("renders the selected mode and exact root-descendant closure before confirmation", () => {
+    expect(
+      createSessionDeletionProposalView({
+        rootSessionID: "ses_root",
+        subtreeCount: 3,
+        subtreeFingerprint: "f".repeat(64),
+        mode: "minimal_audit",
+        targets: [
+          { sessionID: "ses_root", parentSessionID: null },
+          { sessionID: "ses_child_a", parentSessionID: "ses_root" },
+          { sessionID: "ses_child_b", parentSessionID: "ses_root" },
+        ],
+      }),
+    ).toEqual({
+      title: "Confirm deletion of 3 Sessions",
+      mode: "delete bodies; keep minimal inspection lineage",
+      targets: [
+        {
+          title: "ses_root",
+          value: "ses_root",
+          description: "root",
+          details: ["no parent"],
+        },
+        {
+          title: "ses_child_a",
+          value: "ses_child_a",
+          description: "descendant",
+          details: ["parent ses_root"],
+        },
+        {
+          title: "ses_child_b",
+          value: "ses_child_b",
+          description: "descendant",
+          details: ["parent ses_root"],
+        },
+      ],
+      footer: [
+        "Mode: delete bodies; keep minimal inspection lineage",
+        "Root: ses_root",
+        `Scope fingerprint: ${"f".repeat(64)}`,
+        "Local export files are outside this deletion and are not removed.",
+      ],
+    })
+  })
+
   test("routes the default browse list through the active directory", () => {
     expect(
       createDialogSessionListQuery({ directory: "/tmp/learning/course-b", filter: { path: "packages/tui" } }),

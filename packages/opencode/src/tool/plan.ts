@@ -27,6 +27,10 @@ export const PlanExitTool = Tool.define(
           const instance = yield* InstanceState.context
           const info = yield* session.get(ctx.sessionID)
           const plan = path.relative(instance.worktree, Session.plan(info, instance))
+          // The question is an externally visible Event. Reject an exhausted
+          // Session presentation frontier before asking, then let the eventual
+          // Message transaction recheck and atomically claim the exact block.
+          yield* session.preflightPresentationBlock({ sessionID: ctx.sessionID, count: 1, floor: Date.now() })
           const answers = yield* question.ask({
             sessionID: ctx.sessionID,
             questions: [

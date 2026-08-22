@@ -12,6 +12,14 @@ import { EventV2Bridge } from "@/event-v2-bridge"
 import { EventV2 } from "@opencode-ai/core/event"
 import { EventSequenceTable } from "@opencode-ai/core/event/sql"
 import { TurnLifecycle } from "@opencode-ai/core/turn/turn"
+import { SessionDeletion } from "@opencode-ai/core/session-deletion"
+import { SessionDeletionPurgeReceiptTable } from "@opencode-ai/core/session-deletion/sql"
+import { SessionPresentation } from "@opencode-ai/core/session-presentation"
+import {
+  SessionAdministrativeHistoryEmbeddedPartTable,
+  SessionAdministrativeHistoryMessageTable,
+  SessionAdministrativeHistoryPartTable,
+} from "@opencode-ai/core/session-presentation/sql"
 import { TurnChildLineageTable, TurnInputTable, TurnTable } from "@opencode-ai/core/turn/sql"
 import { Turn } from "@opencode-ai/schema/turn"
 import { locationServiceMapLayer } from "@opencode-ai/core/location-services"
@@ -434,9 +442,19 @@ export interface Interface {
       turnID: Turn.ID
       session?: NewSessionInput
       fork?: ForkStartBasis
+      importCopy?: AdministrativeImportPlan
     },
-  ) => Effect.Effect<RootStartPlan, NotFound | BusyError | Turn.Error>
-  readonly prepareChildStart: (input: ChildStartInput) => Effect.Effect<TurnLifecycle.Admitted, NotFound | Turn.Error>
+  ) => Effect.Effect<RootStartPlan, NotFound | BusyError | Turn.Error | SessionDeletion.SessionIDRetiredError>
+  readonly prepareChildStart: (
+    input: ChildStartInput,
+  ) => Effect.Effect<
+    TurnLifecycle.Admitted,
+    | NotFound
+    | Turn.Error
+    | SessionDeletion.SessionIDRetiredError
+    | SessionPresentation.AdministrativeHistoryIntegrityError
+    | SessionPresentation.FrontierUnrepresentableError
+  >
   readonly touch: (sessionID: SessionID) => Effect.Effect<void, BusyError>
   readonly get: (id: SessionID) => Effect.Effect<Info, NotFound>
   readonly setTitle: (input: { sessionID: SessionID; title: string }) => Effect.Effect<void, BusyError>
@@ -474,14 +492,60 @@ export interface Interface {
     workspaceID: Info["workspaceID"]
   }) => Effect.Effect<void, BusyError>
   readonly diff: (sessionID: SessionID) => Effect.Effect<Snapshot.FileDiff[]>
-  readonly messages: (input: { sessionID: SessionID; limit?: number }) => Effect.Effect<SessionV1.WithParts[], NotFound>
+  readonly messages: (
+    input: { sessionID: SessionID; limit?: number },
+  ) => Effect.Effect<SessionV1.WithParts[], NotFound | SessionPresentation.AdministrativeHistoryIntegrityError>
   readonly children: (parentID: SessionID) => Effect.Effect<Info[]>
+  readonly proposeRemoval: (input: {
+    sessionID: SessionID
+    mode: SessionDeletion.Mode
+  }) => Effect.Effect<SessionDeletion.ProposalResult, NotFound | BusyError | Turn.SessionTreeBusyError>
+  readonly commitRemoval: (proposal: SessionDeletion.ProposalResult) => Effect.Effect<
+    SessionDeletion.CommitResult<void>,
+    | NotFound
+    | BusyError
+    | Turn.SessionTreeBusyError
+    | Turn.SessionTreeChangedError
+    | SessionDeletion.InvocationConflictError
+    | SessionDeletion.AuditProjectionError
+  >
+  readonly proposeAuditPurge: (
+    sessionID: SessionID,
+  ) => Effect.Effect<SessionDeletion.PurgeProposal, SessionDeletion.AuditNotAvailableError>
+  readonly purgeAudit: (
+    proposal: SessionDeletion.PurgeProposal,
+  ) => Effect.Effect<
+    SessionDeletion.PurgeResult,
+    SessionDeletion.InvocationConflictError | SessionDeletion.AuditNotAvailableError
+  >
   readonly remove: (sessionID: SessionID) => Effect.Effect<void, NotFound | BusyError | Turn.SessionTreeBusyError>
-  readonly updateMessage: <T extends SessionV1.Info>(msg: T) => Effect.Effect<T>
+  readonly preflightPresentationBlock: (input: {
+    sessionID: SessionID
+    count: number
+    floor?: number
+  }) => Effect.Effect<
+    void,
+    | BusyError
+    | SessionPresentation.AdministrativeHistoryIntegrityError
+    | SessionPresentation.FrontierUnrepresentableError
+  >
+  readonly updateMessage: <T extends SessionV1.Info>(
+    msg: T,
+  ) => Effect.Effect<
+    T,
+    | BusyError
+    | SessionPresentation.AdministrativeHistoryIntegrityError
+    | SessionPresentation.FrontierUnrepresentableError
+  >
   readonly finalizeMessage: (input: {
     info: SessionV1.Assistant
     parts: readonly SessionV1.Part[]
-  }) => Effect.Effect<SessionV1.WithParts>
+  }) => Effect.Effect<
+    SessionV1.WithParts,
+    | BusyError
+    | SessionPresentation.AdministrativeHistoryIntegrityError
+    | SessionPresentation.FrontierUnrepresentableError
+  >
   readonly updateMessageWithParts: (input: {
     info: SessionV1.Info
     parts: readonly SessionV1.Part[]
@@ -497,25 +561,48 @@ export interface Interface {
       sourceAssistantMessageID: MessageID
       sourcePartID: PartID
     }[]
-  }) => Effect.Effect<SessionV1.WithParts>
-  readonly removeMessage: (input: { sessionID: SessionID; messageID: MessageID }) => Effect.Effect<MessageID, BusyError>
+  }) => Effect.Effect<
+    SessionV1.WithParts,
+    | BusyError
+    | SessionPresentation.AdministrativeHistoryIntegrityError
+    | SessionPresentation.FrontierUnrepresentableError
+  >
+  readonly appendPresentationBlock: (
+    messages: readonly SessionV1.WithParts[],
+  ) => Effect.Effect<
+    readonly SessionV1.WithParts[],
+    | BusyError
+    | SessionPresentation.AdministrativeHistoryIntegrityError
+    | SessionPresentation.FrontierUnrepresentableError
+  >
+  readonly removeMessage: (input: { sessionID: SessionID; messageID: MessageID }) => Effect.Effect<
+    MessageID,
+    BusyError | SessionPresentation.AdministrativeHistoryIntegrityError
+  >
   readonly removePart: (input: {
     sessionID: SessionID
     messageID: MessageID
     partID: PartID
-  }) => Effect.Effect<PartID, BusyError>
+  }) => Effect.Effect<PartID, BusyError | SessionPresentation.AdministrativeHistoryIntegrityError>
   readonly removeTranscript: (input: {
     sessionID: SessionID
     messageIDs: readonly MessageID[]
     parts: readonly { messageID: MessageID; partID: PartID }[]
     clearRevert?: { timeUpdated: number }
-  }) => Effect.Effect<void, BusyError>
+  }) => Effect.Effect<void, BusyError | SessionPresentation.AdministrativeHistoryIntegrityError>
   readonly getPart: (input: {
     sessionID: SessionID
     messageID: MessageID
     partID: PartID
   }) => Effect.Effect<SessionV1.Part | undefined>
-  readonly updatePart: <T extends SessionV1.Part>(part: T) => Effect.Effect<T>
+  readonly updatePart: <T extends SessionV1.Part>(
+    part: T,
+  ) => Effect.Effect<
+    T,
+    | BusyError
+    | SessionPresentation.AdministrativeHistoryIntegrityError
+    | SessionPresentation.FrontierUnrepresentableError
+  >
   readonly updatePartDelta: (input: {
     sessionID: SessionID
     messageID: MessageID
@@ -527,7 +614,7 @@ export interface Interface {
   readonly findMessage: (
     sessionID: SessionID,
     predicate: (msg: SessionV1.WithParts) => boolean,
-  ) => Effect.Effect<Option.Option<SessionV1.WithParts>, NotFound>
+  ) => Effect.Effect<Option.Option<SessionV1.WithParts>, NotFound | SessionPresentation.AdministrativeHistoryIntegrityError>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/Session") {}
@@ -553,6 +640,13 @@ export type ForkStartBasis = {
 export type RootStartPlan = {
   readonly session: Info
   readonly events: readonly EventV2.PreparedEvent<EventV2.Definition>[]
+}
+
+export type AdministrativeImportPlan = {
+  readonly sourceFileFingerprint: string
+  readonly historyFrontierTime: number
+  readonly sourceMessageTimes: readonly number[]
+  readonly messages: readonly SessionV1.WithParts[]
 }
 
 export type ChildStartInput = {
@@ -611,6 +705,8 @@ const layer: Layer.Layer<
     const database = yield* Database.Service
     const events = yield* EventV2Bridge.Service
     const runState = yield* SessionRunState.Service
+    const deletionProposals = new Map<SessionDeletion.RequestID, SessionDeletion.Proposal>()
+    const auditPurgeProposals = new Map<SessionDeletion.PurgeRequestID, SessionDeletion.PurgeProposal>()
     const flags = yield* RuntimeFlags.Service
     const patchLocks = KeyedMutex.makeUnsafe<SessionID>()
 
@@ -732,20 +828,115 @@ const layer: Layer.Layer<
       )
     })
 
-    const remove: Interface["remove"] = Effect.fn("Session.remove")(function* (sessionID) {
-      const tree = yield* removalTree(sessionID)
+    const proposeRemoval: Interface["proposeRemoval"] = Effect.fn("Session.proposeRemoval")(function* (input) {
+      const proposal = yield* db
+        .transaction((tx) =>
+          Effect.gen(function* () {
+            const status = yield* SessionDeletion.readStatus(tx, input.sessionID)
+            if (status.type === "deleted") return SessionDeletion.existingDeletionResult(status, input.mode)
+            if (status.type === "missing") return
+            return yield* SessionDeletion.prepareProposal(tx, {
+              requestID: SessionDeletion.createRequestID(),
+              rootSessionID: input.sessionID,
+              mode: input.mode,
+            })
+          }),
+        )
+        .pipe(Effect.catchTag("SqlError", (error) => Effect.die(error)))
+      if (!proposal) {
+        yield* get(input.sessionID)
+        return yield* Effect.die(`Session ${input.sessionID} became unavailable without a deletion receipt`)
+      }
+      if ("type" in proposal) return proposal
+      const sessionIDs = proposal.targets.map((target) => SessionID.make(target.sessionID))
+      const activeTurnIDs = yield* runState.activeTurnIDs(sessionIDs)
+      if (activeTurnIDs.length > 0) {
+        return yield* new Turn.SessionTreeBusyError({ sessionID: input.sessionID, activeTurnIDs })
+      }
+      yield* Effect.forEach(sessionIDs, runState.assertNotBusy, { discard: true }).pipe(
+        Effect.catchTag("SessionBusyError", (error) =>
+          Effect.gen(function* () {
+            const current = yield* runState.activeTurnIDs(sessionIDs)
+            if (current.length > 0) {
+              return yield* new Turn.SessionTreeBusyError({ sessionID: input.sessionID, activeTurnIDs: current })
+            }
+            return yield* error
+          }),
+        ),
+      )
+      yield* Effect.sync(() => deletionProposals.set(proposal.requestID, proposal))
+      return proposal
+    })
+
+    const commitRemoval: Interface["commitRemoval"] = Effect.fn("Session.commitRemoval")(function* (proposal) {
+      if ("type" in proposal) return proposal as SessionDeletion.CommitResult<void>
+      const permissionDecisionFingerprint = SessionDeletion.permissionDecisionFingerprint(proposal)
+      const deletionTime = Date.now()
+      const status = yield* db
+        .transaction((tx) => SessionDeletion.readStatus(tx, proposal.rootSessionID))
+        .pipe(Effect.catchTag("SqlError", (error) => Effect.die(error)))
+      if (status.type === "deleted") {
+        return yield* db
+          .transaction((tx) =>
+            SessionDeletion.commit(
+              tx,
+              { proposal, permissionDecisionFingerprint, deletionTime },
+              () => Effect.die("A deleted Session replay attempted body deletion"),
+            ),
+          )
+          .pipe(Effect.catchTag("SqlError", (error) => Effect.die(error)))
+      }
+
+      const currentProposal = yield* Effect.sync(() => {
+        const current = deletionProposals.get(proposal.requestID)
+        deletionProposals.delete(proposal.requestID)
+        return current
+      })
+      if (!currentProposal || currentProposal.requestFingerprint !== proposal.requestFingerprint) {
+        return yield* new SessionDeletion.InvocationConflictError({ requestID: proposal.requestID })
+      }
+
+      const tree = yield* removalTree(SessionID.make(proposal.rootSessionID))
+      const currentTargets = tree.map((entry) => ({
+        sessionID: entry.info.id,
+        parentSessionID: entry.info.parentID ?? null,
+      }))
+      if (
+        currentTargets.length !== proposal.targets.length ||
+        SessionDeletion.targetFingerprint(proposal.rootSessionID, currentTargets) !== proposal.subtreeFingerprint
+      ) {
+        return yield* new Turn.SessionTreeChangedError({ sessionID: proposal.rootSessionID })
+      }
       const sessionIDs = tree.map((entry) => entry.info.id)
+      const activeTurnIDs = yield* runState.activeTurnIDs(sessionIDs)
+      if (activeTurnIDs.length > 0) {
+        return yield* new Turn.SessionTreeBusyError({
+          sessionID: SessionID.make(proposal.rootSessionID),
+          activeTurnIDs,
+        })
+      }
       const deletion = Effect.forEach(sessionIDs, runState.assertNotBusy, { discard: true }).pipe(
         Effect.andThen(
           runState.closeMany(sessionIDs, (markCommitted) =>
             events.removeMany(
               sessionIDs,
               (tx) =>
-                TurnLifecycle.deleteSessionTree(tx, {
-                  rootSessionID: sessionID,
-                  sessionIDs,
-                  timeDeleted: Date.now(),
-                }),
+                SessionDeletion.commit(
+                  tx,
+                  { proposal, permissionDecisionFingerprint, deletionTime },
+                  () =>
+                    TurnLifecycle.deleteSessionTree(tx, {
+                      rootSessionID: SessionID.make(proposal.rootSessionID),
+                      sessionIDs,
+                      timeDeleted: deletionTime,
+                    }).pipe(Effect.asVoid),
+                ).pipe(
+                  Effect.flatMap((result) =>
+                    result.type === "applied"
+                      ? Effect.succeed(result)
+                      : Effect.die("Concurrent Session deletion bypassed the process-local deletion guard"),
+                  ),
+                ),
               tree.map((entry) => ({
                 definition: SessionV1.Event.Deleted,
                 data: { sessionID: entry.info.id, info: entry.info },
@@ -758,30 +949,113 @@ const layer: Layer.Layer<
           ),
         ),
       )
-      yield* deletion.pipe(
+      const result = yield* deletion.pipe(
         Effect.catchTag("SessionBusyError", (error) =>
-          db
-            .transaction((tx) =>
-              Effect.gen(function* () {
-                const activeTurnIDs = yield* TurnLifecycle.activeIDs(tx, sessionIDs)
-                if (activeTurnIDs.length > 0) {
-                  return yield* new Turn.SessionTreeBusyError({ sessionID, activeTurnIDs })
-                }
-                return yield* error
-              }),
-            )
-            .pipe(Effect.catchTag("SqlError", (cause) => Effect.die(cause))),
+          Effect.gen(function* () {
+            const current = yield* runState.activeTurnIDs(sessionIDs)
+            if (current.length > 0) {
+              return yield* new Turn.SessionTreeBusyError({
+                sessionID: SessionID.make(proposal.rootSessionID),
+                activeTurnIDs: current,
+              })
+            }
+            return yield* error
+          }),
         ),
-        Effect.catchTag("SessionTreeChangedError", () => Effect.fail(new BusyError({ sessionID }))),
         Effect.catchTag("TurnIntegrityError", (error) => Effect.die(error)),
       )
+      yield* Effect.sync(() => {
+        for (const [requestID, pending] of deletionProposals) {
+          if (pending.rootSessionID === proposal.rootSessionID) deletionProposals.delete(requestID)
+        }
+      })
+      return result
     })
+
+    const remove: Interface["remove"] = Effect.fn("Session.remove")(function* (sessionID) {
+      const proposal = yield* proposeRemoval({ sessionID, mode: "full" })
+      if ("type" in proposal) return
+      yield* commitRemoval(proposal).pipe(
+        Effect.catchTag("SessionTreeChangedError", () => Effect.fail(new BusyError({ sessionID }))),
+        Effect.catchTag("SessionDeletion.InvocationConflictError", (error) => Effect.die(error)),
+        Effect.catchTag("SessionDeletion.AuditProjectionError", (error) => Effect.die(error)),
+      )
+    })
+
+    const proposeAuditPurge: Interface["proposeAuditPurge"] = Effect.fn("Session.proposeAuditPurge")(function* (
+      sessionID,
+    ) {
+      const proposal = yield* db
+        .transaction((tx) =>
+          SessionDeletion.preparePurgeProposal(tx, {
+            requestID: SessionDeletion.createPurgeRequestID(),
+            rootSessionID: sessionID,
+          }),
+        )
+        .pipe(Effect.catchTag("SqlError", Effect.die))
+      yield* Effect.sync(() => auditPurgeProposals.set(proposal.requestID, proposal))
+      return proposal
+    })
+
+    const purgeAudit: Interface["purgeAudit"] = Effect.fn("Session.purgeAudit")(function* (proposal) {
+      const replay = yield* db
+        .select({ requestID: SessionDeletionPurgeReceiptTable.request_id })
+        .from(SessionDeletionPurgeReceiptTable)
+        .where(eq(SessionDeletionPurgeReceiptTable.request_id, proposal.requestID))
+        .get()
+        .pipe(Effect.orDie)
+      if (!replay) {
+        const current = yield* Effect.sync(() => {
+          const value = auditPurgeProposals.get(proposal.requestID)
+          auditPurgeProposals.delete(proposal.requestID)
+          return value
+        })
+        if (!current || current.requestFingerprint !== proposal.requestFingerprint) {
+          return yield* new SessionDeletion.InvocationConflictError({ requestID: proposal.requestID })
+        }
+      }
+      const result = yield* db
+        .transaction((tx) => SessionDeletion.purgeAudit(tx, { proposal, purgeTime: Date.now() }))
+        .pipe(Effect.catchTag("SqlError", Effect.die))
+      yield* Effect.sync(() => {
+        for (const [requestID, pending] of auditPurgeProposals) {
+          if (pending.deletionRequestID === proposal.deletionRequestID) auditPurgeProposals.delete(requestID)
+        }
+      })
+      return result
+    })
+
+    const preflightPresentationBlock: Interface["preflightPresentationBlock"] = (input) =>
+      runState.shared(
+        input.sessionID,
+        db
+          .transaction((tx) => SessionPresentation.reserveMessageBlock(tx, input).pipe(Effect.asVoid))
+          .pipe(Effect.catchTag("SqlError", Effect.die)),
+      )
 
     function prepareMessageUpdate<T extends SessionV1.Info>(tx: EventV2.Transaction, msg: T) {
       return Effect.gen(function* () {
         const row = yield* tx.select().from(MessageTable).where(eq(MessageTable.id, msg.id)).get().pipe(Effect.orDie)
         if (row && row.session_id !== msg.sessionID) {
           return yield* Effect.die(new InvalidCausalSourceError({ reason: "wrong_session" }))
+        }
+        if (row && row.time_created !== msg.time.created) {
+          return yield* Effect.die(new InvalidCausalSourceError({ reason: "changed_presentation" }))
+        }
+        const administrative = yield* tx
+          .select({ messageID: SessionAdministrativeHistoryMessageTable.message_id })
+          .from(SessionAdministrativeHistoryMessageTable)
+          .where(eq(SessionAdministrativeHistoryMessageTable.message_id, msg.id))
+          .get()
+          .pipe(Effect.orDie)
+        if (administrative) {
+          if (row && exactStored(row, msg)) return
+          return yield* Effect.die(
+            new SessionPresentation.AdministrativeHistoryIntegrityError({
+              sessionID: msg.sessionID,
+              reason: "historical_message_mutation",
+            }),
+          )
         }
         const presentation = yield* tx
           .select({ messageID: LearnerOccurrencePresentationTable.message_id })
@@ -814,9 +1088,9 @@ const layer: Layer.Layer<
       })
     }
 
-    const updateMessageUnlocked = <T extends SessionV1.Info>(msg: T): Effect.Effect<T> =>
+    const updateMessageUnlocked = <T extends SessionV1.Info>(msg: T) =>
       events
-        .transaction<T, EventV2.Definition>((tx) =>
+        .transactionPresentation<T, EventV2.Definition>((tx) =>
           prepareMessageUpdate(tx, msg).pipe(Effect.map((event) => (event ? { result: msg, event } : { result: msg }))),
         )
         .pipe(
@@ -824,8 +1098,7 @@ const layer: Layer.Layer<
           Effect.withSpan("Session.updateMessage"),
         )
 
-    const updateMessage: Interface["updateMessage"] = (msg) =>
-      runState.shared(msg.sessionID, updateMessageUnlocked(msg)).pipe(Effect.orDie)
+    const updateMessage: Interface["updateMessage"] = (msg) => runState.shared(msg.sessionID, updateMessageUnlocked(msg))
 
     function preparePartUpdate<T extends SessionV1.Part>(tx: EventV2.Transaction, part: T, time: number) {
       return Effect.gen(function* () {
@@ -834,6 +1107,49 @@ const layer: Layer.Layer<
           return yield* Effect.die(new SettledPartImmutableError({ partID: part.id }))
         }
         const exact = row ? exactStored(row, part) : false
+        const [administrativeParent, administrativePart, administrativeEmbeddedPart] = yield* Effect.all([
+          tx
+            .select({ messageID: SessionAdministrativeHistoryMessageTable.message_id })
+            .from(SessionAdministrativeHistoryMessageTable)
+            .where(
+              and(
+                eq(SessionAdministrativeHistoryMessageTable.session_id, part.sessionID),
+                eq(SessionAdministrativeHistoryMessageTable.message_id, part.messageID),
+              ),
+            )
+            .get()
+            .pipe(Effect.orDie),
+          tx
+            .select({ partID: SessionAdministrativeHistoryPartTable.part_id })
+            .from(SessionAdministrativeHistoryPartTable)
+            .where(eq(SessionAdministrativeHistoryPartTable.part_id, part.id))
+            .get()
+            .pipe(Effect.orDie),
+          tx
+            .select({ partID: SessionAdministrativeHistoryEmbeddedPartTable.part_id })
+            .from(SessionAdministrativeHistoryEmbeddedPartTable)
+            .where(eq(SessionAdministrativeHistoryEmbeddedPartTable.part_id, part.id))
+            .get()
+            .pipe(Effect.orDie),
+        ])
+        if (administrativeParent) {
+          if (administrativePart && !administrativeEmbeddedPart && exact) return
+          return yield* Effect.die(
+            new SessionPresentation.AdministrativeHistoryIntegrityError({
+              sessionID: part.sessionID,
+              reason: row ? "historical_part_mutation" : "historical_message_part_insertion",
+            }),
+          )
+        }
+        if (administrativePart || administrativeEmbeddedPart) {
+          if (administrativePart && !administrativeEmbeddedPart && exact) return
+          return yield* Effect.die(
+            new SessionPresentation.AdministrativeHistoryIntegrityError({
+              sessionID: part.sessionID,
+              reason: "historical_part_mutation",
+            }),
+          )
+        }
         const invocation = yield* lookupPhysicalInvocationByPart(tx, part.id)
         if (invocation) {
           if (exact) return
@@ -880,9 +1196,9 @@ const layer: Layer.Layer<
       })
     }
 
-    const updatePartUnlocked = <T extends SessionV1.Part>(part: T): Effect.Effect<T> =>
+    const updatePartUnlocked = <T extends SessionV1.Part>(part: T) =>
       events
-        .transaction<T, EventV2.Definition>((tx) =>
+        .transactionPresentation<T, EventV2.Definition>((tx) =>
           preparePartUpdate(tx, part, Date.now()).pipe(
             Effect.map((event) => (event ? { result: part, event } : { result: part })),
           ),
@@ -892,8 +1208,7 @@ const layer: Layer.Layer<
           Effect.withSpan("Session.updatePart"),
         )
 
-    const updatePart: Interface["updatePart"] = (part) =>
-      runState.shared(part.sessionID, updatePartUnlocked(part)).pipe(Effect.orDie)
+    const updatePart: Interface["updatePart"] = (part) => runState.shared(part.sessionID, updatePartUnlocked(part))
 
     const finalizeMessageUnlocked = Effect.fn("Session.finalizeMessageUnlocked")(function* (
       input: Parameters<Interface["finalizeMessage"]>[0],
@@ -906,7 +1221,7 @@ const layer: Layer.Layer<
       }
       const result = { info: input.info, parts: [...input.parts] } satisfies SessionV1.WithParts
       return yield* events
-        .transaction<SessionV1.WithParts, EventV2.Definition>((tx) =>
+        .transactionPresentation<SessionV1.WithParts, EventV2.Definition>((tx) =>
           Effect.gen(function* () {
             const time = Date.now()
             const partEvents = (yield* Effect.forEach(input.parts, (part) => preparePartUpdate(tx, part, time))).filter(
@@ -928,7 +1243,7 @@ const layer: Layer.Layer<
     })
 
     const finalizeMessage: Interface["finalizeMessage"] = (input) =>
-      runState.shared(input.info.sessionID, finalizeMessageUnlocked(input)).pipe(Effect.orDie)
+      runState.shared(input.info.sessionID, finalizeMessageUnlocked(input))
 
     const updateMessageWithPartsUnlocked = Effect.fn("Session.updateMessageWithPartsUnlocked")(function* (
       input: Parameters<Interface["updateMessageWithParts"]>[0],
@@ -940,8 +1255,27 @@ const layer: Layer.Layer<
         return yield* Effect.die(new InvalidCausalSourceError({ reason: "wrong_session" }))
       }
       const time = Date.now()
-      const committed = yield* events.transaction<SessionV1.WithParts, EventV2.Definition>((tx) =>
+      const committed = yield* events.transactionPresentation<SessionV1.WithParts, EventV2.Definition>((tx) =>
         Effect.gen(function* () {
+          const administrative = yield* tx
+            .select({ messageID: SessionAdministrativeHistoryMessageTable.message_id })
+            .from(SessionAdministrativeHistoryMessageTable)
+            .where(
+              and(
+                eq(SessionAdministrativeHistoryMessageTable.session_id, input.info.sessionID),
+                eq(SessionAdministrativeHistoryMessageTable.message_id, input.info.id),
+              ),
+            )
+            .get()
+            .pipe(Effect.orDie)
+          if (administrative) {
+            return yield* Effect.die(
+              new SessionPresentation.AdministrativeHistoryIntegrityError({
+                sessionID: input.info.sessionID,
+                reason: "historical_message_mutation",
+              }),
+            )
+          }
           const storedMessage = yield* tx
             .select()
             .from(MessageTable)
@@ -954,6 +1288,22 @@ const layer: Layer.Layer<
           const storedParts = yield* Effect.forEach(input.parts, (part) =>
             tx.select().from(PartTable).where(eq(PartTable.id, part.id)).get().pipe(Effect.orDie),
           )
+          const administrativeEmbeddedParts = yield* Effect.forEach(input.parts, (part) =>
+            tx
+              .select({ partID: SessionAdministrativeHistoryEmbeddedPartTable.part_id })
+              .from(SessionAdministrativeHistoryEmbeddedPartTable)
+              .where(eq(SessionAdministrativeHistoryEmbeddedPartTable.part_id, part.id))
+              .get()
+              .pipe(Effect.orDie),
+          )
+          if (administrativeEmbeddedParts.some(Boolean)) {
+            return yield* Effect.die(
+              new SessionPresentation.AdministrativeHistoryIntegrityError({
+                sessionID: input.info.sessionID,
+                reason: "historical_part_mutation",
+              }),
+            )
+          }
           const invocations = yield* Effect.forEach(input.parts, (part) => lookupPhysicalInvocationByPart(tx, part.id))
           if (invocations.some((invocation, index) => invocation && !storedParts[index])) {
             return yield* Effect.die(new SettledPartImmutableError({ partID: input.parts[0]?.id ?? "unknown" }))
@@ -1051,7 +1401,58 @@ const layer: Layer.Layer<
     })
 
     const updateMessageWithParts: Interface["updateMessageWithParts"] = (input) =>
-      runState.shared(input.info.sessionID, updateMessageWithPartsUnlocked(input)).pipe(Effect.orDie)
+      runState.shared(input.info.sessionID, updateMessageWithPartsUnlocked(input))
+
+    const appendPresentationBlockUnlocked = Effect.fn("Session.appendPresentationBlockUnlocked")(function* (
+      input: readonly SessionV1.WithParts[],
+    ) {
+      const sessionID = input[0]?.info.sessionID
+      const messageIDs = input.map((message) => message.info.id)
+      const partIDs = input.flatMap((message) => message.parts.map((part) => part.id))
+      if (
+        !sessionID ||
+        new Set(messageIDs).size !== messageIDs.length ||
+        new Set(partIDs).size !== partIDs.length ||
+        input.some(
+          (message) =>
+            message.info.sessionID !== sessionID ||
+            message.parts.some(
+              (part) => part.sessionID !== sessionID || part.messageID !== message.info.id,
+            ),
+        )
+      ) {
+        return yield* Effect.die(new InvalidCausalSourceError({ reason: "wrong_session" }))
+      }
+
+      const committed = yield* events.transactionPresentation<readonly SessionV1.WithParts[], EventV2.Definition>(
+        (tx) =>
+          Effect.gen(function* () {
+            const time = Date.now()
+            const prepared = yield* Effect.forEach(input, (message) =>
+              Effect.gen(function* () {
+                const messageEvent = yield* prepareMessageUpdate(tx, message.info)
+                const partEvents = yield* Effect.forEach(message.parts, (part) => preparePartUpdate(tx, part, time))
+                return [messageEvent, ...partEvents]
+              }),
+            )
+            const pending = prepared.flat()
+            if (pending.some((event) => event === undefined)) {
+              return yield* Effect.die(new InvalidCausalSourceError({ reason: "changed_presentation" }))
+            }
+            return {
+              result: input,
+              events: pending as readonly EventV2.PreparedEvent<EventV2.Definition>[],
+            }
+          }),
+      )
+      return committed.result
+    })
+
+    const appendPresentationBlock: Interface["appendPresentationBlock"] = (input) => {
+      const sessionID = input[0]?.info.sessionID
+      if (!sessionID) return Effect.die(new InvalidCausalSourceError({ reason: "wrong_session" }))
+      return runState.shared(sessionID, appendPresentationBlockUnlocked(input))
+    }
 
     const getPart: Interface["getPart"] = Effect.fn("Session.getPart")(function* (input) {
       const row = yield* db
@@ -1083,12 +1484,29 @@ const layer: Layer.Layer<
           .where(eq(SessionTable.id, input.targetSessionID))
           .get()
           .pipe(Effect.orDie)
-        if (existing) return { session: fromRow(existing), events: [] }
+        if (existing) {
+          if (input.importCopy) return yield* new Turn.AdmissionConflictError({ turnID: input.turnID })
+          return { session: fromRow(existing), events: [] }
+        }
         if (!input.session && !input.fork) {
           return yield* new NotFoundError({ message: `Session not found: ${input.targetSessionID}` })
         }
-        if (input.fork && input.session?.parentID) {
+        yield* SessionDeletion.assertSessionIDAvailable(tx, input.targetSessionID)
+        if ((input.fork && input.session?.parentID) || (input.fork && input.importCopy)) {
           return yield* new Turn.AdmissionConflictError({ turnID: input.turnID })
+        }
+
+        if (input.session?.parentID) {
+          const parent = yield* tx
+            .select({ id: SessionTable.id })
+            .from(SessionTable)
+            .where(eq(SessionTable.id, input.session.parentID))
+            .get()
+            .pipe(Effect.orDie)
+          if (!parent) {
+            yield* SessionDeletion.assertSessionIDAvailable(tx, input.session.parentID)
+            return yield* new NotFoundError({ message: `Session not found: ${input.session.parentID}` })
+          }
         }
 
         const ctx = yield* InstanceState.context
@@ -1101,7 +1519,11 @@ const layer: Layer.Layer<
               .get()
               .pipe(Effect.orDie)
           : undefined
-        if (input.fork && (!source || source.project_id !== ctx.project.id)) {
+        if (input.fork && !source) {
+          yield* SessionDeletion.assertSessionIDAvailable(tx, input.fork.sourceSessionID)
+          return yield* new NotFoundError({ message: `Session not found: ${input.fork.sourceSessionID}` })
+        }
+        if (input.fork && source?.project_id !== ctx.project.id) {
           return yield* new NotFoundError({ message: `Session not found: ${input.fork.sourceSessionID}` })
         }
         if (input.fork && source) {
@@ -1132,12 +1554,116 @@ const layer: Layer.Layer<
             input.session?.metadata ?? (sourceInfo?.metadata ? structuredClone(sourceInfo.metadata) : undefined),
           permission: input.session?.permission,
         })
+        const administrativeSeal = () => {
+          const importCopy = input.importCopy
+          if (!importCopy) throw new Error("Administrative-history seal requested without import-copy input")
+          return SessionPresentation.createAdministrativeHistorySeal({
+            kind: "local_import_copy",
+            sourceFileFingerprint: importCopy.sourceFileFingerprint,
+            historyFrontierTime: importCopy.historyFrontierTime,
+            messages: importCopy.messages.map((message, ordinal) => ({
+              messageID: message.info.id,
+              ordinal,
+              timeCreated: message.info.time.created,
+              sourceTimeCreated: importCopy.sourceMessageTimes[ordinal],
+              parts: message.parts.map((part, partOrdinal) => ({
+                partID: part.id,
+                ordinal: partOrdinal,
+                embeddedParts:
+                  part.type === "tool" && part.state.status === "completed"
+                    ? (part.state.attachments ?? []).map((attachment, embeddedOrdinal) => ({
+                        partID: attachment.id,
+                        ordinal: embeddedOrdinal,
+                      }))
+                    : [],
+              })),
+            })),
+          })
+        }
         const prepared: EventV2.PreparedEvent<EventV2.Definition>[] = [
           {
             definition: SessionV1.Event.Created,
             data: { sessionID: session.id, info: session },
+            ...(input.importCopy
+              ? {
+                  options: {
+                    commit: () =>
+                      SessionPresentation.beginAdministrativeHistory(tx, session.id, administrativeSeal()).pipe(
+                        Effect.orDie,
+                      ),
+                  },
+                }
+              : {}),
           },
         ]
+        if (input.importCopy) {
+          if (
+            input.importCopy.messages.length === 0 ||
+            input.importCopy.sourceMessageTimes.length !== input.importCopy.messages.length ||
+            input.importCopy.messages.some(
+              (message) =>
+                message.info.sessionID !== session.id ||
+                message.parts.some(
+                  (part) => part.sessionID !== session.id || part.messageID !== message.info.id,
+                ),
+            )
+          ) {
+            return yield* new Turn.IntegrityError({
+              turnID: input.turnID,
+              reason: "Import-copy administrative history does not belong to the fresh target Session",
+            })
+          }
+          const messageIDs = input.importCopy.messages.map((message) => message.info.id)
+          const partIDs = input.importCopy.messages.flatMap((message) => message.parts.map((part) => part.id))
+          if (
+            partIDs.length === 0 ||
+            new Set(messageIDs).size !== messageIDs.length ||
+            new Set(partIDs).size !== partIDs.length
+          ) {
+            return yield* new Turn.AdmissionConflictError({ turnID: input.turnID })
+          }
+          const [messageCollision, partCollision] = yield* Effect.all([
+            tx
+              .select({ id: MessageTable.id })
+              .from(MessageTable)
+              .where(inArray(MessageTable.id, messageIDs))
+              .get()
+              .pipe(Effect.orDie),
+            tx
+              .select({ id: PartTable.id })
+              .from(PartTable)
+              .where(inArray(PartTable.id, partIDs))
+              .get()
+              .pipe(Effect.orDie),
+          ])
+          if (messageCollision || partCollision) return yield* new Turn.AdmissionConflictError({ turnID: input.turnID })
+
+          input.importCopy.messages.forEach((message) => {
+            prepared.push({
+              definition: SessionV1.Event.MessageUpdated,
+              data: { sessionID: session.id, info: message.info },
+            })
+            message.parts.forEach((part) => {
+              prepared.push({
+                definition: SessionV1.Event.PartUpdated,
+                data: { sessionID: session.id, part, time: message.info.time.created },
+              })
+            })
+          })
+          const tail = prepared.at(-1)
+          if (!tail) throw new Error("Import-copy event plan has no administrative-history tail")
+          prepared[prepared.length - 1] = {
+            ...tail,
+            options: {
+              ...tail.options,
+              commit: () =>
+                SessionPresentation.sealAdministrativeHistory(tx, session.id, administrativeSeal()).pipe(
+                  Effect.orDie,
+                ),
+            },
+          }
+          return { session, events: prepared }
+        }
         if (!input.fork || !sourceInfo) return { session, events: prepared }
 
         const messageRows = yield* tx
@@ -1358,7 +1884,7 @@ const layer: Layer.Layer<
       }
 
       let admitted: TurnLifecycle.Admitted | undefined
-      yield* events.transaction((tx) =>
+      yield* events.transactionPresentation((tx) =>
         Effect.gen(function* () {
           const stored = yield* TurnLifecycle.lookup(tx, input.childTurnID)
           if (stored.type === "source_unavailable") {
@@ -1423,6 +1949,7 @@ const layer: Layer.Layer<
               })
             }
           }
+          if (!existing) yield* SessionDeletion.assertSessionIDAvailable(tx, input.childSessionID)
 
           const reusedPresentation = yield* tx
             .select({ id: MessageTable.id })
@@ -1729,7 +2256,11 @@ const layer: Layer.Layer<
         : undefined
       const messageIDs = input.messageIDs
       const parts = input.parts
-      yield* events.transaction<void, EventV2.Definition, BusyError>((tx) =>
+      yield* events.transaction<
+        void,
+        EventV2.Definition,
+        BusyError | SessionPresentation.AdministrativeHistoryIntegrityError
+      >((tx) =>
         Effect.gen(function* () {
           const messages = yield* Effect.forEach(messageIDs, (messageID) =>
             tx.select().from(MessageTable).where(eq(MessageTable.id, messageID)).get().pipe(Effect.orDie),
@@ -1748,6 +2279,55 @@ const layer: Layer.Layer<
             )
           ) {
             return yield* Effect.die(new SettledPartImmutableError({ partID: parts[0]?.partID ?? "unknown" }))
+          }
+
+          const [administrativeMessages, administrativeParts, administrativeEmbeddedParts] = yield* Effect.all([
+            selectedMessages.length === 0
+              ? Effect.succeed([])
+              : tx
+                  .select({ messageID: SessionAdministrativeHistoryMessageTable.message_id })
+                  .from(SessionAdministrativeHistoryMessageTable)
+                  .where(inArray(SessionAdministrativeHistoryMessageTable.message_id, selectedMessages.map((row) => row.id)))
+                  .all()
+                  .pipe(Effect.orDie),
+            selectedParts.length === 0
+              ? Effect.succeed([])
+              : tx
+                  .select({ partID: SessionAdministrativeHistoryPartTable.part_id })
+                  .from(SessionAdministrativeHistoryPartTable)
+                  .where(
+                    inArray(
+                      SessionAdministrativeHistoryPartTable.part_id,
+                      selectedParts.flatMap((row) => (row ? [row.id] : [])),
+                    ),
+                  )
+                  .all()
+                  .pipe(Effect.orDie),
+            selectedParts.length === 0
+              ? Effect.succeed([])
+              : tx
+                  .select({ partID: SessionAdministrativeHistoryEmbeddedPartTable.part_id })
+                  .from(SessionAdministrativeHistoryEmbeddedPartTable)
+                  .where(
+                    inArray(
+                      SessionAdministrativeHistoryEmbeddedPartTable.part_id,
+                      selectedParts.flatMap((row) => (row ? [row.id] : [])),
+                    ),
+                  )
+                  .all()
+                  .pipe(Effect.orDie),
+          ])
+          if (
+            administrativeMessages.length > 0 ||
+            administrativeParts.length > 0 ||
+            administrativeEmbeddedParts.length > 0
+          ) {
+            return yield* Effect.fail(
+              new SessionPresentation.AdministrativeHistoryIntegrityError({
+                sessionID: input.sessionID,
+                reason: "historical_presentation_removal",
+              }),
+            )
           }
 
           yield* Effect.forEach(
@@ -1890,6 +2470,12 @@ const layer: Layer.Layer<
               .where(eq(SessionHistoricalPartPresentationTable.part_id, input.partID))
               .get()
               .pipe(Effect.orDie, Effect.map(Boolean)),
+            tx
+              .select({ partID: SessionAdministrativeHistoryPartTable.part_id })
+              .from(SessionAdministrativeHistoryPartTable)
+              .where(eq(SessionAdministrativeHistoryPartTable.part_id, input.partID))
+              .get()
+              .pipe(Effect.orDie, Effect.map(Boolean)),
           ])
           if (protectedPart.some(Boolean)) {
             return yield* Effect.die(new SettledPartImmutableError({ partID: input.partID }))
@@ -1941,7 +2527,12 @@ const layer: Layer.Layer<
       diff,
       messages,
       children,
+      proposeRemoval,
+      commitRemoval,
+      proposeAuditPurge,
+      purgeAudit,
       remove,
+      preflightPresentationBlock,
       updateMessage,
       finalizeMessage,
       removeMessage,
@@ -1949,6 +2540,7 @@ const layer: Layer.Layer<
       removeTranscript,
       updatePart,
       updateMessageWithParts,
+      appendPresentationBlock,
       getPart,
       updatePartDelta,
       findMessage,

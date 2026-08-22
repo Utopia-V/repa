@@ -66,6 +66,8 @@ import { ProviderV2 } from "@opencode-ai/core/provider"
 import { and, desc, eq, inArray, or } from "drizzle-orm"
 import { MessageTable, PartTable, SessionTable } from "@opencode-ai/core/session/sql"
 import { TurnLifecycle } from "@opencode-ai/core/turn/turn"
+import { SessionDeletion } from "@opencode-ai/core/session-deletion"
+import { SessionPresentation } from "@opencode-ai/core/session-presentation"
 import { TurnInputTable, TurnModelOperationTable } from "@opencode-ai/core/turn/sql"
 import { Turn } from "@opencode-ai/schema/turn"
 import { SessionReminders } from "./reminders"
@@ -168,10 +170,42 @@ export function turnAuthority(
 export interface Interface {
   readonly start: (
     input: StartInput,
-  ) => Effect.Effect<Turn.Info, Image.Error | Session.NotFound | Session.BusyError | Turn.Error | OccurrenceError>
+  ) => Effect.Effect<
+    Turn.Info,
+    | Image.Error
+    | Session.NotFound
+    | Session.BusyError
+    | Turn.Error
+    | OccurrenceError
+    | SessionDeletion.SessionIDRetiredError
+    | SessionPresentation.AdministrativeHistoryIntegrityError
+    | SessionPresentation.FrontierUnrepresentableError
+  >
+  readonly startImportCopy: (
+    input: ImportCopyStartInput,
+  ) => Effect.Effect<
+    Turn.Info,
+    | Image.Error
+    | Session.NotFound
+    | Session.BusyError
+    | Turn.Error
+    | OccurrenceError
+    | SessionDeletion.SessionIDRetiredError
+    | SessionPresentation.AdministrativeHistoryIntegrityError
+    | SessionPresentation.FrontierUnrepresentableError
+  >
   readonly steer: (
     input: SteerInput,
-  ) => Effect.Effect<Turn.Input, Image.Error | Session.NotFound | Session.BusyError | Turn.Error | OccurrenceError>
+  ) => Effect.Effect<
+    Turn.Input,
+    | Image.Error
+    | Session.NotFound
+    | Session.BusyError
+    | Turn.Error
+    | OccurrenceError
+    | SessionPresentation.AdministrativeHistoryIntegrityError
+    | SessionPresentation.FrontierUnrepresentableError
+  >
   readonly activeTurn: (sessionID: SessionID) => Effect.Effect<Turn.Info | undefined, Turn.Error>
   readonly listTurns: (sessionID: SessionID) => Effect.Effect<readonly Turn.Info[], Turn.Error>
   readonly getTurn: (sessionID: SessionID, turnID: Turn.ID) => Effect.Effect<Turn.Info, Turn.Error>
@@ -179,11 +213,29 @@ export interface Interface {
   readonly interruptTurn: (sessionID: SessionID, turnID: Turn.ID) => Effect.Effect<Turn.Info, Turn.Error>
   readonly startChild: (
     input: StartChildInput,
-  ) => Effect.Effect<Turn.Info, Image.Error | Session.NotFound | Session.BusyError | Turn.Error>
+  ) => Effect.Effect<
+    Turn.Info,
+    | Image.Error
+    | Session.NotFound
+    | Session.BusyError
+    | Turn.Error
+    | SessionDeletion.SessionIDRetiredError
+    | SessionPresentation.AdministrativeHistoryIntegrityError
+    | SessionPresentation.FrontierUnrepresentableError
+  >
   readonly awaitChild: (
     input: AwaitChildInput,
   ) => Effect.Effect<Turn.ChildResult, Session.NotFound | Session.BusyError | Turn.Error>
-  readonly shell: (input: ShellInput) => Effect.Effect<SessionV1.WithParts, Session.NotFound | Session.BusyError>
+  readonly shell: (
+    input: ShellInput,
+  ) => Effect.Effect<
+    SessionV1.WithParts,
+    | Session.NotFound
+    | Session.BusyError
+    | SessionPresentation.AdministrativeHistoryIntegrityError
+    | SessionPresentation.HistoricalPresentationNotRevertibleError
+    | SessionPresentation.FrontierUnrepresentableError
+  >
   readonly resolvePromptParts: (template: string) => Effect.Effect<PromptInput["parts"]>
 }
 
@@ -386,7 +438,6 @@ const layer = Layer.effect(
               agent: input.agent,
               model: { providerID: model.providerID, modelID: model.modelID },
             }
-            yield* sessions.updateMessage(userMsg)
             const userPart: SessionV1.Part = {
               type: "text",
               id: PartID.ascending(),
@@ -395,8 +446,6 @@ const layer = Layer.effect(
               text: "The following tool was executed by the user",
               synthetic: true,
             }
-            yield* sessions.updatePart(userPart)
-
             const msg: SessionV1.Assistant = {
               id: MessageID.ascending(),
               sessionID: input.sessionID,
@@ -411,8 +460,7 @@ const layer = Layer.effect(
               modelID: model.modelID,
               providerID: model.providerID,
             }
-            yield* sessions.updateMessage(msg)
-            const started = Date.now()
+            let started = Date.now()
             const part: SessionV1.ToolPart = {
               type: "tool",
               id: PartID.ascending(),
@@ -426,7 +474,13 @@ const layer = Layer.effect(
                 input: { command: input.command },
               },
             }
-            yield* sessions.updatePart(part)
+            yield* sessions.appendPresentationBlock([
+              { info: userMsg, parts: [userPart] },
+              { info: msg, parts: [part] },
+            ])
+            started = Math.max(started, msg.time.created)
+            if (part.state.status !== "running") return yield* Effect.die("Shell Tool Part changed state before execution")
+            part.state.time.start = started
             return { msg, part, cwd: ctx.directory }
           }).pipe(Effect.ensuring(markReady))
 
@@ -1023,6 +1077,20 @@ const layer = Layer.effect(
         ...("fork" in input && input.fork ? { fork: input.fork } : {}),
       })
 
+    const importCopyEnvelope = (input: ImportCopyStartInput, message: UserWithParts, limits: Turn.Limits) =>
+      normalizeTurnEnvelope({
+        ...learnerEnvelope(input, message, limits),
+        importCopy: input.importCopy.envelope,
+      })
+
+    const learnerAdmissionAtPresentation = (message: UserWithParts) =>
+      message.learnerAdmission.capturedTemporalContext?.instant === message.info.time.created
+        ? message.learnerAdmission
+        : LearnerAdmission.interactive({
+            timeZone: message.learnerAdmission.timeZone,
+            instant: message.info.time.created,
+          })
+
     const learnerEvents = (
       message: UserWithParts,
       commit: () => Effect.Effect<void>,
@@ -1082,13 +1150,13 @@ const layer = Layer.effect(
     })
 
     const admitRoot = Effect.fn("SessionPrompt.admitRoot")(function* (input: {
-      request: StartInput
+      request: StartInput | ImportCopyStartInput
       message: UserWithParts
       limits: Turn.Limits
       envelope: Record<string, unknown>
     }) {
       let admitted: TurnLifecycle.Admitted | undefined
-      yield* events.transaction((tx) =>
+      yield* events.transactionPresentation((tx) =>
         Effect.gen(function* () {
           const stored = yield* TurnLifecycle.lookup(tx, input.request.turnID)
           if (stored.type === "source_unavailable") {
@@ -1124,6 +1192,15 @@ const layer = Layer.effect(
             .pipe(Effect.orDie)
           if (reused) return yield* new Turn.AdmissionConflictError({ turnID: input.request.turnID })
           yield* preflightLearnerPresentation(tx, input.message, input.request.turnID)
+          if ("importCopy" in input.request && input.request.importCopy) {
+            if (!(yield* input.request.importCopy.verifySource)) {
+              return yield* new Turn.IntegrityError({
+                turnID: input.request.turnID,
+                reason: "import_copy_source_changed",
+              })
+            }
+            yield* input.request.importCopy.verifyTargetIdentities(tx, input.message)
+          }
 
           const rules = Object.entries(input.request.tools ?? {}).map(([permission, enabled]) => ({
             permission,
@@ -1148,6 +1225,9 @@ const layer = Layer.effect(
             turnID: input.request.turnID,
             ...(sessionInput ? { session: sessionInput } : {}),
             ...(input.request.fork ? { fork: input.request.fork } : {}),
+            ...("importCopy" in input.request && input.request.importCopy
+              ? { importCopy: input.request.importCopy.plan }
+              : {}),
           })
           const profile: Session.Info = {
             ...plan.session,
@@ -1173,7 +1253,7 @@ const layer = Layer.effect(
           const commit = () =>
             Effect.gen(function* () {
               const occurrence = yield* Occurrence.admit(tx, {
-                admission: input.message.learnerAdmission,
+                admission: learnerAdmissionAtPresentation(input.message),
                 sessionID: input.request.sessionID,
                 messageID: input.request.messageID,
                 timeAdmitted: input.message.info.time.created,
@@ -1205,13 +1285,32 @@ const layer = Layer.effect(
       return admitted
     })
 
+    const assertMaterializationTargetAvailable = (sessionID: SessionID) =>
+      db
+        .transaction((tx) => SessionDeletion.assertSessionIDAvailable(tx, sessionID))
+        .pipe(Effect.catchTag("SqlError", Effect.die))
+
+    const startMaterialization = <A, E, R>(
+      sessionID: SessionID,
+      effect: Effect.Effect<A, E | Session.BusyError, R>,
+    ) =>
+      assertMaterializationTargetAvailable(sessionID).pipe(
+        Effect.andThen(effect),
+        Effect.catchTag("SessionBusyError", (error) =>
+          state.awaitClosing(sessionID).pipe(
+            Effect.andThen(assertMaterializationTargetAvailable(sessionID)),
+            Effect.andThen(Effect.fail(error)),
+          ),
+        ),
+      )
+
     const promoteSteer = Effect.fn("SessionPrompt.promoteSteer")(function* (input: {
       request: SteerInput
       message: UserWithParts
       envelope: Record<string, unknown>
     }) {
       let promoted: Turn.Input | undefined
-      yield* events.transaction((tx) =>
+      yield* events.transactionPresentation((tx) =>
         Effect.gen(function* () {
           const existing = yield* tx
             .select({ id: TurnInputTable.id, messageID: TurnInputTable.message_id })
@@ -1245,7 +1344,7 @@ const layer = Layer.effect(
           const commit = () =>
             Effect.gen(function* () {
               const occurrence = yield* Occurrence.admit(tx, {
-                admission: input.message.learnerAdmission,
+                admission: learnerAdmissionAtPresentation(input.message),
                 sessionID: input.request.sessionID,
                 messageID: input.request.messageID,
                 timeAdmitted: input.message.info.time.created,
@@ -1275,14 +1374,34 @@ const layer = Layer.effect(
       const limits = yield* resolveStartLimits(input)
       const message = yield* prepareUserMessage(input, false)
       const envelope = learnerEnvelope(input, message, limits)
-      return yield* state.startTurn({
-        sessionID: input.sessionID,
-        turnID: input.turnID,
-        envelopeFingerprint: TurnLifecycle.envelopeFingerprint(envelope),
-        ...(input.fork ? { guardSessionIDs: [input.fork.sourceSessionID] } : {}),
-        admit: admitRoot({ request: input, message, limits, envelope }),
-        work: runTurnLoop(input.sessionID, input.turnID),
-      })
+      return yield* startMaterialization(
+        input.sessionID,
+        state.startTurn({
+          sessionID: input.sessionID,
+          turnID: input.turnID,
+          envelopeFingerprint: TurnLifecycle.envelopeFingerprint(envelope),
+          ...(input.fork ? { guardSessionIDs: [input.fork.sourceSessionID] } : {}),
+          admit: admitRoot({ request: input, message, limits, envelope }),
+          work: runTurnLoop(input.sessionID, input.turnID),
+        }),
+      )
+    })
+
+    const startImportCopy: Interface["startImportCopy"] = Effect.fn("SessionPrompt.startImportCopy")(function* (input) {
+      const limits = yield* resolveStartLimits(input)
+      const message = yield* prepareUserMessage(input, false)
+      message.info.time.created = input.importCopy.envelope.learnerPresentationTime
+      const envelope = importCopyEnvelope(input, message, limits)
+      return yield* startMaterialization(
+        input.sessionID,
+        state.startTurn({
+          sessionID: input.sessionID,
+          turnID: input.turnID,
+          envelopeFingerprint: TurnLifecycle.envelopeFingerprint(envelope),
+          admit: admitRoot({ request: input, message, limits, envelope }),
+          work: runTurnLoop(input.sessionID, input.turnID),
+        }),
+      )
     })
 
     const replaySteer = Effect.fn("SessionPrompt.replaySteer")(function* (input: {
@@ -1388,37 +1507,40 @@ const layer = Layer.effect(
         content: learnerContent(message),
         session: input.session,
       })
-      return yield* state.startTurn({
-        sessionID: input.childSessionID,
-        turnID: input.childTurnID,
-        envelopeFingerprint: TurnLifecycle.envelopeFingerprint(envelope),
-        admit: sessions.prepareChildStart({
-          childSessionID: input.childSessionID,
-          childTurnID: input.childTurnID,
-          childInputID: input.childInputID,
-          parentSessionID: input.parentSessionID,
-          parentTurnID: input.parentTurnID,
-          parentTaskPartID: input.parentTaskPartID,
-          parentModelMessageID: input.parentModelMessageID,
-          delegatedCapability,
-          depthLimit: input.depthLimit,
-          limits: input.limits,
-          envelope,
-          policyBasis: { ...TURN_POLICY_BASIS, admission: "delegated_task" },
-          timeAdmitted: message.info.time.created,
-          session: {
-            ...input.session,
-            agent: message.info.agent,
-            model: {
-              id: message.info.model.modelID,
-              providerID: message.info.model.providerID,
-              variant: message.info.model.variant ?? "default",
+      return yield* startMaterialization(
+        input.childSessionID,
+        state.startTurn({
+          sessionID: input.childSessionID,
+          turnID: input.childTurnID,
+          envelopeFingerprint: TurnLifecycle.envelopeFingerprint(envelope),
+          admit: sessions.prepareChildStart({
+            childSessionID: input.childSessionID,
+            childTurnID: input.childTurnID,
+            childInputID: input.childInputID,
+            parentSessionID: input.parentSessionID,
+            parentTurnID: input.parentTurnID,
+            parentTaskPartID: input.parentTaskPartID,
+            parentModelMessageID: input.parentModelMessageID,
+            delegatedCapability,
+            depthLimit: input.depthLimit,
+            limits: input.limits,
+            envelope,
+            policyBasis: { ...TURN_POLICY_BASIS, admission: "delegated_task" },
+            timeAdmitted: message.info.time.created,
+            session: {
+              ...input.session,
+              agent: message.info.agent,
+              model: {
+                id: message.info.model.modelID,
+                providerID: message.info.model.providerID,
+                variant: message.info.model.variant ?? "default",
+              },
             },
-          },
-          message,
+            message,
+          }),
+          work: runTurnLoop(input.childSessionID, input.childTurnID),
         }),
-        work: runTurnLoop(input.childSessionID, input.childTurnID),
-      })
+      )
     })
 
     const childOutput = Effect.fn("SessionPrompt.childOutput")(function* (turnID: Turn.ID) {
@@ -1526,7 +1648,14 @@ const layer = Layer.effect(
     const runLoop: (
       sessionID: SessionID,
       turnID: Turn.ID,
-    ) => Effect.Effect<TurnLoopResult, Session.NotFound | Turn.Error> = Effect.fn("SessionPrompt.runTurn")(function* (
+    ) => Effect.Effect<
+      TurnLoopResult,
+      | Session.NotFound
+      | Session.BusyError
+      | Turn.Error
+      | SessionPresentation.AdministrativeHistoryIntegrityError
+      | SessionPresentation.FrontierUnrepresentableError
+    > = Effect.fn("SessionPrompt.runTurn")(function* (
       sessionID: SessionID,
       turnID: Turn.ID,
     ) {
@@ -2089,6 +2218,7 @@ const layer = Layer.effect(
 
     return Service.of({
       start,
+      startImportCopy,
       steer,
       activeTurn,
       listTurns,
@@ -2144,6 +2274,33 @@ export const StartInput = Schema.Struct({
   ),
 })
 export type StartInput = Schema.Schema.Type<typeof StartInput>
+
+export type ImportCopyStartInput = StartInput & {
+  readonly importCopy: {
+    readonly plan: Session.AdministrativeImportPlan
+    readonly envelope: {
+      readonly schemaVersion: 1
+      readonly sourceFileFingerprint: string
+      readonly sourceDatabaseID: string
+      readonly sourceSessionID: SessionID
+      readonly targetDatabaseID: string
+      readonly targetSessionID: SessionID
+      readonly copyRequestFingerprint: string
+      readonly mappingVersion: 1
+      readonly mappingFingerprint: string
+      readonly messageCount: number
+      readonly partCount: number
+      readonly historyStartTime: number
+      readonly historyFrontierTime: number
+      readonly learnerPresentationTime: number
+    }
+    readonly verifySource: Effect.Effect<boolean>
+    readonly verifyTargetIdentities: (
+      tx: EventV2.Transaction,
+      learnerPresentation: UserWithParts,
+    ) => Effect.Effect<void, Turn.AdmissionConflictError | SessionDeletion.SessionIDRetiredError>
+  }
+}
 
 export const SteerInput = Schema.Struct({
   sessionID: SessionID,
