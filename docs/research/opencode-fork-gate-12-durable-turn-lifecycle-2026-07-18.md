@@ -54,13 +54,14 @@ from a genuine new-copy root Turn, through the contract/theory-accepted
 The accepted Turn, terminal, recovery, child-lineage, and busy-input behavior
 above remains closed. The exact current implementation/evidence successor is
 independently accepted under Whole-Gate run
-`G22-WG-20260813-019ff8e2-01` but is not integrated. Gate 22 review temporarily
+`G22-WG-20260813-019ff8e2-01` and is integrated with Gate 22 at implementation
+commit `ada0a04c19847ce62ae490c90838c88c51a65d72`. Gate 22 review temporarily
 reopened only Gate 18's material exact-read relation feeding optional audit
 coverage; the retained reviewer accepted its action-complete successor at
 manifest `334CDCAEEA573A8257E8F3B67A8A4AE9550F06522B3E85645B974CE126C4CBE6`.
 Turn lifecycle, deletion finality, restore/copy, administrative-history, and
 presentation-frontier behavior were unchanged. The current integrated runtime
-still reflects the earlier deletion contract.
+now carries the accepted correction.
 
 Date: 2026-07-18
 

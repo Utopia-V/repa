@@ -5,7 +5,8 @@ Status: Accepted boundary retained at corrective integration commit
 retention subsection is bounded-reopened by the contract/theory-accepted
 [Gates 5/8/12/18 deletion-choice and local-restore correction](repa-gate-05-08-12-18-session-deletion-choice-correction-2026-08-13.md).
 Its exact current implementation/evidence successor is independently accepted
-under Whole-Gate run `G22-WG-20260813-019ff8e2-01` and remains unintegrated.
+under Whole-Gate run `G22-WG-20260813-019ff8e2-01` and is integrated with Gate
+22 at implementation commit `ada0a04c19847ce62ae490c90838c88c51a65d72`.
 Gate 22 review temporarily reopened only Gate 18's material exact-read relation
 feeding the optional audit; the retained reviewer accepted the action-complete
 successor at manifest `334CDCAEEA573A8257E8F3B67A8A4AE9550F06522B3E85645B974CE126C4CBE6`.

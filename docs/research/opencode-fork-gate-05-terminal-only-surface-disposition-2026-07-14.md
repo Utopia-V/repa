@@ -37,7 +37,8 @@ does not reopen terminal-only composition, local-file-only input, network
 exclusion, or project/directory rebinding. Its separate
 [implementation/evidence record](repa-gate-05-08-12-18-session-deletion-choice-correction-implementation-evidence-2026-08-14.md)
 is independently accepted under Whole-Gate run
-`G22-WG-20260813-019ff8e2-01` and remains unintegrated.
+`G22-WG-20260813-019ff8e2-01` and is integrated with Gate 22 at implementation
+commit `ada0a04c19847ce62ae490c90838c88c51a65d72`.
 
 Date: 2026-07-14
 

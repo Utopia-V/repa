@@ -1,7 +1,8 @@
 # Repa Gates 5/8/12/18 deletion-choice and local-restore implementation/evidence
 
 Status: **exact current implementation/evidence successor accepted by the
-retained independent reviewer; not integrated**
+retained independent reviewer and integrated with Gate 22 at implementation
+commit `ada0a04c19847ce62ae490c90838c88c51a65d72`**
 
 Date: 2026-08-14
 
@@ -435,3 +436,13 @@ review layers. This prerequisite acceptance removes Gate 22's producer
 dependency; it does not accept Gate 22, prove per-record causal influence,
 establish a scheduler or activity ledger, or authorize Gate 23, integration,
 publication, or release.
+
+## Subsequent integration
+
+Gate 22 later closed both review layers. After that acceptance, the maintainer
+separately authorized commit and push. This prerequisite successor is included
+in Gate 22 implementation commit
+`ada0a04c19847ce62ae490c90838c88c51a65d72`; the final Gate 22 evidence record
+owns the accepted combined working-tree and commit-tree manifests. Integration
+changes none of this record's evidence scope and does not accept Gate 23 or
+claim release readiness.

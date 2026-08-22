@@ -1,7 +1,8 @@
 # Gate 18 learning context and Session continuation implementation/evidence record
 
 Status: **exact current action-complete implementation/evidence successor
-accepted by the retained reviewer under `G22-CR-002`; not integrated.** Independent review
+accepted by the retained reviewer under `G22-CR-002` and integrated with Gate
+22 at implementation commit `ada0a04c19847ce62ae490c90838c88c51a65d72`.** Independent review
 returned an initial **Revise** on 2026-08-04 with `G18-IR-001..005`; corrective passes by
 the same reviewer closed those findings. The maintainer then explicitly
 authorized a bounded credential/cost-bearing released-model qualification. On
@@ -35,7 +36,8 @@ reopened by the contract/theory-accepted
 Its separate
 [implementation/evidence record](repa-gate-05-08-12-18-session-deletion-choice-correction-implementation-evidence-2026-08-14.md)
 is independently accepted under Whole-Gate run
-`G22-WG-20260813-019ff8e2-01` but remains unintegrated. This accepted
+`G22-WG-20260813-019ff8e2-01` and is integrated with Gate 22 at implementation
+commit `ada0a04c19847ce62ae490c90838c88c51a65d72`. This accepted
 snapshot likewise does not evidence that correction's new sealed
 administrative-history classification, imported-history Session frontier, or
 fresh Context ordering after exact restore/copy. In particular, it does not
@@ -653,9 +655,10 @@ flat alignment identity. The current candidate corrects that narrow boundary:
   alignment/Map/selector/target record; and an unknown future action fails
   closed instead of sealing no-positive coverage.
 
-The complete unintegrated prerequisite successor remains 90 package paths,
-totals 5,424,504 bytes, and has ordinal path/byte-length/file-SHA-256 manifest
+The review-bound prerequisite successor contains 90 package paths, totals
+5,424,504 bytes, and has ordinal path/byte-length/file-SHA-256 manifest
 `334CDCAEEA573A8257E8F3B67A8A4AE9550F06522B3E85645B974CE126C4CBE6`.
+It is now subsumed by the integrated Gate 22 implementation above.
 The five files changed from accepted predecessor manifest
 `C18F06F7D10DD2C183AAD13036EA772B3D28DFE976DC4D852CEEF898D7C93474`
 are:

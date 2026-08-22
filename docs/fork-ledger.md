@@ -5250,3 +5250,32 @@ integration step. The working tree remains unintegrated and unstaged. This
 closure performs or authorizes no integration, commit, publication, release,
 Gate 23 work, provider-reliability claim, or pedagogy claim. The reviewer is
 retired from further Gate work and remains visible as durable review evidence.
+
+## 2026-08-23 Gate 22 mainline integration and publication
+
+After Whole-Gate acceptance, the maintainer separately authorized commit and
+push. Immediately before staging, the expanded working-tree status remained the
+review-bound 149 entries / 49 untracked / zero staged, and the package
+recomputed exactly as 134 paths / 7,338,855 bytes / canonical manifest
+`57A15F358CF9C1AF8FA8F79A956D8DD8769A1DF69957AB1F611DE998F418F3BB`.
+The Gate 22 contract, evidence record, status map, roadmap, and ledger hashes
+also matched the accepted closure. No repository writer was active and
+`git diff --check` passed.
+
+Staging applied only the repository's existing line-ending clean filter. Of the
+134 package files, 105 were byte-identical and 29 differed only by CRLF-to-LF
+normalization; no package file had a non-EOL difference. The behavior-equivalent
+commit-tree package therefore contains the same 134 paths, totals 7,290,093
+bytes, and has canonical manifest
+`5D08725A4BB922BE7CD7DB6864FAC0C48D0F3BC4125B141B7163C0F04ABCD840`.
+The accepted implementation and all prerequisite corrections were committed as
+`ada0a04c19847ce62ae490c90838c88c51a65d72` after rebasing the unpublished
+candidate onto the then-current `origin/main`. The two intervening handbook and
+agent-writing commits were preserved without conflict; no force update was
+used.
+
+This documentation successor records mainline publication. The already
+accepted focused evidence was not rerun merely to add green count because the
+production candidate changed only through the verified line-ending filter.
+Gate 22 is integrated; release, Gate 23 acceptance, provider reliability, and
+pedagogical efficacy remain separately governed.

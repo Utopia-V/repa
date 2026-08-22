@@ -3,7 +3,8 @@
 Status: **Whole Gate accepted; contract/theory and exact implementation/
 evidence accepted by the retained independent reviewer; prerequisite Gates
 5/8/12/18 layers accepted; `G22-CR-001..006` and `G22-IR-001..008` closed;
-working tree remains unintegrated**
+integrated into `main` at implementation commit
+`ada0a04c19847ce62ae490c90838c88c51a65d72`**
 
 Date: 2026-08-13
 
@@ -20,7 +21,8 @@ order before any local writer. That rebound also rejects imported live revert
 state, makes imported Patch/history non-revertible, and binds non-Turn
 transcript writers to the same frontier. The prerequisite
 implementation/evidence working-tree candidate was independently accepted and
-remains unintegrated. Gate 22 contract review then exposed an action-shape bug
+is now included in the integrated Gate 22 implementation. Gate 22 contract
+review then exposed an action-shape bug
 in Gate 18's accepted learning-material exact-read projector. The current
 working-tree successor repairs that narrow producer boundary and adds focused
 evidence; the retained reviewer accepted exact package manifest
@@ -28,8 +30,8 @@ evidence; the retained reviewer accepted exact package manifest
 and restored the current prerequisite implementation/evidence claim. Four Gate
 22 contract passes returned `Revise`; the fifth pass accepted the final
 `G22-CR-006` rebound and this contract/theory layer. No Gate 22 production
-integration, commit, publication, or release exists. The independently accepted
-implementation/evidence boundary is recorded
+integration existed at that review cut. The independently accepted
+implementation/evidence boundary and subsequent integration are recorded
 separately in
 [the Gate 22 evidence record](./repa-gate-22-learning-native-tui-inspect-correct-implementation-evidence-2026-08-22.md).
 
@@ -1393,7 +1395,8 @@ passes returned `Revise`; the fifth retained-reviewer pass closed
 `G22-CR-006`, confirmed `G22-CR-001..005` remained closed, raised no new
 acceptance-changing finding, and returned **Accept** for this exact contract
 successor. Both prerequisite layers are also accepted; their working-tree
-implementation remains unintegrated. Under the explicitly authorized Whole-
+implementation is included in Gate 22 implementation commit
+`ada0a04c19847ce62ae490c90838c88c51a65d72`. Under the explicitly authorized Whole-
 Gate run, this contract is implementation authority for its scoped Gate 22
 boundary. Four implementation/evidence passes returned `Revise`; the final
 retained-reviewer pass closed `G22-IR-005/006`, confirmed every earlier finding
@@ -1401,5 +1404,7 @@ remained closed, opened no new finding, and accepted exact package manifest
 `57A15F358CF9C1AF8FA8F79A956D8DD8769A1DF69957AB1F611DE998F418F3BB`.
 Its only contract correction remains the missing-predecessor distinction above;
 every other accepted decision remains current. Gate 22 as a whole is accepted
-and unintegrated. Nothing here authorizes integration, stage, commit,
-publication, release, Gate 23 work, model reliability, or pedagogy claims.
+and integrated into `main` at that implementation commit. The review verdict
+itself authorized none of those Git actions; the maintainer separately
+authorized integration, commit, and push after acceptance. This integration
+does not release the product or accept Gate 23, model reliability, or pedagogy.

@@ -1,7 +1,8 @@
 # Repa Gates 5/8/12/18 bounded correction: learner-chosen Session deletion
 
 Status: **contract/theory and exact current implementation/evidence successor
-accepted; working-tree implementation not integrated**
+accepted and integrated with Gate 22 at implementation commit
+`ada0a04c19847ce62ae490c90838c88c51a65d72`**
 
 Date: 2026-08-13
 
@@ -45,7 +46,8 @@ for this correction. Retained reviewer
 `019ff945-7b10-7f53-999f-b92dfa68d30c` accepted the exact 90-path package
 manifest
 `C18F06F7D10DD2C183AAD13036EA772B3D28DFE976DC4D852CEEF898D7C93474`
-after closing `G81218-IR-001..003`. The implementation remains unintegrated.
+after closing `G81218-IR-001..003`. That accepted predecessor is now subsumed
+by the integrated Gate 22 successor.
 
 ## Maintainer-owned product decision
 

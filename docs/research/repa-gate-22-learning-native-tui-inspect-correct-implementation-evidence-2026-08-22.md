@@ -1,6 +1,6 @@
 # Gate 22 learning-native TUI inspect/correct — accepted implementation/evidence
 
-**Status: accepted by the retained independent Whole-Gate reviewer at exact package manifest `57A15F358CF9C1AF8FA8F79A956D8DD8769A1DF69957AB1F611DE998F418F3BB`; not integrated, staged, committed, published, or released**
+**Status: accepted by the retained independent Whole-Gate reviewer at exact working-tree package manifest `57A15F358CF9C1AF8FA8F79A956D8DD8769A1DF69957AB1F611DE998F418F3BB`; integrated into `main` at implementation commit `ada0a04c19847ce62ae490c90838c88c51a65d72`; not released**
 
 This record binds the current Gate 22 implementation candidate to the already
 accepted contract/theory result in
@@ -25,15 +25,22 @@ provenance; it is not a replacement product or architecture authority.
   manifest `57A15F358CF9C1AF8FA8F79A956D8DD8769A1DF69957AB1F611DE998F418F3BB`;
 - working-tree status with untracked leaf files expanded: 149 entries / 49
   untracked / zero staged; no commit, integration, push, publication, release,
-  or Gate 23 action is included.
+  or Gate 23 action was included at the review cut;
+- integrated implementation commit:
+  `ada0a04c19847ce62ae490c90838c88c51a65d72`;
+- behavior-equivalent commit-tree package: 134 paths / 7,290,093 bytes /
+  manifest `5D08725A4BB922BE7CD7DB6864FAC0C48D0F3BC4125B141B7163C0F04ABCD840`.
 
 The package manifest covers every modified or untracked regular file under
 `packages/` from `git status --porcelain=v1 --untracked-files=all`. Records are
 sorted by repository path and encoded as UTF-8
 `path<TAB>byte-length<TAB>UPPERCASE-file-SHA-256`, joined by LF with no terminal
 LF; the manifest is the uppercase SHA-256 of those bytes. It includes the
-accepted prerequisite implementation because the checkout remains deliberately
-unintegrated.
+accepted prerequisite implementation because the review checkout deliberately
+combined both unintegrated layers. The integration commit carries that same
+combined boundary. Git's existing clean filter changed only CRLF to LF in 29
+package files; 105 package files are byte-identical and no package file has a
+non-EOL difference from the accepted working-tree candidate.
 
 The first review dispatch reported package digest
 `B9FACFDA36BA6D310CA4EB53F7909EC6E82869305184AE87CB9F001C3B5455FE` and
@@ -323,3 +330,14 @@ theory layer was already accepted, so Gate 22 as a whole is accepted and ready
 only for its separately governed integration step. This closure authorizes no
 integration, stage, commit, publication, release, Gate 23 work, provider-
 reliability claim, or pedagogy claim.
+
+## Integration
+
+After the Whole-Gate verdict, the maintainer separately authorized commit and
+push. The exact accepted working-tree candidate was committed on top of the
+then-current `origin/main` as
+`ada0a04c19847ce62ae490c90838c88c51a65d72`. The line-ending-only clean-filter
+normalization and commit-tree manifest are recorded in the candidate identity
+above. This documentation successor records mainline publication; it changes no
+production package byte. Integration does not establish release readiness,
+accept Gate 23, or add provider-reliability or pedagogical-efficacy evidence.

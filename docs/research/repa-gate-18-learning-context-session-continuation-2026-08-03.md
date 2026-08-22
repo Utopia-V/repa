@@ -45,7 +45,8 @@ accepted deletion behavior. The new product direction additionally permits a
 learner-selected body-free audit containing only the correction contract's
 allowlisted facts. Its prerequisite contract is accepted, and a separate
 implementation/evidence candidate is independently accepted under Whole-Gate
-run `G22-WG-20260813-019ff8e2-01` but remains unintegrated. That correction also requires
+run `G22-WG-20260813-019ff8e2-01` and is integrated with Gate 22 at
+implementation commit `ada0a04c19847ce62ae490c90838c88c51a65d72`. That correction also requires
 every exact-restore or copy Message/Part to have complete sealed historical-only
 classification and a stable Session ordering frontier. Bounded Context may use
 that transcript only as historical presentation ordered before current input;
