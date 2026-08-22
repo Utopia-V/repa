@@ -463,6 +463,42 @@ Valid types are `feat`, `fix`, `docs`, `chore`, `refactor`, and `test`. Scopes a
 
 Examples: `fix(tui): simplify thinking toggle styling`, `docs: update contributing guide`, `chore(sdk): regenerate types`.
 
+## Pull request writing
+
+A pull request body is a reader-facing explanation of the change. It must stand
+on its own without the drafting chat, agent transcript, worktree history, or an
+internal handoff.
+
+- Open with the problem and resulting change in ordinary prose. Let the reader
+  understand why the change belongs before introducing implementation detail.
+- Explain the product behavior, engineering invariant, or design judgment that
+  organizes the diff. Current files and modules support that explanation; a
+  file inventory is not a substitute for it.
+- Use headings only when they answer real review questions. Most PRs need some
+  account of the change, the evidence, and any remaining merge condition, but
+  those purposes do not prescribe fixed headings or a repeated template.
+- Describe verification at the level of the claim it supports. Include a
+  command, fixture, screenshot, or exact identifier when a reviewer needs it to
+  reproduce or distinguish the result; otherwise summarize the evidence in
+  natural prose.
+- Keep agent operations in the execution record. Skill names, tool calls,
+  reviewer histories, staged-file counts, worktree paths, task IDs, hashes, and
+  command logs belong in the PR only when they are material evidence for the
+  reviewer.
+- For a draft PR, state what remains before review or merge and why it matters.
+  Do not narrate every earlier pass or pending internal step.
+- State a limitation when it changes how the reviewer should interpret or
+  merge the change. Avoid defensive inventories of unrelated behavior the PR
+  does not claim.
+- Match the language used by the actual reviewers. Private Repa collaboration
+  normally uses natural Chinese prose with precise code identifiers retained
+  in English. Keep one coherent prose language instead of mixing translated
+  process labels with English fragments.
+
+The repository PR template supplies hidden drafting guidance only. Replace it
+with a concise, change-specific account rather than exposing the template as
+the final body.
+
 ## Style Guide
 
 ### General Principles
