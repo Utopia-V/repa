@@ -1,80 +1,63 @@
 # Repa
 
-Repa is a terminal-native, local-first agentic learning system. Its Tutor
-orients a learner, works with local materials, explains and demonstrates,
-answers questions, guides practice and substantial assignments, revisits
-earlier material, and preserves only durable meaning that improves later help.
+Repa is a terminal-native, local-first learning system. Its Tutor helps a
+learner work through difficult material, choose a useful next move, connect
+learning to real courses and assignments, and continue across days without
+reconstructing the whole situation from scratch.
 
-The Tutor is the behavior of the whole Learning System, not a persona attached
-to one model call. Models provide open-ended interpretation and interaction;
-program-owned authorities preserve identity, sources, revisions, permissions,
-correction, deterministic consequences, and long-running continuity.
+The Tutor emerges from the whole system. Models interpret open language and
+materials, explain, demonstrate, research, plan, and adapt to the current
+interaction. The program supplies relevant context, executes real tools, and
+keeps identity, sources, time, permissions, corrections, transactions, and
+recovery coherent across Sessions. The learner provides the goal and steering
+and does the work of understanding, recalling, solving, creating, and applying.
 
-Repa is not a note generator, Anki skin, todo application, one-shot chat
-teacher, or a generic coding agent with a few learning tools.
+## What learning with Repa looks like
 
-## Current direction
+A learner can open a local workspace, bring course material or a concrete
+problem, and begin in natural language. Repa can orient them, explain a concept,
+show a worked example, guide or leave space for an attempt, help with real
+coursework, revisit earlier material, and revise its approach when the learner
+says that something did not help.
 
-Repa is an independent product created from a one-time full-history fork of
-OpenCode `v1.17.18`. It inherits the mature local Agent substrate—Sessions,
-providers, tools, permissions, MCP, subagents, compaction, cancellation,
-recovery, and terminal mechanics—while Repa owns product semantics, defaults,
-database authority, migrations, terminal surfaces, and release direction.
+Over time, Repa can draw on courses and materials, goals, assignments, future
+attention, learner-state judgments, planning suggestions, and earlier
+interactions. It presents a bounded current view to the model and retrieves
+detail when the present move needs it.
 
-Learning is first-class rather than an overlay. Coding, Git, LSP, and other
-local Agent mechanics may remain useful capabilities, but they are not the
-default ontology and do not silently become Course, Goal, future attention,
-Assignment, planning, Tutor, or learner state.
+## Current form
 
-Engineering direction is accepted through numbered Gates, but this README does
-not copy their volatile progress. The canonical current Gate disposition and
-control point live only in the [documentation map](docs/README.md); the
-[fork ledger](docs/fork-ledger.md) records exact evidence and corrections.
+Repa is implemented in TypeScript and Bun. The main interface is a
+natural-language terminal TUI. Direct run, attach, local server, and ACP use the
+same Session, model, tool, permission, and learning-state runtime for scripts
+and integrations.
 
-The first accepted product surface is the existing natural-language TUI.
-Direct run, attach, local server, and ACP remain retained interaction carriers,
-not alternate primary product UIs or separate Tutor runtimes. Inherited Web and
-Desktop clients are not supported product surfaces unless real use earns a
-later decision. The registered default build is terminal-only; an explicit
-research flag may embed retained Web assets without admitting a Web product or
-release surface. Cloud, account, sharing, marketplace, and inherited OpenCode
-release surfaces are outside the baseline. That does not by itself require
-deleting safe hibernated source. Ordinary external model providers, local
-credentials, and explicit local capabilities such as PR checkout are separate
-behavior boundaries.
+The repository is an independent product built from a one-time full-history
+fork of OpenCode `v1.17.18`. It reuses the mature local Agent harness—providers,
+tools, permissions, MCP, subagents, compaction, cancellation, recovery, and
+terminal mechanics—while Repa develops its own learning behavior, data,
+migrations, interface, and release direction.
 
-## Documentation
+## Building Repa
 
-Start with the [documentation map](docs/README.md),
-[product origin](docs/foundation/00-product-origin.md),
-[system architecture](docs/architecture/00-system-architecture.md), and
-[fork decision](docs/decisions/0014-one-time-opencode-fork.md).
+People who want to understand and develop the product should start with
+[Building Repa](building/README.md). It follows concrete learning
+situations into the project's central questions: model behavior, learning over
+time, review, learning data, the current system, and practical development.
 
-The [inherited-material index](docs/inherited/README.md) distinguishes retained
-contracts and provenance from upstream material removed from the current tree
-but recoverable through Git history.
-
-The pre-fork implementation, research logs, and labs remain historical oracles;
-they are not migration targets or compatibility requirements.
+Detailed architecture, decisions, research, and engineering evidence remain in
+`docs/` for internal maintenance and traceability. They are source material for
+the shared account in `building/`, not a prerequisite reading sequence.
 
 ## Development
 
-Repa uses TypeScript and Bun. Install dependencies at the repository root, then
-run focused tests and typechecks from the affected package:
-
-```powershell
-bun install
-cd packages/opencode
-bun test <relevant-test-files>
-bun run typecheck
-```
-
-Root-level tests intentionally fail. Verification is proportional to the
-changed claim; consult [AGENTS.md](AGENTS.md) before modifying the fork.
+Follow the [development guide](building/development.md) before the first source
+run so the worktree uses an isolated LearnerHome database. Contribution scope,
+verification, and handoff conventions are in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Provenance
 
 The fork preserves OpenCode's full upstream history and MIT license. The
-[fork notice](FORK-NOTICE.md) records distribution attribution; exact source
-pins, Gate commits, and the immutable pre-fork oracle locator are recorded in
-the [fork ledger](docs/fork-ledger.md).
+[fork notice](FORK-NOTICE.md) records distribution attribution. Exact source
+pins and the immutable pre-fork oracle remain available in the internal project
+records.
