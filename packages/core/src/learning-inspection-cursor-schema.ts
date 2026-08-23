@@ -9,6 +9,7 @@ const SessionID = Schema.String.check(Schema.isStartsWith("ses_"))
 const TurnID = Schema.String.check(Schema.isStartsWith("trn_"))
 const InputID = Schema.String.check(Schema.isStartsWith("tri_"))
 const PartID = Schema.String.check(Schema.isStartsWith("prt_"))
+const CallID = Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(8192))
 const TerminalReason = Schema.Literals([
   "normal",
   "provider_failure",
@@ -149,9 +150,19 @@ export const RangeInput = Schema.Struct({
   predecessor: Schema.optional(Continuation),
 }).annotate({ parseOptions: { onExcessProperty: "error" } })
 
-export const SearchInput = Schema.Union([TerminalRootListInput, MaterializeInput, SkipInput, RangeInput]).annotate({
-  parseOptions: { onExcessProperty: "error" },
-})
+export const RecentRangeInput = Schema.Struct({
+  action: Schema.Literal("read_recent_range"),
+  directoryCallID: CallID,
+  entryIndex: NonNegativeInt.check(Schema.isLessThanOrEqualTo(63)),
+}).annotate({ parseOptions: { onExcessProperty: "error" } })
+
+export const SearchInput = Schema.Union([
+  TerminalRootListInput,
+  MaterializeInput,
+  SkipInput,
+  RangeInput,
+  RecentRangeInput,
+]).annotate({ parseOptions: { onExcessProperty: "error" } })
 export type SearchInput = typeof SearchInput.Type
 
 export function queryFingerprint(value: unknown) {

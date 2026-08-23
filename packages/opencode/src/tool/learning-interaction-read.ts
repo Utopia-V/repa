@@ -21,6 +21,7 @@ import {
   remainingCapacity,
   signSearch,
   source,
+  verifyPriorCompletedToolCall,
   verifyPredecessor,
 } from "./learning-interaction-search"
 import { Tool } from "./tool"
@@ -45,6 +46,7 @@ const LearningInteractionReadInput = Schema.Union([
   Schema.Struct({ action: Schema.Literal("inspect_current_context") }),
   Schema.Struct({ action: Schema.Literal("inspect_retained_steering_cut") }),
   Schema.Struct({ action: Schema.Literal("inspect_retained_steering_history") }),
+  LearningInspectionCursor.RecentRangeInput,
   LearningInspectionCursor.RangeInput,
 ]).annotate({ parseOptions: { onExcessProperty: "error" } })
 
@@ -58,11 +60,16 @@ export const LearningInteractionReadTool = Tool.define<
     const database = yield* Database.Service
     return {
       description:
-        "Inspect the current operation's immutable Context or retained-steering cut, discover terminal root Turns through a thin keyset directory, materialize one selected exact locator within explicit row/byte bounds, explicitly skip an oversized candidate while preserving the coverage gap, or read one exact pinned Message/Part range. General retained-steering policy history remains unsupported. Continuations are verified against immutable stored predecessor Tool results and cannot reset or erase gaps. The current Session remains directly discoverable. This tool never imports old transcript bodies into current history or changes Interaction state.",
+        "Inspect the current operation's immutable Context or retained-steering cut, discover terminal root Turns through a thin keyset directory, materialize one selected exact locator within explicit row/byte bounds, explicitly skip an oversized candidate while preserving the coverage gap, or read one exact pinned Message/Part range. After list_recent, prefer read_recent_range with the returned directoryCallID and entryIndex instead of copying the locator or its fingerprints. General retained-steering policy history remains unsupported. Continuations and compact recent-range reads are verified against immutable stored predecessor Tool results and cannot reset or erase gaps. The current Session remains directly discoverable. This tool never imports old transcript bodies into current history or changes Interaction state.",
       parameters: LearningInteractionReadInput,
       jsonSchema: ToolJsonSchema.fromSchema(LearningInteractionReadInput, { additionalProperties: false }),
       execute: (input, context) => {
-        requireInteraction(context)
+        const interaction = requireInteraction(context)
+        if (input.action === "read_recent_range") {
+          return database.db
+            .transaction((tx) => executeRecentRange(tx, input, context))
+            .pipe((effect) => boundedInspection(effect, context.abort), Effect.orDie)
+        }
         if (
           input.action === "list_terminal_roots" ||
           input.action === "materialize_interaction_locator" ||
@@ -92,8 +99,9 @@ export const LearningInteractionReadTool = Tool.define<
             )
             .pipe(
               (effect) => boundedInspection(effect, context.abort),
-              Effect.map((page) =>
-                learningContextReadResult({
+              Effect.map((page) => {
+                const entries = page.entries.map((entry, entryIndex) => ({ entryIndex, ...entry }))
+                return learningContextReadResult({
                   capabilityID: LEARNING_INTERACTION_READ_TOOL_ID,
                   title: "Recent Interaction locators",
                   metadata: {
@@ -107,12 +115,16 @@ export const LearningInteractionReadTool = Tool.define<
                     status: "available",
                     currentSessionID: context.sessionID,
                     countAtRead: page.countAtCut,
-                    entries: page.entries,
+                    rangeReadHandle: {
+                      directoryCallID: interaction.candidate.callID,
+                      entryCount: entries.length,
+                    },
+                    entries,
                     omitted: page.entries.length < page.countAtCut,
                   },
                   itemCount: page.entries.length,
-                }),
-              ),
+                })
+              }),
               Effect.orDie,
             )
         }
@@ -121,6 +133,76 @@ export const LearningInteractionReadTool = Tool.define<
     }
   }),
 )
+
+export function resolveRecentRangeLocator(
+  tx: Transaction,
+  input: LearningInspectionCursor.SearchInput & { action: "read_recent_range" },
+  context: Tool.Context,
+) {
+  return Effect.gen(function* () {
+    const predecessor = yield* verifyPriorCompletedToolCall(tx, {
+      context,
+      toolID: LEARNING_INTERACTION_READ_TOOL_ID,
+      callID: input.directoryCallID,
+      action: "list_recent",
+    })
+    if (predecessor.type !== "verified") return predecessor
+    const owner = record(predecessor.output.ownerResult) ? predecessor.output.ownerResult : predecessor.output
+    const handle = record(owner.rangeReadHandle) ? owner.rangeReadHandle : undefined
+    const entries = Array.isArray(owner.entries) ? owner.entries : []
+    if (
+      handle?.directoryCallID !== input.directoryCallID ||
+      handle.entryCount !== entries.length ||
+      !Number.isSafeInteger(handle.entryCount)
+    ) {
+      return { type: "conflict" as const, reason: "predecessor_handle_mismatch" as const }
+    }
+    const entry = record(entries[input.entryIndex]) ? entries[input.entryIndex] : undefined
+    if (!entry || entry.entryIndex !== input.entryIndex) {
+      return { type: "conflict" as const, reason: "predecessor_entry_index" as const }
+    }
+    if (!Schema.is(LearningInspectionCursor.Locator)(entry.locator)) {
+      return { type: "conflict" as const, reason: "predecessor_locator_shape" as const }
+    }
+    return { type: "verified" as const, partID: predecessor.partID, locator: entry.locator }
+  })
+}
+
+function executeRecentRange(
+  tx: Transaction,
+  input: LearningInspectionCursor.SearchInput & { action: "read_recent_range" },
+  context: Tool.Context,
+) {
+  return Effect.gen(function* () {
+    const resolved = yield* resolveRecentRangeLocator(tx, input, context)
+    if (resolved.type !== "verified") {
+      return yield* searchResult(
+        tx,
+        context,
+        {
+          status:
+            resolved.type === "source_unavailable_or_unresolved"
+              ? "cursor_source_unavailable_or_unresolved"
+              : "cursor_predecessor_conflict",
+          reason:
+            resolved.type === "source_unavailable_or_unresolved"
+              ? "predecessor_part_unavailable_or_unproven"
+              : resolved.reason,
+          queryFingerprint: queryFingerprint({
+            schemaVersion: 1,
+            kind: "recent_interaction_range",
+            directoryCallID: input.directoryCallID,
+            entryIndex: input.entryIndex,
+          }),
+          noReadPerformed: true,
+        },
+        [],
+        "compact recent Interaction binding failed before any range read",
+      )
+    }
+    return yield* executeSearch(tx, { action: "read_range", locator: resolved.locator, limit: 64 }, context)
+  })
+}
 
 function executeControlInspection(
   tx: Transaction,

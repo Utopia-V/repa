@@ -27,6 +27,7 @@ import { RuntimeFlags } from "@/effect/runtime-flags"
 import {
   assertExternalToolID,
   isLearningCommandToolID,
+  learningCommandInputResolution,
   learningCommandPreparation,
   normalizeHostPreparedToolInput,
   toolCallPreparation,
@@ -145,6 +146,7 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
   for (const item of localTools) {
     const schema = ProviderTransform.schema(input.model, ToolJsonSchema.fromTool(item))
     const prepareToolCall = toolCallPreparation(item)
+    const resolveLearningCommandInput = learningCommandInputResolution(item)
     const learningCommand = isLearningCommandToolID(item.id)
     const local = tool({
       description: item.description,
@@ -207,6 +209,13 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
       prepared[SessionProcessor.ToolCallPreparation] = (args, registration) => {
         return run.promise(prepareHostToolCall(plugin, item.id, args, registration, prepareToolCall))
       }
+    }
+    if (resolveLearningCommandInput) {
+      const resolved = local as AITool & {
+        [SessionProcessor.ToolCallInputResolution]: SessionProcessor.ToolCallInputResolution
+      }
+      resolved[SessionProcessor.ToolCallInputResolution] = (args, registration) =>
+        run.promise(resolveLearningCommandInput(args, registration))
     }
     install(tools, item.id, "registered", local)
   }

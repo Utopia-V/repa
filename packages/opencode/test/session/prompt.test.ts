@@ -112,11 +112,13 @@ import {
   TurnInputTable,
   TurnModelOperationTable,
   TurnTable,
+  TurnToolCandidateTable,
   TurnUnavailableSourceTable,
 } from "@opencode-ai/core/turn/sql"
 import { LearningFrontier } from "@opencode-ai/core/learning-frontier"
 import { LearningContext } from "@opencode-ai/core/learning-context"
 import { MaterialMap } from "@opencode-ai/core/material-map"
+import { TurnLearningContext } from "@opencode-ai/core/turn/learning-context"
 import { Turn } from "@opencode-ai/schema/turn"
 import { Project } from "@opencode-ai/schema/project"
 import { TurnEvent } from "@opencode-ai/schema/turn-event"
@@ -171,6 +173,65 @@ function providerText(value: unknown): string[] {
   if (Array.isArray(value)) return value.flatMap(providerText)
   if (value && typeof value === "object") return Object.values(value as Record<string, unknown>).flatMap(providerText)
   return []
+}
+
+const learningDomainPrefixes = [
+  "artifact",
+  "course",
+  "learning_course_material",
+  "learner_default_course",
+  "learner_course_route",
+  "learner_goal",
+  "learner_response_evidence",
+  "material",
+  "retained_steering",
+  "future_attention",
+  "assignment",
+  "learner_state_judgment",
+  "advisory_plan_suggestion",
+] as const
+
+function learningDomainDigest(db: Database.Interface["db"]) {
+  return Effect.gen(function* () {
+    const tables = (yield* db
+      .all(
+        sql`
+          SELECT name FROM sqlite_schema
+          WHERE type = 'table' AND name NOT LIKE 'sqlite_%'
+          ORDER BY name
+        `,
+      )
+      .pipe(Effect.orDie)) as Array<{ name: string }>
+    return Object.fromEntries(
+      yield* Effect.forEach(
+        tables
+          .map((table) => table.name)
+          .filter(
+            (name) =>
+              name !== "retained_steering_state" &&
+              learningDomainPrefixes.some((prefix) => name === prefix || name.startsWith(`${prefix}_`)),
+          ),
+        (name) =>
+          db.all(sql.raw(`SELECT * FROM "${name.replaceAll('"', '""')}"`)).pipe(
+            Effect.orDie,
+            Effect.map((rows) => {
+              const canonical = rows
+                .map((row) => JSON.stringify(row))
+                .toSorted()
+                .join("\n")
+              return [
+                name,
+                {
+                  count: rows.length,
+                  fingerprint: new Bun.CryptoHasher("sha256").update(canonical).digest("hex"),
+                },
+              ] as const
+            }),
+          ),
+        { concurrency: 1 },
+      ),
+    )
+  })
 }
 
 function isJsonObject(value: unknown): value is Readonly<Record<string, unknown>> {
@@ -3463,6 +3524,7 @@ it.instance(
       yield* sessions.remove(sessionID)
     }),
   { config: cfg },
+  60_000,
 )
 
 it.instance(
@@ -4818,7 +4880,7 @@ it.instance(
         session: { title: "strict FIFO steered Turn" },
         parts: [{ type: "text", text: "begin with this request" }],
       })
-      yield* awaitWithTimeout(llm.wait(1), "first model operation was not sampled")
+      yield* awaitWithTimeout(llm.wait(1), "first model operation was not sampled", "10 seconds")
 
       contextBuildHooks.push(contextHook)
       const steerA = yield* prompt
@@ -4850,6 +4912,7 @@ it.instance(
       yield* awaitWithTimeout(
         Effect.promise(() => contextEntered.promise),
         "the post-A context build did not reach its deterministic frontier race",
+        "10 seconds",
       )
       expect((yield* Fiber.join(steerA)).id).toBe(steerAInputID)
       expect(steerB.pollUnsafe()).toBeUndefined()
@@ -4891,7 +4954,7 @@ it.instance(
         .pipe(Effect.catchTag("SqlError", Effect.die))
       contextRelease.resolve()
 
-      yield* awaitWithTimeout(llm.wait(2), "the rebuilt A model operation was not sampled")
+      yield* awaitWithTimeout(llm.wait(2), "the rebuilt A model operation was not sampled", "10 seconds")
       expect(steerB.pollUnsafe()).toBeUndefined()
       expect(yield* llm.calls).toBe(2)
       const afterRebuildModels = yield* database.db
@@ -4916,7 +4979,11 @@ it.instance(
 
       secondRelease.resolve()
       expect((yield* Fiber.join(steerB)).id).toBe(steerBInputID)
-      yield* awaitWithTimeout(llm.wait(3), "the model operation causally bound to steer B was not sampled")
+      yield* awaitWithTimeout(
+        llm.wait(3),
+        "the model operation causally bound to steer B was not sampled",
+        "10 seconds",
+      )
       const terminal = yield* prompt.awaitTurn(sessionID, turnID)
       expect(terminal.terminal).toMatchObject({ outcome: "completed", reason: "normal" })
       expect(yield* llm.calls).toBe(3)
@@ -7449,6 +7516,788 @@ isolatedDatabaseBoundary.instance(
 )
 
 isolatedDatabaseBoundary.instance(
+  "continues from one source-discriminating prior Interaction fact in a fresh Session",
+  () =>
+    Effect.gen(function* () {
+      const { dir, llm } = yield* useServerConfig(providerCfg)
+      const prompt = yield* SessionPrompt.Service
+      const sessions = yield* Session.Service
+      const database = yield* Database.Service
+      yield* database.db
+        .insert(ProjectTable)
+        .values({ id: Project.ID.global, worktree: AbsolutePath.make(dir), sandboxes: [] })
+        .onConflictDoNothing()
+        .run()
+        .pipe(Effect.orDie)
+
+      const bootstrapInput = {
+        course: { type: "new", title: "Euclidean algorithm" },
+        route: {
+          type: "new_view",
+          key: "main",
+          name: "Euclidean algorithm route",
+          authorship: "learner_requested",
+          revision: { items: [{ key: "first-remainder", title: "Trace the first exact remainder" }] },
+        },
+        selection: { type: "set", target: { type: "route" } },
+        anchor: { type: "set", target: { type: "route_item", itemKey: "first-remainder" } },
+      } as const
+      const sourceRequest = "Create a useful Euclidean-algorithm route and teach the first worked step."
+      const sourceFact =
+        "We stopped at the candidate-specific step 84217 = 3 × 27109 + 2890; next, replace (84217, 27109) with (27109, 2890)."
+      const sourceSessionID = SessionID.create()
+      const sourceTurnID = Turn.ID.create()
+      yield* llm.tool(LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY, bootstrapInput)
+      yield* llm.text(sourceFact)
+      yield* prompt.start({
+        sessionID: sourceSessionID,
+        turnID: sourceTurnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 2, tool: 1 },
+        session: {
+          title: "Gate 23 source-discriminating floor",
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        },
+        parts: [{ type: "text", text: sourceRequest }],
+      })
+      expect((yield* prompt.awaitTurn(sourceSessionID, sourceTurnID)).terminal).toMatchObject({
+        outcome: "completed",
+        counters: { model: 2, tool: 1 },
+      })
+
+      const controlSessionID = SessionID.create()
+      const projection = yield* database.db.transaction((tx) =>
+        TurnLearningContext.projectLearningContext(tx, { currentSessionID: controlSessionID, limit: 4 }),
+      )
+      const sourceLocator = projection.entries.find((entry) => entry.locator.turnID === sourceTurnID)?.locator
+      if (!sourceLocator || sourceLocator.status !== "available") {
+        return yield* Effect.die("Gate 23 product-floor source Turn has no exact current Interaction locator")
+      }
+      const stableLearningState = yield* Effect.all({
+        domain: learningDomainDigest(database.db),
+        frontier: database.db.transaction((tx) => LearningFrontier.read(tx)),
+      })
+      const continueRequest = "Continue from exactly where we left off."
+      const controlClarification = "Which exact unfinished worked step should I resume?"
+      const sourceLocatorVisible = (body: unknown) => {
+        const text = providerText(body).join("\n")
+        return (
+          text.includes(continueRequest) &&
+          text.includes(sourceTurnID) &&
+          !text.includes(sourceFact) &&
+          !/(?:84217|27109|2890)/.test(text)
+        )
+      }
+
+      const controlStart = (yield* llm.hits).length
+      const pendingBeforeControl = yield* llm.pending
+      yield* llm.textMatch((hit) => sourceLocatorVisible(hit.body), controlClarification)
+      const controlTurnID = Turn.ID.create()
+      yield* prompt.start({
+        sessionID: controlSessionID,
+        turnID: controlTurnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 1, tool: 1 },
+        session: {
+          title: "Gate 23 floor withheld control",
+          permission: [
+            { permission: "*", pattern: "*", action: "allow" },
+            { permission: "learning_interaction_read", pattern: "*", action: "deny" },
+          ],
+        },
+        parts: [{ type: "text", text: continueRequest }],
+      })
+      expect((yield* prompt.awaitTurn(controlSessionID, controlTurnID)).terminal).toMatchObject({
+        outcome: "completed",
+        counters: { model: 1, tool: 0 },
+      })
+      expect(yield* llm.pending).toBe(pendingBeforeControl)
+      const controlHit = (yield* llm.hits)
+        .slice(controlStart)
+        .find((hit) => providerText(hit.body).some((value) => value.includes(continueRequest)))
+      expect(sourceLocatorVisible(controlHit?.body)).toBe(true)
+      const controlMessages = yield* sessions.messages({ sessionID: controlSessionID })
+      expect(controlMessages.flatMap((message) => message.parts)).toContainEqual(
+        expect.objectContaining({ type: "text", text: controlClarification }),
+      )
+      expect(controlMessages.flatMap((message) => message.parts).some((part) => part.type === "tool")).toBe(false)
+
+      const positiveSessionID = SessionID.create()
+      const positiveTurnID = Turn.ID.create()
+      const positiveDirectory = yield* database.db.transaction((tx) =>
+        TurnLearningContext.projectLearningContext(tx, { currentSessionID: positiveSessionID, limit: 4 }),
+      )
+      const sourceEntryIndex = positiveDirectory.entries.findIndex((entry) => entry.locator.turnID === sourceTurnID)
+      if (sourceEntryIndex < 0) {
+        return yield* Effect.die("Gate 23 product-floor source is absent from the positive recent directory")
+      }
+      const positiveTeaching =
+        "Resume the exact unfinished step: 27109 = 9 × 2890 + 1099, so the next pair is (2890, 1099)."
+      const positiveStart = (yield* llm.hits).length
+      const pendingBeforePositive = yield* llm.pending
+      yield* llm.toolMatch((hit) => sourceLocatorVisible(hit.body), "learning_interaction_read", {
+        action: "list_recent",
+        limit: 4,
+      })
+      yield* llm.toolMatch(
+        (hit) => {
+          const text = providerText(hit.body).join("\n")
+          return (
+            text.includes(continueRequest) &&
+            text.includes(sourceTurnID) &&
+            text.includes('"directoryCallID":"call_1"') &&
+            !text.includes(sourceFact)
+          )
+        },
+        "learning_interaction_read",
+        {
+          action: "read_recent_range",
+          directoryCallID: "call_1",
+          entryIndex: sourceEntryIndex,
+        },
+      )
+      yield* llm.textMatch((hit) => {
+        const text = providerText(hit.body).join("\n")
+        return text.includes(continueRequest) && /84217/.test(text) && /27109/.test(text) && /2890/.test(text)
+      }, positiveTeaching)
+      yield* prompt.start({
+        sessionID: positiveSessionID,
+        turnID: positiveTurnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 3, tool: 2 },
+        session: {
+          title: "Gate 23 exact product-floor continuation",
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        },
+        parts: [{ type: "text", text: continueRequest }],
+      })
+      expect((yield* prompt.awaitTurn(positiveSessionID, positiveTurnID)).terminal).toMatchObject({
+        outcome: "completed",
+        counters: { model: 3, tool: 2 },
+      })
+
+      const positiveMessages = yield* sessions.messages({ sessionID: positiveSessionID })
+      const interactionReads = positiveMessages
+        .flatMap((message) => message.parts)
+        .filter((part): part is SessionV1.ToolPart => part.type === "tool" && part.tool === "learning_interaction_read")
+      const directoryRead = interactionReads[0]
+      const exactRead = interactionReads[1]
+      if (
+        !directoryRead ||
+        directoryRead.state.status !== "completed" ||
+        !exactRead ||
+        exactRead.state.status !== "completed"
+      ) {
+        return yield* Effect.die("Gate 23 product-floor continuation omitted its compact exact Interaction read")
+      }
+      expect(directoryRead.state.output).toContain('"directoryCallID":"call_1"')
+      expect(directoryRead.state.output).not.toContain(sourceFact)
+      expect(exactRead.state.input).toMatchObject({
+        action: "read_recent_range",
+        directoryCallID: "call_1",
+        entryIndex: sourceEntryIndex,
+      })
+      expect(exactRead.state.output).toMatch(/84217.*27109.*2890/s)
+      const positiveHits = (yield* llm.hits)
+        .slice(positiveStart)
+        .filter((hit) => providerText(hit.body).some((value) => value.includes(continueRequest)))
+      expect(providerText(positiveHits[0]?.body).join("\n")).not.toMatch(/(?:84217|27109|2890)/)
+      expect(providerText(positiveHits[1]?.body).join("\n")).not.toMatch(/(?:84217|27109|2890)/)
+      expect(providerText(positiveHits[2]?.body).join("\n")).toMatch(/84217.*27109.*2890/s)
+      expect(yield* llm.pending).toBe(pendingBeforePositive)
+      expect(positiveMessages.flatMap((message) => message.parts)).toContainEqual(
+        expect.objectContaining({ type: "text", text: positiveTeaching }),
+      )
+      expect(positiveMessages.flatMap((message) => message.parts)).not.toContainEqual(
+        expect.objectContaining({ type: "text", text: controlClarification }),
+      )
+
+      const operations = yield* database.db
+        .select({ assistantMessageID: TurnModelOperationTable.assistant_message_id })
+        .from(TurnModelOperationTable)
+        .where(eq(TurnModelOperationTable.turn_id, positiveTurnID))
+        .orderBy(TurnModelOperationTable.ordinal)
+        .all()
+        .pipe(Effect.orDie)
+      const firstOperation = operations[0]
+      if (!firstOperation) return yield* Effect.die("Gate 23 product-floor continuation has no model operation")
+      const cut = yield* database.db.transaction((tx) => LearningContext.readCut(tx, firstOperation.assistantMessageID))
+      expect(JSON.stringify(cut)).toContain(sourceTurnID)
+      expect(
+        yield* Effect.all({
+          domain: learningDomainDigest(database.db),
+          frontier: database.db.transaction((tx) => LearningFrontier.read(tx)),
+        }),
+      ).toEqual(stableLearningState)
+
+      yield* sessions.remove(sourceSessionID)
+      yield* sessions.remove(controlSessionID)
+      yield* sessions.remove(positiveSessionID)
+    }),
+  { config: cfg },
+  90_000,
+)
+
+isolatedDatabaseBoundary.instance(
+  "isolates a corrected learner-state successor in fresh-Session teaching and a withheld control",
+  () =>
+    Effect.gen(function* () {
+      const { dir, llm } = yield* useServerConfig(providerCfg)
+      const prompt = yield* SessionPrompt.Service
+      const sessions = yield* Session.Service
+      const database = yield* Database.Service
+      yield* database.db
+        .insert(ProjectTable)
+        .values({ id: Project.ID.global, worktree: AbsolutePath.make(dir), sandboxes: [] })
+        .onConflictDoNothing()
+        .run()
+        .pipe(Effect.orDie)
+
+      const journeySessionID = SessionID.create()
+      const teachingRequest = "Teach the binary-search invariant with one concrete comparison."
+      const initialTeaching =
+        "Before each comparison, if the target exists, its index remains inside the current interval; compare the midpoint and discard only indices the comparison makes impossible."
+      yield* llm.textMatch(
+        (hit) => providerText(hit.body).some((value) => value.includes(teachingRequest)),
+        initialTeaching,
+      )
+      const teachingTurnID = Turn.ID.create()
+      yield* prompt.start({
+        sessionID: journeySessionID,
+        turnID: teachingTurnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 1, tool: 0 },
+        session: { title: "Gate 23 durable learner journey" },
+        parts: [{ type: "text", text: teachingRequest }],
+      })
+      expect((yield* prompt.awaitTurn(journeySessionID, teachingTurnID)).terminal).toMatchObject({
+        outcome: "completed",
+        counters: { model: 1, tool: 0 },
+      })
+
+      const report =
+        "I can repeat the invariant, but I still cannot tell which half becomes impossible after the comparison."
+      const subject = "Binary-search invariant application"
+      const initialBody =
+        "Can repeat the invariant; choosing the impossible half from one comparison remains uncertain."
+      const createInput = {
+        operation: "create" as const,
+        cause: {
+          type: "interpreted_learner_report" as const,
+          excerpt: { text: report, startByte: 0, endByte: new TextEncoder().encode(report).byteLength },
+        },
+        snapshot: {
+          subject: { label: subject, scope: { type: "learner_home" as const } },
+          judgmentBody: initialBody,
+          exactBasisRefs: [],
+          uncertaintyAndLimits: "Learner report is fallible and remains open to correction.",
+          basisScope: "whole_judgment" as const,
+        },
+      }
+      yield* llm.tool(LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY, createInput)
+      yield* llm.text("I retained that fallible report for later teaching without treating it as mastery.")
+      const reportTurnID = Turn.ID.create()
+      yield* prompt.start({
+        sessionID: journeySessionID,
+        turnID: reportTurnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 2, tool: 1 },
+        parts: [{ type: "text", text: report }],
+      })
+      expect((yield* prompt.awaitTurn(journeySessionID, reportTurnID)).terminal).toMatchObject({
+        outcome: "completed",
+        counters: { model: 2, tool: 1 },
+      })
+      const created = (yield* database.db.transaction((tx) =>
+        LearnerStateJudgment.read(tx, { type: "discover", disposition: "active" }, { limit: 8 }),
+      )).items.find(
+        (item): item is LearnerStateJudgment.Judgment =>
+          "current" in item && item.current.snapshot.subject.label === subject,
+      )
+      if (!created) return yield* Effect.die("Gate 23 learner report did not produce a judgment head")
+      const judgmentID = created.id
+      const firstRevisionID = created.current.id
+      const applicationRequest = "Use my current learner-state memory and teach the binary-search step I am missing."
+      const hasExactDirectory = (body: unknown, revisionID: string, version: number) => {
+        const text = providerText(body).join("\n")
+        return (
+          text.includes(applicationRequest) &&
+          text.includes("[Repa learning context — protected]") &&
+          text.includes('"learner_state_judgment"') &&
+          text.includes(judgmentID) &&
+          text.includes(revisionID) &&
+          text.includes(subject) &&
+          Number.isInteger(version)
+        )
+      }
+      const hasExactRead = (body: unknown, revisionID: string, version: number, judgmentBody: string) => {
+        const text = providerText(body).join("\n")
+        return (
+          text.includes(applicationRequest) &&
+          text.includes('"returnedCount":1') &&
+          text.includes(`"id":"${revisionID}"`) &&
+          text.includes(`"judgmentID":"${judgmentID}"`) &&
+          text.includes(`"version":${version}`) &&
+          text.includes(`"judgmentBody":${JSON.stringify(judgmentBody)}`)
+        )
+      }
+
+      const initialApplicationTeaching =
+        "If target < a[mid], every index at or right of mid is impossible; if target > a[mid], every index at or left of mid is impossible."
+      const initialConsumerStart = (yield* llm.hits).length
+      yield* llm.toolMatch(
+        (hit) => {
+          const text = providerText(hit.body).join("\n")
+          return text.includes(applicationRequest) && text.includes(judgmentID)
+        },
+        LearnerStateJudgment.READ_CAPABILITY,
+        { action: "revision", judgmentID, revisionID: firstRevisionID },
+      )
+      yield* llm.textMatch((hit) => hasExactRead(hit.body, firstRevisionID, 1, initialBody), initialApplicationTeaching)
+      const initialConsumerSessionID = SessionID.create()
+      const initialConsumerTurnID = Turn.ID.create()
+      yield* prompt.start({
+        sessionID: initialConsumerSessionID,
+        turnID: initialConsumerTurnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 2, tool: 1 },
+        session: {
+          title: "Gate 23 initial learner-state consumer",
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        },
+        parts: [{ type: "text", text: applicationRequest }],
+      })
+      expect((yield* prompt.awaitTurn(initialConsumerSessionID, initialConsumerTurnID)).terminal).toMatchObject({
+        outcome: "completed",
+        counters: { model: 2, tool: 1 },
+      })
+      const initialConsumerHits = (yield* llm.hits)
+        .slice(initialConsumerStart)
+        .filter((hit) => providerText(hit.body).some((value) => value.includes(applicationRequest)))
+      expect(hasExactDirectory(initialConsumerHits[0]?.body, firstRevisionID, 1)).toBe(true)
+      expect(hasExactRead(initialConsumerHits[1]?.body, firstRevisionID, 1, initialBody)).toBe(true)
+      const initialOperations = yield* database.db
+        .select({ assistantMessageID: TurnModelOperationTable.assistant_message_id })
+        .from(TurnModelOperationTable)
+        .where(eq(TurnModelOperationTable.turn_id, initialConsumerTurnID))
+        .orderBy(TurnModelOperationTable.ordinal)
+        .all()
+        .pipe(Effect.orDie)
+      const initialOperation = initialOperations[0]
+      if (!initialOperation) return yield* Effect.die("Gate 23 initial learner-state consumer has no model operation")
+      const immutableInitialCut = JSON.stringify(
+        yield* database.db.transaction((tx) => LearningContext.readCut(tx, initialOperation.assistantMessageID)),
+      )
+
+      const current = yield* database.db.transaction((tx) =>
+        LearnerStateJudgment.readCurrent(tx, judgmentID, Date.now()),
+      )
+      if (!current?.currentHead) return yield* Effect.die("Gate 23 learner-state correction lost the current head")
+      const correctionSessionID = SessionID.create()
+      const currentReadRequest = "Read the exact current learner-state judgment before I correct it."
+      const currentReadRelease = Promise.withResolvers<void>()
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => {
+          currentReadRelease.resolve()
+          setSystemTime()
+        }),
+      )
+      const currentReadHitStart = (yield* llm.hits).length
+      yield* llm.tool(LearnerStateJudgment.READ_CAPABILITY, { action: "current", judgmentID, includeInspection: true })
+      yield* llm.hold("What would you like to correct in that current judgment?", currentReadRelease.promise)
+      const currentReadTurnID = Turn.ID.create()
+      yield* prompt.start({
+        sessionID: correctionSessionID,
+        turnID: currentReadTurnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 2, tool: 1 },
+        session: {
+          title: "Gate 23 learner-state correction source",
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        },
+        parts: [{ type: "text", text: currentReadRequest }],
+      })
+      yield* awaitWithTimeout(
+        llm.wait(currentReadHitStart + 2),
+        "Gate 23 current-read final model operation was not sampled",
+        "10 seconds",
+      )
+      const currentReadLive = yield* database.db
+        .select({ causalTime: TurnTable.causal_time })
+        .from(TurnTable)
+        .where(eq(TurnTable.id, currentReadTurnID))
+        .get()
+        .pipe(Effect.orDie)
+      const presentationFrontier = yield* database.db
+        .select({ time: SessionPresentationFrontierTable.frontier_time })
+        .from(SessionPresentationFrontierTable)
+        .where(eq(SessionPresentationFrontierTable.session_id, correctionSessionID))
+        .get()
+        .pipe(Effect.orDie)
+      const sharedFrontier = yield* database.db.transaction((tx) => LearningFrontier.read(tx))
+      const equalTime = Math.max(
+        Date.now(),
+        currentReadLive?.causalTime ?? 0,
+        presentationFrontier?.time ?? 0,
+        sharedFrontier.time,
+      ) + 1_000
+      setSystemTime(new Date(equalTime))
+      currentReadRelease.resolve()
+      expect((yield* prompt.awaitTurn(correctionSessionID, currentReadTurnID)).terminal).toMatchObject({
+        outcome: "completed",
+        counters: { model: 2, tool: 1 },
+      })
+      const currentReadTerminal = yield* database.db
+        .select({ time: TurnTable.time_terminal })
+        .from(TurnTable)
+        .where(eq(TurnTable.id, currentReadTurnID))
+        .get()
+        .pipe(Effect.orDie)
+      expect(currentReadTerminal?.time).toBe(equalTime)
+      const currentReadPart = (yield* sessions.messages({ sessionID: correctionSessionID }))
+        .flatMap((message) => message.parts)
+        .find(
+          (part): part is SessionV1.ToolPart =>
+            part.type === "tool" && part.tool === LearnerStateJudgment.READ_CAPABILITY,
+        )
+      if (!currentReadPart || currentReadPart.state.status !== "completed") {
+        return yield* Effect.die("Gate 23 compact correction source omitted its exact current read")
+      }
+      expect(currentReadPart.state.output).toContain(current.currentHead.revisionID)
+      expect(currentReadPart.state.output).toContain(
+        `"correctionHandle":{"currentReadCallID":"${currentReadPart.callID}"}`,
+      )
+      const correction =
+        "Correction: the invariant definition itself is still unclear, so define it before asking me to discard a half."
+      const correctedBody =
+        "The invariant definition itself remains uncertain; application and half-discard choices should follow later."
+      const correctionInput = {
+        operation: "revise_from_current_read" as const,
+        currentReadCallID: currentReadPart.callID,
+        sourceExcerpt: correction,
+        judgmentBody: correctedBody,
+        uncertaintyAndLimits: "Natural learner correction; fallible and revisable.",
+        rationale: "Use the learner's correction to change the next teaching focus.",
+      }
+      const correctionTurnID = Turn.ID.create()
+      yield* llm.tool(LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY, correctionInput)
+      yield* llm.text("I corrected the remembered judgment without treating either revision as mastery.")
+      yield* prompt.start({
+        sessionID: correctionSessionID,
+        turnID: correctionTurnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 2, tool: 1 },
+        parts: [{ type: "text", text: correction }],
+      })
+      expect((yield* prompt.awaitTurn(correctionSessionID, correctionTurnID)).terminal).toMatchObject({
+        outcome: "completed",
+        counters: { model: 2, tool: 1 },
+      })
+      const correctionAdmission = yield* database.db
+        .select({ time: TurnTable.time_admitted })
+        .from(TurnTable)
+        .where(eq(TurnTable.id, correctionTurnID))
+        .get()
+        .pipe(Effect.orDie)
+      expect(correctionAdmission?.time).toBe(equalTime)
+      const compactCorrectionTool = (yield* sessions.messages({ sessionID: correctionSessionID }))
+        .flatMap((message) => message.parts)
+        .find(
+          (part): part is SessionV1.ToolPart =>
+            part.type === "tool" && part.tool === LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY,
+        )
+      if (!compactCorrectionTool || compactCorrectionTool.state.status !== "completed") {
+        return yield* Effect.die(
+          `Gate 23 compact learner-state correction did not complete its typed tool: ${JSON.stringify(compactCorrectionTool?.state)}`,
+        )
+      }
+      expect(compactCorrectionTool.state.metadata).toMatchObject({ outcome: "applied" })
+      expect(compactCorrectionTool.state.output).toContain(judgmentID)
+      expect(compactCorrectionTool.state.input).toMatchObject({
+        operation: "revise",
+        judgmentID,
+        expectedHead: current.currentHead,
+        cause: {
+          type: "learner_correction",
+          excerpt: {
+            text: correction,
+            startByte: 0,
+            endByte: new TextEncoder().encode(correction).byteLength,
+          },
+        },
+        snapshot: {
+          subject: current.revision.snapshot.subject,
+          judgmentBody: correctedBody,
+          exactBasisRefs: current.revision.snapshot.exactBasis.map((basis) => basis.ref),
+        },
+      })
+      const compactCandidate = yield* database.db
+        .select({ envelope: TurnToolCandidateTable.normalized_envelope })
+        .from(TurnToolCandidateTable)
+        .where(eq(TurnToolCandidateTable.part_id, compactCorrectionTool.id))
+        .get()
+        .pipe(Effect.orDie)
+      expect(compactCandidate?.envelope).toEqual({ input: correctionInput })
+      const corrected = yield* database.db.transaction((tx) =>
+        LearnerStateJudgment.readCurrent(tx, judgmentID, Date.now()),
+      )
+      if (!corrected) return yield* Effect.die("Gate 23 correction did not produce a successor")
+      expect(corrected.currentRelation).toBe("current")
+      expect(corrected.revision).toMatchObject({
+        version: 2,
+        predecessorRevisionID: firstRevisionID,
+        snapshot: { judgmentBody: correctedBody },
+      })
+      expect(
+        yield* database.db.transaction((tx) => LearnerStateJudgment.readExactRevision(tx, judgmentID, firstRevisionID)),
+      ).toEqual(created.current)
+      const stableCorrectedState = yield* Effect.all({
+        domain: learningDomainDigest(database.db),
+        frontier: database.db.transaction((tx) => LearningFrontier.read(tx)),
+      })
+
+      const withheldTeaching = "What changed in your understanding of the invariant definition?"
+      const withheldSessionID = SessionID.create()
+      const withheldTurnID = Turn.ID.create()
+      const withheldStart = (yield* llm.hits).length
+      yield* llm.textMatch((hit) => {
+        const text = providerText(hit.body).join("\n")
+        return text.includes(applicationRequest) && !text.includes(correction) && !text.includes(correctedBody)
+      }, withheldTeaching)
+      yield* prompt.start({
+        sessionID: withheldSessionID,
+        turnID: withheldTurnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 1, tool: 1 },
+        session: {
+          title: "Gate 23 successor-withheld control",
+          permission: [
+            { permission: "*", pattern: "*", action: "allow" },
+            { permission: LearnerStateJudgment.READ_CAPABILITY, pattern: "*", action: "deny" },
+            { permission: "learning_interaction_read", pattern: "*", action: "deny" },
+          ],
+        },
+        parts: [{ type: "text", text: applicationRequest }],
+      })
+      expect((yield* prompt.awaitTurn(withheldSessionID, withheldTurnID)).terminal).toMatchObject({
+        outcome: "completed",
+        counters: { model: 1, tool: 0 },
+      })
+      const withheldHit = (yield* llm.hits)
+        .slice(withheldStart)
+        .find((hit) => providerText(hit.body).some((value) => value.includes(applicationRequest)))
+      expect(providerText(withheldHit?.body).join("\n")).not.toContain(correction)
+      expect(providerText(withheldHit?.body).join("\n")).not.toContain(correctedBody)
+
+      const correctedTeaching =
+        "Start with the definition: before each loop iteration, the current interval contains every still-possible target index; only after that statement is clear should a comparison eliminate one half."
+      const positiveSessionID = SessionID.create()
+      const positiveTurnID = Turn.ID.create()
+      const positiveStart = (yield* llm.hits).length
+      yield* llm.toolMatch(
+        (hit) => {
+          const text = providerText(hit.body).join("\n")
+          return (
+            hasExactDirectory(hit.body, corrected.revision.id, 2) &&
+            !text.includes(correction) &&
+            !text.includes(correctedBody)
+          )
+        },
+        LearnerStateJudgment.READ_CAPABILITY,
+        { action: "revision", judgmentID, revisionID: corrected.revision.id },
+      )
+      yield* llm.textMatch((hit) => hasExactRead(hit.body, corrected.revision.id, 2, correctedBody), correctedTeaching)
+      yield* prompt.start({
+        sessionID: positiveSessionID,
+        turnID: positiveTurnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 2, tool: 1 },
+        session: {
+          title: "Gate 23 isolated successor consumer",
+          permission: [
+            { permission: "*", pattern: "*", action: "allow" },
+            { permission: "learning_interaction_read", pattern: "*", action: "deny" },
+          ],
+        },
+        parts: [{ type: "text", text: applicationRequest }],
+      })
+      expect((yield* prompt.awaitTurn(positiveSessionID, positiveTurnID)).terminal).toMatchObject({
+        outcome: "completed",
+        counters: { model: 2, tool: 1 },
+      })
+
+      const positiveHits = (yield* llm.hits)
+        .slice(positiveStart)
+        .filter((hit) => providerText(hit.body).some((value) => value.includes(applicationRequest)))
+      expect(providerText(positiveHits[0]?.body).join("\n")).not.toContain(correction)
+      expect(providerText(positiveHits[0]?.body).join("\n")).not.toContain(correctedBody)
+      expect(providerText(positiveHits[1]?.body).join("\n")).toContain(correctedBody)
+      const positiveMessages = yield* sessions.messages({ sessionID: positiveSessionID })
+      const positiveTools = positiveMessages
+        .flatMap((message) => message.parts)
+        .filter((part): part is SessionV1.ToolPart => part.type === "tool")
+      expect(positiveTools.map((part) => part.tool)).toEqual([LearnerStateJudgment.READ_CAPABILITY])
+      expect(positiveTools[0]?.state.status).toBe("completed")
+      expect(positiveTools[0]?.state.status === "completed" ? positiveTools[0].state.output : "").toContain(
+        correctedBody,
+      )
+      expect(positiveMessages.flatMap((message) => message.parts)).toContainEqual(
+        expect.objectContaining({ type: "text", text: correctedTeaching }),
+      )
+      expect(positiveMessages.flatMap((message) => message.parts)).not.toContainEqual(
+        expect.objectContaining({ type: "text", text: withheldTeaching }),
+      )
+      expect(
+        yield* Effect.all({
+          domain: learningDomainDigest(database.db),
+          frontier: database.db.transaction((tx) => LearningFrontier.read(tx)),
+        }),
+      ).toEqual(stableCorrectedState)
+      expect(
+        JSON.stringify(
+          yield* database.db.transaction((tx) => LearningContext.readCut(tx, initialOperation.assistantMessageID)),
+        ),
+      ).toBe(immutableInitialCut)
+
+      yield* sessions.remove(journeySessionID)
+      yield* sessions.remove(initialConsumerSessionID)
+      yield* sessions.remove(correctionSessionID)
+      yield* sessions.remove(withheldSessionID)
+      yield* sessions.remove(positiveSessionID)
+    }),
+  { config: cfg },
+  120_000,
+)
+
+isolatedDatabaseBoundary.instance(
+  "changes the next peer teaching move from same-Session feedback without a learning-domain write",
+  () =>
+    Effect.gen(function* () {
+      const { dir, llm } = yield* useServerConfig(providerCfg)
+      const prompt = yield* SessionPrompt.Service
+      const sessions = yield* Session.Service
+      const database = yield* Database.Service
+      yield* database.db
+        .insert(ProjectTable)
+        .values({ id: Project.ID.global, worktree: AbsolutePath.make(dir), sandboxes: [] })
+        .onConflictDoNothing()
+        .run()
+        .pipe(Effect.orDie)
+
+      const sessionID = SessionID.create()
+      const initialRequest = "Explain a mutex with the one-key picture."
+      const initialTeaching =
+        "Picture one brass key shared by the threads: only the thread holding that key may enter the critical section."
+      const feedback =
+        "That key picture did not help. Compare the mutex to a one-lane bridge and show what a waiting thread does."
+      const adaptedTeaching =
+        "Use a one-lane bridge: one thread drives through the critical section while the others wait at the gate; unlock lets exactly one waiter compete to enter next."
+
+      yield* llm.textMatch(
+        (hit) => providerText(hit.body).some((value) => value.includes(initialRequest)),
+        initialTeaching,
+      )
+      const initialTurnID = Turn.ID.create()
+      yield* prompt.start({
+        sessionID,
+        turnID: initialTurnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 1, tool: 1 },
+        session: { title: "Gate 23 zero-write feedback" },
+        parts: [{ type: "text", text: initialRequest }],
+      })
+      expect((yield* prompt.awaitTurn(sessionID, initialTurnID)).terminal).toMatchObject({
+        outcome: "completed",
+        counters: { model: 1, tool: 0 },
+      })
+
+      const before = yield* Effect.all({
+        domain: learningDomainDigest(database.db),
+        frontier: database.db.transaction((tx) => LearningFrontier.read(tx)),
+      })
+      const pending = yield* llm.pending
+      yield* llm.textMatch((hit) => {
+        const text = providerText(hit.body).join("\n")
+        return text.includes(initialRequest) && text.includes(initialTeaching) && text.includes(feedback)
+      }, adaptedTeaching)
+      const feedbackTurnID = Turn.ID.create()
+      yield* prompt.start({
+        sessionID,
+        turnID: feedbackTurnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 1, tool: 1 },
+        parts: [{ type: "text", text: feedback }],
+      })
+      expect((yield* prompt.awaitTurn(sessionID, feedbackTurnID)).terminal).toMatchObject({
+        outcome: "completed",
+        counters: { model: 1, tool: 0 },
+      })
+      expect(yield* llm.pending).toBe(pending)
+      expect(
+        yield* Effect.all({
+          domain: learningDomainDigest(database.db),
+          frontier: database.db.transaction((tx) => LearningFrontier.read(tx)),
+        }),
+      ).toEqual(before)
+
+      const feedbackHit = (yield* llm.hits).findLast((hit) =>
+        providerText(hit.body).some((value) => value.includes(feedback)),
+      )
+      const providerHistory = providerText(feedbackHit?.body).join("\n")
+      expect(providerHistory).toContain(initialRequest)
+      expect(providerHistory).toContain(initialTeaching)
+      expect(providerHistory).toContain(feedback)
+      const messages = yield* sessions.messages({ sessionID })
+      expect(messages.flatMap((message) => message.parts)).toContainEqual(
+        expect.objectContaining({ type: "text", text: initialTeaching }),
+      )
+      expect(messages.flatMap((message) => message.parts)).toContainEqual(
+        expect.objectContaining({ type: "text", text: adaptedTeaching }),
+      )
+      expect(messages.flatMap((message) => message.parts).some((part) => part.type === "tool")).toBe(false)
+      yield* sessions.remove(sessionID)
+    }),
+  { config: cfg },
+  60_000,
+)
+
+isolatedDatabaseBoundary.instance(
   "finalizes an admitted FutureAttention A1 claim when its live Turn is interrupted",
   () =>
     Effect.gen(function* () {
@@ -8426,6 +9275,129 @@ noLLMServer.instance(
 )
 
 it.instance(
+  "binds one promoted steer to the exact later model operation when its provider request fails",
+  () =>
+    Effect.gen(function* () {
+      const { dir, llm } = yield* useServerConfig(providerCfg)
+      const prompt = yield* SessionPrompt.Service
+      const sessions = yield* Session.Service
+      const database = yield* Database.Service
+      yield* database.db
+        .insert(ProjectTable)
+        .values({ id: Project.ID.global, worktree: AbsolutePath.make(dir), sandboxes: [] })
+        .onConflictDoNothing()
+        .run()
+        .pipe(Effect.orDie)
+
+      const release = Promise.withResolvers<void>()
+      yield* Effect.addFinalizer(() => Effect.sync(() => release.resolve()))
+      const rootResponse = "The root move completes before the exact steer is promoted."
+      yield* llm.hold(rootResponse, release.promise)
+      yield* llm.error(400, { error: { message: "Gate 23 promoted-steer provider failure" } })
+
+      const sessionID = SessionID.create()
+      const turnID = Turn.ID.create()
+      const rootInputID = Turn.InputID.create()
+      const rootRequest = "Begin one finite Turn and wait for my current-work correction."
+      yield* prompt.start({
+        sessionID,
+        turnID,
+        inputID: rootInputID,
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 2, tool: 0 },
+        session: { title: "Gate 23 promoted-steer provider failure" },
+        parts: [{ type: "text", text: rootRequest }],
+      })
+      yield* awaitWithTimeout(llm.wait(1), "Gate 23 root model operation was not sampled", "10 seconds")
+
+      const steerInputID = Turn.InputID.create()
+      const steerText = "Use this exact promoted correction in the next model operation."
+      const steer = yield* prompt
+        .steer({
+          sessionID,
+          expectedTurnID: turnID,
+          inputID: steerInputID,
+          messageID: MessageID.ascending(),
+          agent: "repa",
+          model: ref,
+          parts: [{ type: "text", text: steerText }],
+        })
+        .pipe(Effect.forkChild)
+      yield* Effect.sleep("25 millis")
+      expect(steer.pollUnsafe()).toBeUndefined()
+      release.resolve()
+      expect((yield* Fiber.join(steer)).id).toBe(steerInputID)
+
+      const result = yield* prompt.awaitTurn(sessionID, turnID)
+      expect(result.terminal).toMatchObject({
+        outcome: "failed",
+        reason: "provider_failure",
+        counters: { model: 2, tool: 0 },
+      })
+      const inputs = yield* database.db
+        .select({
+          id: TurnInputTable.id,
+          occurrenceID: TurnInputTable.occurrence_id,
+          source: TurnInputTable.source,
+          ordinal: TurnInputTable.ordinal,
+        })
+        .from(TurnInputTable)
+        .where(eq(TurnInputTable.turn_id, turnID))
+        .orderBy(TurnInputTable.ordinal)
+        .all()
+        .pipe(Effect.orDie)
+      const models = yield* database.db
+        .select({
+          inputID: TurnModelOperationTable.input_id,
+          causalOccurrenceID: TurnModelOperationTable.causal_occurrence_id,
+          state: TurnModelOperationTable.state,
+          ordinal: TurnModelOperationTable.ordinal,
+        })
+        .from(TurnModelOperationTable)
+        .where(eq(TurnModelOperationTable.turn_id, turnID))
+        .orderBy(TurnModelOperationTable.ordinal)
+        .all()
+        .pipe(Effect.orDie)
+      expect(inputs.map((input) => ({ id: input.id, source: input.source, ordinal: input.ordinal }))).toEqual([
+        { id: rootInputID, source: "learner_root", ordinal: 0 },
+        { id: steerInputID, source: "learner_steer", ordinal: 1 },
+      ])
+      expect(models.map((model) => ({ inputID: model.inputID, state: model.state, ordinal: model.ordinal }))).toEqual([
+        { inputID: rootInputID, state: "completed", ordinal: 0 },
+        { inputID: steerInputID, state: "failed", ordinal: 1 },
+      ])
+      expect(models.map((model) => model.causalOccurrenceID)).toEqual(inputs.map((input) => input.occurrenceID))
+
+      const events = yield* database.db
+        .select({ type: EventTable.type, data: EventTable.data })
+        .from(EventTable)
+        .where(eq(EventTable.aggregate_id, sessionID))
+        .orderBy(EventTable.seq)
+        .all()
+        .pipe(Effect.orDie)
+      expect(
+        events
+          .filter((event) => event.type.startsWith("turn.input.promoted"))
+          .map((event) => (event.data as { input?: { id?: string } }).input?.id),
+      ).toEqual([steerInputID])
+      const providerRequests = (yield* llm.hits).filter((hit) => {
+        const text = providerText(hit.body).join("\n")
+        return text.includes(rootRequest) || text.includes(steerText)
+      })
+      expect(providerRequests).toHaveLength(2)
+      expect(providerText(providerRequests[0]?.body).join("\n")).not.toContain(steerText)
+      expect(providerText(providerRequests[1]?.body).join("\n")).toContain(steerText)
+      expect(providerText(providerRequests[1]?.body).join("\n")).toContain(rootResponse)
+      expect(yield* llm.pending).toBe(0)
+      yield* sessions.remove(sessionID)
+    }),
+  { config: cfg },
+  60_000,
+)
+
+it.instance(
   "interrupting a parent Turn settles its live child before returning",
   () =>
     Effect.gen(function* () {
@@ -8525,4 +9497,5 @@ raceNoLLMServer.instance(
       yield* sessions.remove(chat.id)
     }),
   { config: cfg },
+  30_000,
 )

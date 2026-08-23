@@ -3512,7 +3512,7 @@ function persistLearnerStateJudgmentSelection(
   return events
     .transaction((tx) =>
       Effect.gen(function* () {
-        const metadata = yield* settlementMetadata(tx, registration.sessionID, Date.now())
+        const metadata = yield* learnerStateJudgmentPermissionMetadata(tx, registration)
         if (selection.action === "ask") {
           yield* LearnerStateJudgment.issueCapabilityPrompt(tx, {
             partID: registration.partID,
@@ -3545,7 +3545,7 @@ function persistLearnerStateJudgmentReply(
   return events
     .transaction((tx) =>
       Effect.gen(function* () {
-        const metadata = yield* settlementMetadata(tx, registration.sessionID, Date.now())
+        const metadata = yield* learnerStateJudgmentPermissionMetadata(tx, registration)
         yield* LearnerStateJudgment.settlePrompt(tx, {
           partID: registration.partID,
           requestID: input.request.id,
@@ -3638,6 +3638,14 @@ function readLearnerStateJudgmentState(tx: EventV2.Transaction, registration: Re
     partID: registration.partID,
     assistantMessageID: registration.assistantMessageID,
     providerCallID: registration.callID,
+  })
+}
+
+function learnerStateJudgmentPermissionMetadata(tx: EventV2.Transaction, registration: Registration) {
+  return Effect.gen(function* () {
+    const state = yield* readLearnerStateJudgmentState(tx, registration)
+    if (!state) return yield* new LearningCommand.InvocationNotFoundError({ partID: registration.partID })
+    return yield* settlementMetadata(tx, registration.sessionID, state.timeAdmitted)
   })
 }
 

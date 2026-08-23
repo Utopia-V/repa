@@ -56,7 +56,7 @@ import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import { ConfigPermissionV1 } from "@opencode-ai/core/v1/config/permission"
 import { McpCatalog } from "@/mcp/catalog"
 import { AcceptCourseViewRevisionTool } from "./accept-course-view-revision"
-import { assertExternalToolID, toolCallPreparation } from "./learning-command"
+import { assertExternalToolID, learningCommandInputResolution, toolCallPreparation } from "./learning-command"
 import { SetCourseRouteAnchorTool, SetDefaultCoursePreferenceTool } from "./learner-navigation"
 import { LearningCommandRuntime } from "@/learning-command/runtime"
 import { RepresentationCommandRuntime } from "@/learning-command/representation-runtime"
@@ -481,6 +481,7 @@ const layer = Layer.effect(
         visible,
         Effect.fnUntraced(function* (tool: Tool.Def) {
           const prepareToolCall = toolCallPreparation(tool)
+          const resolveLearningCommandInput = learningCommandInputResolution(tool)
           const output = {
             description: tool.description,
             parameters: tool.parameters,
@@ -505,6 +506,7 @@ const layer = Layer.effect(
             execute: tool.execute,
             formatValidationError: tool.formatValidationError,
             ...(prepareToolCall ? { prepareToolCall } : {}),
+            ...(resolveLearningCommandInput ? { resolveLearningCommandInput } : {}),
           }
         }),
         { concurrency: "unbounded" },

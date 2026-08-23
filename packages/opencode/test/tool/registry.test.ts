@@ -1390,7 +1390,11 @@ describe("tool.registry", () => {
       expect(command.description).toContain("whole revision")
       expect(command.description).toContain("may remain zero-write")
       expect(command.description).toContain("Never infer a judgment from silence")
-      expect((command.jsonSchema as { additionalProperties?: boolean }).additionalProperties).toBe(false)
+      expect(
+        (command.jsonSchema as { anyOf?: Array<{ additionalProperties?: boolean }> }).anyOf?.map(
+          (branch) => branch.additionalProperties,
+        ),
+      ).toEqual([false, false])
       expect(
         (query.jsonSchema as { anyOf?: Array<{ additionalProperties?: boolean }> }).anyOf?.map(
           (branch) => branch.additionalProperties,

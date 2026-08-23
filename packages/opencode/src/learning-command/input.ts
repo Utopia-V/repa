@@ -1064,6 +1064,22 @@ export const UpdateLearnerStateJudgmentInput = Schema.Struct({
 
 export type UpdateLearnerStateJudgmentInput = LearnerStateJudgment.Command
 
+export const CompactLearnerStateCorrectionInput = Schema.Struct({
+  operation: Schema.Literal("revise_from_current_read"),
+  currentReadCallID: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(8192)),
+  sourceExcerpt: LearnerStateText(LearnerStateJudgment.MAX_EXCERPT_BYTES),
+  judgmentBody: LearnerStateText(LearnerStateJudgment.MAX_JUDGMENT_BODY_BYTES),
+  uncertaintyAndLimits: LearnerStateText(LearnerStateJudgment.MAX_UNCERTAINTY_BYTES),
+  rationale: LearnerStateText(LearnerStateJudgment.MAX_RATIONALE_BYTES),
+}).annotate({ parseOptions: { onExcessProperty: "error" } })
+export type CompactLearnerStateCorrectionInput = typeof CompactLearnerStateCorrectionInput.Type
+
+export const UpdateLearnerStateJudgmentToolInput = Schema.Union([
+  CompactLearnerStateCorrectionInput,
+  UpdateLearnerStateJudgmentInput,
+]).annotate({ parseOptions: { onExcessProperty: "error" } })
+export type UpdateLearnerStateJudgmentToolInput = typeof UpdateLearnerStateJudgmentToolInput.Type
+
 const AdvisoryText = (maximum: number) => Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(maximum))
 const AdvisoryExcerpt = Schema.Struct({
   text: AdvisoryText(AdvisoryPlanSuggestion.MAX_EXCERPT_BYTES),
@@ -1192,6 +1208,7 @@ const decodeLearnerResponseEvidence = Schema.decodeUnknownSync(UpdateLearnerResp
 const decodeFutureAttention = Schema.decodeUnknownSync(UpdateFutureAttentionInput)
 const decodeAssignment = Schema.decodeUnknownSync(UpdateAssignmentInput)
 const decodeLearnerStateJudgment = Schema.decodeUnknownSync(UpdateLearnerStateJudgmentInput)
+const decodeLearnerStateJudgmentTool = Schema.decodeUnknownSync(UpdateLearnerStateJudgmentToolInput)
 const decodeAdvisoryPlanSuggestion = Schema.decodeUnknownSync(UpdateAdvisoryPlanSuggestionInput)
 
 export function normalize(input: unknown): AcceptCourseViewRevisionInput {
@@ -1318,6 +1335,21 @@ export function normalizeLearnerStateJudgment(input: unknown): UpdateLearnerStat
   return value as LearnerStateJudgment.Command
 }
 
+export function normalizeLearnerStateJudgmentTool(input: unknown): UpdateLearnerStateJudgmentToolInput {
+  const value = decodeLearnerStateJudgmentTool(input)
+  if (value.operation !== "revise_from_current_read") {
+    return normalizeLearnerStateJudgment(value) as Schema.Schema.Type<typeof UpdateLearnerStateJudgmentInput>
+  }
+  return {
+    operation: value.operation,
+    currentReadCallID: value.currentReadCallID,
+    sourceExcerpt: value.sourceExcerpt,
+    judgmentBody: value.judgmentBody,
+    uncertaintyAndLimits: value.uncertaintyAndLimits,
+    rationale: value.rationale,
+  }
+}
+
 export function normalizeAdvisoryPlanSuggestion(input: unknown): UpdateAdvisoryPlanSuggestionInput {
   const value = decodeAdvisoryPlanSuggestion(input)
   AdvisoryPlanSuggestion.canonicalizeCommand(value as AdvisoryPlanSuggestion.Command)
@@ -1347,7 +1379,7 @@ export function normalizeCommand(toolID: string, input: unknown) {
   if (toolID === LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY) return normalizeFutureAttention(input)
   if (toolID === LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY) return normalizeAssignment(input)
   if (toolID === LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY) {
-    return normalizeLearnerStateJudgment(input)
+    return normalizeLearnerStateJudgmentTool(input)
   }
   if (toolID === LearningCommand.UPDATE_ADVISORY_PLAN_SUGGESTION_CAPABILITY) {
     return normalizeAdvisoryPlanSuggestion(input)

@@ -8,12 +8,18 @@ import { LEARNER_GOAL_QUERY_TOOL_IDS } from "./learner-goal-query"
 import { LEARNING_MATERIAL_QUERY_TOOL_IDS } from "./learning-material-query"
 import { Tool } from "./tool"
 import { LearningContext } from "@opencode-ai/core/learning-context"
+import { Effect } from "effect"
 
 type Preparation = LearningCommandRuntime.Interface["prepare"]
+type InputResolution = (
+  input: unknown,
+  registration: LearningCommandRuntime.Registration,
+) => Effect.Effect<unknown, unknown>
 
 type PreparedDefinition = Tool.Def & {
   readonly prepareLearningCommand?: Preparation
   readonly prepareToolCall?: Preparation
+  readonly resolveLearningCommandInput?: InputResolution
 }
 
 export function learningCommandPreparation(tool: Tool.Def): Preparation | undefined {
@@ -25,6 +31,11 @@ export function toolCallPreparation(tool: Tool.Def): Preparation | undefined {
   if (!isHostPreparedToolID(tool.id)) return undefined
   const prepared = tool as PreparedDefinition
   return prepared.prepareToolCall ?? prepared.prepareLearningCommand
+}
+
+export function learningCommandInputResolution(tool: Tool.Def): InputResolution | undefined {
+  if (!isLearningCommandToolID(tool.id)) return undefined
+  return (tool as PreparedDefinition).resolveLearningCommandInput
 }
 
 export function assertExternalToolID(id: string, source: "custom" | "mcp") {

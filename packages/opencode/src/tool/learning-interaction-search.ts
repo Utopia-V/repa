@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm"
+import { and, eq, lt, sql } from "drizzle-orm"
 import { Database } from "@opencode-ai/core/database/database"
 import { LearningInspectionCursor } from "@opencode-ai/core/learning-inspection-cursor-schema"
 import { PartTable } from "@opencode-ai/core/session/sql"
@@ -68,6 +68,107 @@ export function verifyPredecessor(
       return { type: "conflict" as const, reason: "predecessor_not_completed" as const }
     }
     return LearningInspectionCursor.verifyStoredSearch(state.output, input.continuation)
+  })
+}
+
+export function verifyPriorCompletedToolCall(
+  tx: Transaction,
+  input: Readonly<{ context: Tool.Context; toolID: string; callID: string; action: string }>,
+) {
+  const interaction = input.context.interaction
+  if (!interaction) return Effect.die(new Error("Interaction search requires an admitted Turn"))
+  return Effect.gen(function* () {
+    const current = yield* tx
+      .select({ candidate: TurnToolCandidateTable, operation: TurnModelOperationTable })
+      .from(TurnToolCandidateTable)
+      .innerJoin(
+        TurnModelOperationTable,
+        eq(TurnModelOperationTable.assistant_message_id, TurnToolCandidateTable.assistant_message_id),
+      )
+      .where(eq(TurnToolCandidateTable.part_id, interaction.candidate.partID))
+      .get()
+      .pipe(Effect.orDie)
+    if (
+      !current ||
+      interaction.assistantMessageID !== input.context.messageID ||
+      interaction.candidate.callID !== input.context.callID ||
+      current.candidate.tool !== input.toolID ||
+      current.candidate.state !== "admitted" ||
+      current.candidate.call_id !== interaction.candidate.callID ||
+      current.candidate.emission_ordinal !== interaction.candidate.emissionOrdinal ||
+      current.candidate.session_id !== input.context.sessionID ||
+      current.candidate.turn_id !== interaction.turnID ||
+      current.candidate.assistant_message_id !== input.context.messageID ||
+      current.operation.session_id !== input.context.sessionID ||
+      current.operation.turn_id !== interaction.turnID ||
+      current.operation.input_id !== interaction.inputID ||
+      current.operation.assistant_message_id !== input.context.messageID ||
+      (interaction.causalOccurrenceID !== undefined &&
+        current.operation.causal_occurrence_id !== interaction.causalOccurrenceID)
+    ) {
+      return { type: "conflict" as const, reason: "current_operation_identity_mismatch" as const }
+    }
+    const rows = yield* tx
+      .select({
+        part: PartTable,
+        candidate: TurnToolCandidateTable,
+        invocation: TurnToolInvocationTable,
+        operation: TurnModelOperationTable,
+      })
+      .from(TurnToolCandidateTable)
+      .innerJoin(TurnToolInvocationTable, eq(TurnToolInvocationTable.part_id, TurnToolCandidateTable.part_id))
+      .innerJoin(PartTable, eq(PartTable.id, TurnToolCandidateTable.part_id))
+      .innerJoin(
+        TurnModelOperationTable,
+        eq(TurnModelOperationTable.assistant_message_id, TurnToolCandidateTable.assistant_message_id),
+      )
+      .where(
+        and(
+          eq(TurnToolCandidateTable.session_id, input.context.sessionID),
+          eq(TurnToolCandidateTable.turn_id, interaction.turnID),
+          eq(TurnToolCandidateTable.call_id, input.callID),
+          eq(TurnToolCandidateTable.tool, input.toolID),
+          eq(TurnToolCandidateTable.state, "admitted"),
+          eq(TurnToolInvocationTable.state, "completed"),
+          eq(TurnModelOperationTable.input_id, interaction.inputID),
+          lt(TurnModelOperationTable.ordinal, current.operation.ordinal),
+        ),
+      )
+      .all()
+      .pipe(Effect.orDie)
+    if (rows.length === 0) return { type: "source_unavailable_or_unresolved" as const }
+    if (rows.length !== 1) return { type: "conflict" as const, reason: "predecessor_call_ambiguous" as const }
+    const row = rows[0]!
+    if (
+      row.candidate.assistant_message_id !== row.operation.assistant_message_id ||
+      row.invocation.session_id !== row.operation.session_id ||
+      row.invocation.turn_id !== row.operation.turn_id ||
+      row.invocation.assistant_message_id !== row.operation.assistant_message_id ||
+      row.part.session_id !== row.operation.session_id ||
+      row.part.message_id !== row.operation.assistant_message_id
+    ) {
+      return { type: "conflict" as const, reason: "predecessor_identity_mismatch" as const }
+    }
+    const data = row.part.data as Record<string, unknown>
+    const state = record(data.state) ? data.state : undefined
+    const toolInput = record(state?.input) ? state.input : undefined
+    if (data.callID !== input.callID) {
+      return { type: "conflict" as const, reason: "predecessor_identity_mismatch" as const }
+    }
+    if (
+      data.type !== "tool" ||
+      data.tool !== input.toolID ||
+      state?.status !== "completed" ||
+      typeof state.output !== "string"
+    ) {
+      return { type: "conflict" as const, reason: "predecessor_not_completed" as const }
+    }
+    if (toolInput?.action !== input.action) {
+      return { type: "conflict" as const, reason: "predecessor_action_mismatch" as const }
+    }
+    const output = parse(state.output)
+    if (!record(output)) return { type: "conflict" as const, reason: "predecessor_output_shape" as const }
+    return { type: "verified" as const, partID: row.part.id, output }
   })
 }
 

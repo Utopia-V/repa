@@ -84,9 +84,14 @@ export type RegisteredToolCall = Readonly<{
 }>
 
 export const ToolCallPreparation = Symbol("SessionProcessor.ToolCallPreparation")
+export const ToolCallInputResolution = Symbol("SessionProcessor.ToolCallInputResolution")
 export const FutureAttentionServiceSourceUse = Symbol("SessionProcessor.FutureAttentionServiceSourceUse")
 
 export type ToolCallPreparation = (input: unknown, registration: RegisteredToolCall) => void | PromiseLike<void>
+export type ToolCallInputResolution = (
+  input: unknown,
+  registration: RegisteredToolCall,
+) => unknown | PromiseLike<unknown>
 
 export interface Handle {
   readonly message: SessionV1.Assistant
@@ -157,6 +162,7 @@ function assertProviderDoesNotExecuteHostPreparedTool(
 
 type LocalTool = LLM.StreamInput["tools"][string] & {
   [ToolCallPreparation]?: ToolCallPreparation
+  [ToolCallInputResolution]?: ToolCallInputResolution
   [FutureAttentionServiceSourceUse]?: Turn.ToolCandidate["futureAttentionServiceSource"]
 }
 
@@ -562,6 +568,8 @@ const layer = Layer.effect(
       })
 
       const preparation = (tool: LLM.StreamInput["tools"][string]) => (tool as LocalTool)[ToolCallPreparation]
+      const inputResolution = (tool: LLM.StreamInput["tools"][string]) =>
+        (tool as LocalTool)[ToolCallInputResolution]
 
       const isFilePart = (value: unknown): value is SessionV1.FilePart => Schema.is(SessionV1.FilePart)(value)
 
@@ -1266,7 +1274,31 @@ const layer = Layer.effect(
 
       const prepareAdmittedCall = Effect.fn("SessionProcessor.prepareAdmittedCall")(function* (call: ToolCall) {
         const item = activeTools[call.name]
+        const resolve = item ? inputResolution(item) : undefined
         const prepare = item ? preparation(item) : undefined
+        if (resolve) {
+          const resolved = yield* Effect.tryPromise({
+            try: () => Promise.resolve(resolve(call.input ?? {}, call.registration!)),
+            catch: (error) => error,
+          })
+          call.input = canonicalToolInput(call.name, resolved)
+          const part = yield* updateToolCall(call.callID, (current) => {
+            if (current.state.status !== "pending") {
+              throw new ProcessorIntegrityFailure(
+                `Prepared tool input resolution found a non-pending Part: ${call.callID}`,
+              )
+            }
+            return {
+              ...current,
+              state: { ...current.state, input: call.input! },
+            }
+          })
+          if (!part) {
+            throw new ProcessorIntegrityFailure(
+              `Prepared tool input resolution lost its reserved Part: ${call.callID}`,
+            )
+          }
+        }
         if (prepare) {
           yield* Effect.tryPromise({
             try: () => Promise.resolve(prepare(call.input ?? {}, call.registration!)),

@@ -59,7 +59,7 @@ export const LearnerStateJudgmentReadTool = Tool.define<
     const database = yield* Database.Service
     return {
       description:
-        "Read durable learner-state judgments without changing them: an exact immutable revision, a fresh current projection, bounded revision history, or a bounded deterministic non-priority directory page. Set includeInspection to true for the same-snapshot typed TUI owner/lineage projection. Pass the Context directory cursor to current or discover when the read must remain bound to that admitted operation; it returns stale rather than joining a later owner/dependency cut. Without that cursor, current is an explicitly fresh read. Bodies, exact basis references, uncertainty, source drift, and history stay lazy. These are fallible whole-judgment memories, not mastery certificates, scores, activity, progress, priority, or required Tutor moves.",
+        "Read durable learner-state judgments without changing them: an exact immutable revision, a fresh current projection, bounded revision history, or a bounded deterministic non-priority directory page. Set includeInspection to true for the same-snapshot typed TUI owner/lineage projection. Pass the Context directory cursor to current or discover when the read must remain bound to that admitted operation; it returns stale rather than joining a later owner/dependency cut. Without that cursor, current is an explicitly fresh read. A successful current result includes correctionHandle.currentReadCallID for the short revise_from_current_read correction input; copy that handle exactly and never substitute a judgment or revision ID. Bodies, exact basis references, uncertainty, source drift, and history stay lazy. These are fallible whole-judgment memories, not mastery certificates, scores, activity, progress, priority, or required Tutor moves. When the exact current revision says an earlier difficulty is resolved and names a different remaining difficulty, do not keep targeting the resolved difficulty merely because older context did; choose a useful move for the remaining difficulty unless the exact current learner request overrides it.",
       parameters: LearnerStateJudgmentReadInput,
       jsonSchema: ToolJsonSchema.fromSchema(LearnerStateJudgmentReadInput, { additionalProperties: false }),
       execute: (input, context) => {
@@ -94,7 +94,7 @@ export const LearnerStateJudgmentReadTool = Tool.define<
                 const page = yield* LearnerStateJudgment.read(tx, query, options)
                 return yield* learningInspectionReadResult(
                   tx,
-                  judgmentResult(input.action, asOf, page),
+                  judgmentResult(input.action, asOf, page, context.callID),
                   context,
                   inspectionOwner(
                     "learner_state_judgment",
@@ -116,7 +116,9 @@ export const LearnerStateJudgmentReadTool = Tool.define<
             )
           : judgments
               .read(query, options)
-              .pipe(Effect.map((page) => learningContextReadResult(judgmentResult(input.action, asOf, page))))
+              .pipe(
+                Effect.map((page) => learningContextReadResult(judgmentResult(input.action, asOf, page, context.callID))),
+              )
         return read.pipe(
           Effect.catch((error) => {
             if (error instanceof LearnerStateJudgment.InvalidCommandError && error.reason === "stale") {
@@ -140,7 +142,7 @@ export const LearnerStateJudgmentReadTool = Tool.define<
   }),
 )
 
-function judgmentResult(action: string, asOf: number, page: LearnerStateJudgment.ReadPage) {
+function judgmentResult(action: string, asOf: number, page: LearnerStateJudgment.ReadPage, callID?: string) {
   return {
     capabilityID: LEARNER_STATE_JUDGMENT_READ_TOOL_ID,
     title: "Learner-state judgment",
@@ -152,7 +154,11 @@ function judgmentResult(action: string, asOf: number, page: LearnerStateJudgment
       ownerCut: page.ownerCut,
       ...(page.nextCursor ? { cursor: page.nextCursor } : {}),
     },
-    value: { asOf: page.asOf ?? asOf, page },
+    value: {
+      asOf: page.asOf ?? asOf,
+      page,
+      ...(action === "current" && callID ? { correctionHandle: { currentReadCallID: callID } } : {}),
+    },
     itemCount: page.returnedCount,
   } satisfies Parameters<typeof learningContextReadResult>[0]
 }
