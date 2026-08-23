@@ -186,6 +186,64 @@ commit-tree package is 7,290,093 bytes at manifest
 This status successor records mainline publication. Gate 22 remains unreleased,
 and its integration does not accept Gate 23, provider reliability, or
 pedagogical efficacy.
+The accepted
+[Gate 23 integrated Learning-System product-loop contract](research/repa-gate-23-integrated-learning-system-product-loop-2026-08-23.md)
+is derived on exact integrated baseline `e2bcaa62a`. Whole-Gate review run
+`G23-WG-20260823-5F9B9860-01` used top-level reviewer
+`01a02d7f-8926-7562-82c3-06d2fadb1143` across both layers. The first contract
+pass returned `Revise` for High findings `G23-CR-001..003`: non-discriminating
+fresh-Session continuation, same-Session correction confounding, and a false
+linearization of pending/promoted steer. The current repair candidate isolates
+cut-bound prior facts and owner successors in matched fresh-Session controls
+and separates root start from exact steer promotion/model membership. The same
+reviewer closed all three findings and accepted exact semantic candidate
+`CDFE23F7...512D1F`, with no replacement finding, owner blocker, or material
+contract unknown. The first implementation/evidence pass then returned
+`Revise` for High findings `G23-IR-001..003`: strict-time rejection of a legal
+equal-time predecessor, nonrecoverable reuse of phases bound to an older
+runner, and real-provider entry below the required retained carrier/handler
+boundary. The closure pass retested those counterexamples, closed all three
+findings, opened no replacement or new finding, owner blocker, or material
+acceptance-changing unknown, and returned `Accept` for implementation/evidence
+and the Whole Gate. The accepted 16-path / 1,243,728-byte
+[implementation/evidence](research/repa-gate-23-integrated-learning-system-product-loop-implementation-evidence-2026-08-23.md)
+at manifest `243538E5...E4B572` retains four independent released-v1
+SessionPrompt traces and adds two production repairs exposed by the authorized
+provider path: a predecessor-bound compact recent-Interaction range read and a
+predecessor-bound compact learner-state correction that expands inside the
+same SessionProcessor/learning-command owner spine. Neither adds a migration,
+owner, capability ID, runtime, or fallback. The review repair admits equal-time
+Session predecessors, floors learner-state permission settlement at exact
+invocation admission, and routes the qualification through the primary-TUI
+generated SDK plus mounted production Session handler. Current focused
+evidence includes 4 Gate-23 traces / 73 assertions and 9 compact/range tests /
+16 assertions,
+large-history Interaction/TUI, closed-schema learner-state runtime/registry,
+root/FIFO/promoted-steer, no-preview route/Location, ten-owner collision, TUI,
+typecheck, and diff checks.
+
+The bounded `openai/gpt-5.6-luna` qualification now has 11 selected passing
+phases / 33 captured provider requests / 60 carrier calls in one
+`recovery-35-carrier-final` lineage across collision/clear/ambiguous/corrected/
+zero-write, product-floor, and intermittent phases. Product-floor and
+intermittent positive/control pairs start from byte-identical databases; the
+fresh positive consumers obtain their decisive facts only through exact lazy
+reads and produce incompatible action classes. All final manifests show
+unchanged pre/post candidates, disposed runtimes, checkpointed databases, and
+absent WAL/SHM. Earlier ceiling breach, Bun crashes, malformed tool inputs,
+stalls, exhaustion, and narrow-oracle diagnostics remain retained and are not
+counted green. The full qualification root contains 141 provider captures /
+331 captured provider requests and 37 carrier captures / 192 carrier calls;
+the final 75,109-file / 2,392,473,963-byte exact scan found no current OAuth
+secret and no `auth.json`. Provider execution is stopped. The repair evidence
+is independently accepted; `G23-CR-001..003` and `G23-IR-001..003` are closed,
+and Gate 23 Whole Gate is accepted. The reviewer is retired. The checkout
+is locally integrated at implementation commit `db3ae0c80068`. Git's clean
+filter produces the behavior-equivalent 16-path / 1,230,882-byte commit-tree
+manifest `CABB42A2...CE024`; six files differ only by 12,846 CRLF-to-LF bytes,
+with no non-EOL package difference. `origin/main` remains at pre-integration
+baseline `e2bcaa62a` because no push was authorized. No publication, release,
+provider-reliability, pedagogical-efficacy, or next-Gate claim follows.
 Gate 17 is fixed at implementation/evidence commit `39a8c2f4`. The baseline
 omits `/learn`; the accepted ordinary-Agent bootstrap
 preserves Gate 10's local-read union and one-new-Artifact ceiling, uses the
@@ -552,6 +610,7 @@ in the [inherited-material index](inherited/README.md).
 | 21. [Advisory learning-plan suggestions](research/repa-gate-21-advisory-learning-planning-2026-08-09.md) | Accepted contract for multiple scoped, source-bearing, correctable learning-plan suggestions authored by the ordinary Tutor or learner. A suggestion separates learner-visible meaning, deterministic retrieval scope, and exact bases; may cite exact Goal, Assignment, Course, evidence, learner-state, and suggestion revisions; becomes more concrete near term and coarser farther out; and remains advice rather than a global schedule or learner commitment. | **Contract/theory and [implementation/evidence](research/repa-gate-21-advisory-learning-planning-implementation-evidence-2026-08-11.md) accepted and integrated into `origin/main` at implementation commit `1e0f1fcaa` through integration/status commit `972f0f725`.** Whole-Gate run `G21-WG-20260810-019fe065-01`, retained reviewer `019fe9c2-c8b6-7913-a988-ab7c955ffd36`, closed `G21-CR-001..004` and `G21-IE-001..005`, accepting semantic SHA-256 `9CA7DB48...D69D567C` and the exact 46-file / 5,254-byte working-tree package candidate SHA-256 `668FBC64...A598D78`. The behavior-equivalent commit-tree manifest is `4C15DCA0...D4CFA043`; one extra EOF blank line was removed at integration and the existing clean filter normalized line endings. The reviewer is retired. Release, credentialed-provider qualification, pedagogical-optimality and model-reliability claims, and automatic Gate 21A+ authority remain separately governed. |
 | 21A. [Tutor move selection and flow continuity](research/repa-gate-21a-tutor-move-selection-flow-continuity-2026-08-12.md) | Accepted contract for the ordinary `repa` Agent to compose one exact request, bounded current learning Context, retained steering, and owner-native reads into a useful current move or one necessary learner-visible clarification, then choose again from current truth after correction or failure. | **Contract/theory and [implementation/evidence](research/repa-gate-21a-tutor-move-selection-flow-continuity-implementation-evidence-2026-08-12.md) accepted and integrated into `origin/main` at implementation commit `d43109fc3` through local-integration/status commit `6d7855d9a`.** Review run `repa-g21a-contract-1f881e-20260812`, retained reviewer `019ff1c6-97c5-7441-bb96-77d863f3a4d5`, closed `G21A-CR-001..003` and `G21A-IR-001..008` with no open finding, material unknown, or owner blocker. Accepted semantic SHA-256 is `307F9D4F...BA0787F`; accepted 17-file working-tree package is `9BA0B2ED...6C24`; ordinal-correct recovery `final-12` closes the reviewer-mutation and comparer defects. The implementation adds no selector, scheduler, activity owner, hard-limit increase, Gate 22 UI, or Gate 23 integration claim. Release, Gate 22, and Gate 23 remain separately governed. |
 | 22. [Learning-native TUI inspect/correct](research/repa-gate-22-learning-native-tui-inspect-correct-2026-08-13.md) | Accepted owner-specific, cut-bound, non-causal operational inspection and owner-native correction in the primary natural-language TUI, including deletion/import limits and bounded Interaction discovery. | **Whole Gate accepted and integrated into `main` at implementation commit `ada0a04c1`.** Retained reviewer `019ff945-7b10-7f53-999f-b92dfa68d30c` accepted contract/theory candidate `26543CC9...7BDD` and exact [implementation/evidence](research/repa-gate-22-learning-native-tui-inspect-correct-implementation-evidence-2026-08-22.md) working-tree package `57A15F35...418F3BB`, closing `G22-CR-001..006` and `G22-IR-001..008` with no owner blocker, new finding, or material acceptance-changing unknown. Git normalization produced behavior-equivalent commit-tree manifest `5D08725A...ABCD840` with no non-EOL byte difference. Both prerequisite layers and the `334CD...CBE6` action-complete material producer are included. This status successor records mainline publication; release, Gate 23 acceptance, provider reliability, and pedagogy remain separate. |
+| 23. [Integrated Learning-System product loop](research/repa-gate-23-integrated-learning-system-product-loop-2026-08-23.md) | Accepted contract for one released-v1 production composition that connects real teaching, learner feedback, optional owner-native durable consequence, bounded later Context/lazy reads, and a changed later Tutor move while preserving a useful zero-write floor and one truthful intermittent-use loop. | **Whole Gate accepted and locally integrated at implementation commit `db3ae0c80068`; not pushed or released.** Under `G23-WG-20260823-5F9B9860-01`, reviewer `01a02d7f-8926-7562-82c3-06d2fadb1143` closed `G23-CR-001..003` and `G23-IR-001..003`, with no replacement or new finding, owner blocker, or material acceptance-changing unknown. The accepted Windows working-tree package is 16 paths / 1,243,728 bytes at `243538E5...E4B572`; Git produced the behavior-equivalent 16-path / 1,230,882-byte commit-tree package `CABB42A2...CE024` through CRLF-to-LF normalization in six files, with no non-EOL difference. The implementation keeps one released-v1 spine, compact exact Interaction and learner-state-correction handoffs, legal equal-time predecessor/permission ordering, and primary-carrier qualification without a migration, owner, capability ID, runtime, or fallback. All selected `openai/gpt-5.6-luna` semantic phases pass with matched controls. The reviewer is retired. `origin/main` remains at pre-integration baseline `e2bcaa62a`; no publication, release, provider-reliability, pedagogy, educational-efficacy, or next-Gate claim exists. |
 
 Gate numbers are maintainer-facing acceptance units, not a claim that every
 later Gate depends on every earlier one. Exact close commits, review runs,
@@ -601,6 +660,8 @@ reopen chains, and evidence qualifications live in the
 - [Gate 21 superseded deterministic Planning contract candidate](research/repa-gate-21-cross-day-planning-authority-2026-08-08.md)
 - [Gate 22 learning-native TUI inspect/correct accepted contract](research/repa-gate-22-learning-native-tui-inspect-correct-2026-08-13.md)
 - [Gate 22 accepted implementation/evidence](research/repa-gate-22-learning-native-tui-inspect-correct-implementation-evidence-2026-08-22.md)
+- [Gate 23 integrated Learning-System product-loop contract candidate](research/repa-gate-23-integrated-learning-system-product-loop-2026-08-23.md)
+- [Gate 23 integrated Learning-System product-loop implementation/evidence candidate](research/repa-gate-23-integrated-learning-system-product-loop-implementation-evidence-2026-08-23.md)
 - [Pre-fork asset disposition](research/pre-fork-repa-asset-audit-2026-07-13.md)
 
 ## Accepted decisions

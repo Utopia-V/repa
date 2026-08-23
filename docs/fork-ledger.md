@@ -5279,3 +5279,501 @@ accepted focused evidence was not rerun merely to add green count because the
 production candidate changed only through the verified line-ending filter.
 Gate 22 is integrated; release, Gate 23 acceptance, provider reliability, and
 pedagogical efficacy remain separately governed.
+
+## 2026-08-23 Gate 23 opening grill and contract/theory candidate
+
+After Gate 22 integration, the Gate 23 top-level executor re-anchored the
+mutation boundary to clean `main`/`origin/main`
+`e2bcaa62a2b7f475528ad3c37e230bc8062d1270`. Its earlier detached read-only
+snapshot remained untouched. The opening grill found no missing first-boundary
+domain owner and no reason to introduce a second runtime, universal activity or
+causal table, durable Tutor-move record, or one giant all-feature test.
+
+The decisive remaining gap is product composition: existing accepted evidence
+separately proves bootstrap/teaching, bounded fresh-Session Context and carrier
+paths, owner state-to-request wiring, advisory consumption, ordinary-Agent move
+selection/re-entry, and primary-TUI inspection/correction, but no current trace
+joins a real learning move, learner occurrence/outcome, owner-native durable
+consequence, later current cut/read, and changed Tutor move. Gate 19's
+fixture-specific teaching oracle, Gate 21A's synthetic setup, and the retained
+but production-unregistered preview-v2 SessionRunner are concrete ways local
+checks could pass without proving that chain.
+
+The first Gate 23 contract/theory candidate is
+[`repa-gate-23-integrated-learning-system-product-loop-2026-08-23.md`](research/repa-gate-23-integrated-learning-system-product-loop-2026-08-23.md).
+It binds Whole-Gate review run `G23-WG-20260823-5F9B9860-01`, keeps one
+released-v1 production spine, separates connected-durable, product-floor,
+zero-write, longitudinal/intermittent, and orthogonal failure/carrier evidence,
+and preserves Gate 22's prohibition on per-record Tutor-answer causal
+attribution. The candidate awaits fresh independent contract/theory review.
+No review verdict, implementation/evidence candidate, provider qualification,
+commit, integration, publication, release, or next-Gate authority exists.
+
+## 2026-08-23 Gate 23 first contract review and isolation/steer successor
+
+Fresh top-level reviewer task
+`01a02d7f-8926-7562-82c3-06d2fadb1143` reviewed the exact first Gate 23
+contract candidate, 28,997 bytes at SHA-256
+`8BB30C00596669BF4A5BA8FA0D7FB15B913F76094E5F5FE95B55EB5BC3B85C0D`,
+under Whole-Gate run `G23-WG-20260823-5F9B9860-01`. It returned **Revise**
+with three High acceptance-changing findings and no owner blocker:
+
+- `G23-CR-001` showed that a fresh Session could see a directory, perform no
+  exact read, emit a generic useful answer, and pass the first product-floor
+  wording without consuming prior learning state;
+- `G23-CR-002` showed that a same-Session correction transcript could explain
+  a changed action even when an exact owner successor was also included and
+  read; and
+- `G23-CR-003` showed that the contract incorrectly linearized root start and
+  steer even though steer begins process-local, may be rejected without
+  durable promotion, and belongs to a later model operation only through its
+  exact promoted Input identity.
+
+The current contract successor makes the product-floor positive depend on one
+source-discriminating fact available only through a cut-bound exact prior-
+Interaction read and pairs it with otherwise matched withheld/unavailable or
+changed-current truth. Every verdict-bearing durable-correction and
+intermittent successor consumer now runs in a fresh Session without the
+correction transcript or compaction summary, with predecessor-current or
+successor-withheld controls. Root start retains ownership of `runTurnLoop`;
+steer is separately pending, rejected, or durably promoted, and only an exact
+promoted-Input-to-later-model-operation join may prove consumption. The
+no-shadow predicate ends at the released-v1 Session/Turn/Context/tool-terminal
+ownership boundary and does not misclassify provider-stream implementations
+inside the same LLM/SessionProcessor spine.
+
+`G23-CR-001..003` remain open until the same reviewer closes or supersedes
+them and returns `Accept`. The checkout remained production-unmodified during
+review. No implementation/evidence candidate, provider call, commit,
+integration, publication, release, or next-Gate authority follows.
+
+## 2026-08-23 Gate 23 contract/theory acceptance
+
+The same retained reviewer re-read the exact 36,588-byte repair candidate at
+SHA-256
+`CDFE23F708DCCF3C5327EEDED6B1436BB2FA84CFB3B32801B0C0122E37512D1F`
+and returned **Accept** for Gate 23 contract/theory. It closed
+`G23-CR-001..003`, opened no replacement or new finding, and reported no owner
+blocker or material contract-layer unknown.
+
+The closure confirms that the product-floor positive requires one
+source-discriminating prior fact and an incompatible matched control; every
+verdict-bearing durable successor is isolated in a fresh Session from its
+correction transcript and alternate Interaction/summary paths; and root start,
+pending/rejected steer, durable promotion, exact later model membership, and
+post-promotion failure retain their actual released-v1 lifecycle. The contract
+adds no causal/activity table, durable unconsumed-steer owner, workflow
+manager, second runtime, giant test, release Gate, or per-record Tutor-answer
+causal attribution.
+
+Contract acceptance authorizes only the implementation/evidence boundary
+recorded by the contract. The reviewer remains retained and idle for that
+separate layer. Gate 23 production behavior, implementation/evidence, and
+real-provider qualification remain unverified; provider or credential use
+still requires separate explicit authorization. No Whole-Gate acceptance,
+integration, commit, publication, release, or next-Gate authority follows.
+
+## 2026-08-23 Gate 23 deterministic implementation/evidence predecessor
+
+The executor added no production code, schema, runtime, tool, or API. The first
+deterministic predecessor changes only
+`packages/opencode/test/session/prompt.test.ts`, 394,558 bytes at SHA-256
+`7F7EF25BCD26FE3C26A942C31F83BDA617FC91ED95F34E3BC3C59D80C85EECBE`,
+with one-path package manifest
+`258FAFDB05E7F69E344CD1023D0BCD32596DE4B2C9B3470421245E018FA03DF5`.
+Its
+[implementation/evidence record](research/repa-gate-23-integrated-learning-system-product-loop-implementation-evidence-2026-08-23.md)
+binds four independent released-v1 SessionPrompt traces:
+
+- a bootstrap/teaching source Turn whose distinctive gcd step appears in a
+  fresh Session only after one exact Interaction range read, paired with a
+  same-request read-withheld clarification;
+- a teaching-to-learner-report-to-learner-state chain, exact correction, fresh
+  successor-withheld control, and fresh exact-successor teaching whose provider
+  request has no correction transcript or alternate Interaction Tool result;
+- same-Session feedback that changes the next peer teaching move while every
+  learning-domain table digest and the shared frontier remain unchanged; and
+- one pending then durably promoted steer whose exact later model operation
+  fails at provider transport without duplicate promotion, fallback, or false
+  completion.
+
+The four new traces pass together with 59 assertions. Focused current evidence
+also passes the retained root/FIFO/no-implicit-steer tests, exact promoted
+occurrence membership, production Location no-preview composition, mounted and
+public no-preview routes, the fully populated ten-owner renderer-7 collision,
+primary-TUI current/start carrier checks, and the OpenCode package typecheck.
+
+A concurrent two-file HTTP/SDK steer attempt produced a temporary database
+writer conflict and timeout; an isolated HTTP retry ended at its internal
+five-second provider-wait timeout without a semantic assertion. Those runs are
+recorded as non-acceptance harness evidence and are not counted green or used
+to infer a product failure.
+
+This predecessor does not satisfy the accepted real-provider product-floor,
+durable successor, zero-write, collision, or intermittent-use semantic legs.
+Historical Gate 18/21A provider authorization does not carry forward. No Gate
+23 credential/model/request ceiling is authorized, no provider call or
+qualification artifact exists, and implementation/evidence review has not
+begun. No Whole-Gate acceptance, commit, integration, publication, release, or
+next-Gate authority follows.
+
+## 2026-08-23 Gate 23 provider stop and compact Interaction-handoff repair
+
+The maintainer subsequently authorized the existing Repa OpenAI OAuth
+credential, `openai/gpt-5.6-luna`, an overall ceiling of 48 captured provider
+requests, and a product-floor ceiling of eight. Evidence is retained under:
+
+`C:\Users\Discordance\.codex\campaigns\repa-gate23\evidence\qualification\repa-g23-luna-20260823-01`
+
+The initial credential refresh returned 401 before provider transport. The
+maintainer completed a browser OAuth login using an isolated bootstrap database;
+the unrelated unrecognized local-channel database remained untouched. All
+qualification XDG data, databases, workspaces, model catalog, manifests, and
+logs stayed under the authorized evidence boundary; credential contents were
+environment-only and isolated refreshed `auth.json` files were removed and
+verified absent.
+
+Captured product-floor requests are exactly:
+
+- `recovery-04/product_floor_setup`: 2, passed source bootstrap and teaching;
+- `recovery-04/product_floor_control`: 1, semantically valid directive-form
+  clarification rejected by an overly narrow punctuation oracle;
+- `recovery-05/product_floor_setup`: 1, typed-tool rejection of a model command
+  whose `anchor` omitted the required `set/target` wrapper;
+- `recovery-06/product_floor_control`: 1, passed the repaired matched withheld
+  control; and
+- `recovery-06/product_floor_positive_retry1`: 6, consisting of one thin recent
+  directory, three schema-rejected locator-copy attempts, one exact range read,
+  and one exact source-conditioned continuation.
+
+The first `recovery-06` positive start made zero provider requests because Bun
+intermittently parsed a truncated model-catalog read; the stored catalog bytes,
+hash, and subsequent parse remained valid. Setup, stale OAuth, Bun startup, and
+zero-budget roots likewise made zero captured provider requests.
+
+The six-request positive retry ultimately read the exact source Turn containing
+`1071`, `462`, and `147` and changed the Tutor move to the exact next remainder
+step. It nevertheless exceeded both the runner's four-request phase setting and
+the campaign's cumulative eight-request product-floor ceiling. The cause was a
+post-Turn ceiling assertion that did not refuse requests before transport. The
+retained evidence therefore remains diagnostic and cannot be promoted to Gate
+qualification. The overall 48-request ceiling was not exceeded. All provider
+execution stopped at 11 captured requests; no durable, zero-write, collision,
+or intermittent phase began.
+
+The same run falsified the deterministic predecessor's full-locator assumption.
+The ordinary model had to reproduce several 64-hex fingerprints from
+`list_recent`; three malformed copies were correctly rejected. The current
+production repair keeps the existing `learning_interaction_read` capability and
+exact range reader. `list_recent` now returns its completed provider call
+identity and a zero-based index on each entry. `read_recent_range` supplies only
+that call identity and selected index. The program requires the prior call to
+be a unique, earlier, admitted and completed `list_recent` invocation in the
+same exact Session/Turn/Input; verifies current model/tool identity and the
+stored Part call identity; reads the immutable stored output; validates the
+selected full locator; and delegates to the unchanged exact range path. Wrong
+Input, index, action, handle, Part identity, duplicate/missing predecessor,
+malformed locator, and source deletion remain fail-closed. No owner, migration,
+runtime, fallback, or second Interaction reader was added.
+
+The runner now requires explicit remaining-total and remaining-leg budgets,
+takes their minimum with the phase ceiling, and refuses an excess request before
+body capture or transport. The zero-budget observation at
+`recovery-07-budget-check/phases/budget_refusal.runner.events.jsonl` records one
+`provider_request_refused_by_ceiling`, zero captured requests, no request
+artifact, no isolated credential file, and no surviving Bun process. The
+positive oracle now selects the completed source-bearing compact exact read
+instead of the first completed directory read.
+
+The final post-stop secret scan covered 3,839 evidence files / 219,944,231
+bytes and all three credential-bearing values in the current OAuth record. It
+found zero exact credential hits and zero `auth.json` artifacts under the
+qualification root.
+
+The current six-path package is 587,681 bytes at canonical manifest
+`50743C2C3BB1BCD472EBE4F7852477AE3349CB613058AFE6A1D7D23A8708CEAC`.
+Focused current evidence passes:
+
+- compact Interaction predecessor/index and retained range behavior: 9 tests /
+  15 assertions;
+- all four Gate 23 released-v1 SessionPrompt traces: 4 tests / 63 assertions;
+- retained large-history Interaction search, persistence, exhaustion, and
+  primary-TUI rendering: 1 test / 12 assertions;
+- retained Core continuation/cursor authentication: 4 tests / 11 assertions;
+- the previously recorded root/steer, no-preview, collision, TUI, and package
+  evidence; and
+- `packages/opencode` typecheck.
+
+This is an unstaged, uncommitted implementation/evidence repair candidate. The
+retained Whole-Gate reviewer remains idle; implementation/evidence review has
+not been dispatched. The repaired current candidate has no compliant
+real-provider qualification. Any further provider execution requires new
+maintainer authorization after the product-floor ceiling breach and does not
+retroactively authorize the three excess requests. No Whole-Gate acceptance,
+integration, publication, release, or next-Gate authority follows.
+
+## 2026-08-23 Gate 23 authorized qualification continuation and owner-handoff repairs
+
+After the original product-floor ceiling breach was disclosed, the maintainer
+authorized additional `openai/gpt-5.6-luna` calls as needed to complete the
+Gate. The executor kept every invocation finite through explicit remaining-
+total and remaining-leg environment budgets, retained the pre-transport
+ceiling refusal, and allowed no provider/model fallback. The same isolated
+qualification root remained authoritative:
+
+`C:\Users\Discordance\.codex\campaigns\repa-gate23\evidence\qualification\repa-g23-luna-20260823-01`
+
+Provider execution exposed a second production seam after the compact
+Interaction repair. The ordinary model repeatedly malformed the full
+learner-state correction input, then selected the new compact branch but used a
+revision ID where the tool call identity was required. The owner read now
+returns `correctionHandle.currentReadCallID`. A compact
+`revise_from_current_read` candidate carries that handle, an exact current-
+learner excerpt, revised body, uncertainty, and rationale. Program code proves
+one earlier completed current read in a terminal Turn of the same Session,
+carries the owner-provided judgment/head/subject/bases, binds UTF-8 offsets, and
+persists the expanded full command before the unchanged learning-command
+preparation/execution path. The sealed Turn candidate retains the compact
+provider input; the Session Part and owner settlement retain the one expanded
+command. No new capability ID, owner, migration, runtime, or fallback was
+introduced.
+
+The final compact recent-Interaction action likewise stopped accepting a
+model-selected page size. It now resolves the prior directory call and entry
+index and performs one fixed 64-item bounded read; the existing signed full
+`read_range` path remains the pagination owner. This removed an observed path
+where a ten-item compact read forced the model back into full-locator/
+continuation copying.
+
+All intermediate evidence remains retained. It includes expired OAuth before
+transport, Bun 1.3.14 Windows startup panics, one stalled provider stream
+cancelled without a concurrent retry, malformed owner/tool inputs, wrong
+compact handles, operator/configuration mistakes, truthful model/tool
+exhaustion, and narrow semantic/format oracles. None is counted as a passing
+phase. Across the full root, 104 request-capture files contain 235 captured
+requests, including blocked-before-transport attempts and failed diagnostics;
+that number is not a successful-call, billable-request, or reliability claim.
+
+## 2026-08-23 Gate 23 complete implementation/evidence candidate and review handoff
+
+The final implementation/test/runner package contains 15 paths / 901,759 bytes
+at canonical manifest
+`44F1AB9EA1ACF34B7C85290BD6E9642DA9A7A578B876172094F8173B20486479`.
+It remains based on unchanged `main`/`origin/main`
+`e2bcaa62a2b7f475528ad3c37e230bc8062d1270`, with zero staged changes and no
+commit, integration, or publication.
+
+Fresh deterministic evidence includes:
+
+- four independent released-v1 Gate 23 SessionPrompt traces: 4 tests / 71
+  assertions;
+- compact Interaction and retained range continuation: 9 tests / 16
+  assertions;
+- retained large-history Interaction/TUI and Core cursor authentication;
+- learner-state owner runtime, closed provider schemas, current-read handle,
+  compact-to-full command settlement, and typed stale reads;
+- strict root, FIFO steer/frontier rebuild, exact promoted-steer failure, and
+  no implicit start-to-steer conversion;
+- production/hibernated Location and mounted/public no-preview route checks;
+- the frozen ten-owner renderer-7 collision and primary-TUI carrier checks;
+  and
+- the OpenCode package typecheck and repository diff check.
+
+The selected bounded real-provider lineage is:
+
+- `recovery-27-final-interaction-fixed`: setup 0, collision 1 captured and
+  blocked before transport, `clear_retry1` 8, ambiguous 2, corrected 5, and
+  zero-write 2 requests;
+- `recovery-28-product-floor-final`: source setup 2, matched withheld control
+  1, and compact exact-read positive 3 requests; and
+- `recovery-29-intermittent-final`: setup 0, matched predecessor-current
+  control 3, and compact natural-correction/fresh-successor positive 6
+  requests.
+
+All 12 selected phases report `phase_passed`, immutable pre/post candidate
+identity, disposed runtimes, checkpointed databases, and absent final WAL/SHM.
+Product-floor and intermittent pairs each start from byte-identical databases.
+The product-floor positive obtains `84217`, `27109`, and `2890` only through
+directory plus compact exact read, then emits the exact next remainder `1099`
+and pair `(2890, 1099)`; its control asks one minimal clarification. The
+intermittent positive makes no activity/adherence/progress/mastery inference,
+applies only a learner-state successor through the compact current-read handle,
+and changes a fresh no-Interaction consumer from diagnosis to repair/
+completion. Zero-write feedback changes peer teaching while owner tables and
+frontier remain unchanged. Clear/corrected and ambiguity phases preserve
+matched controls, owner immutability, useful action classes, and one truthful
+referent clarification.
+
+The non-product-floor `recovery-27` candidate fingerprint is
+`9FE7C9B26556E8E756C82DD1D725BCB578F8443B0ADE77FF60A5156651386DF0`;
+current product-floor/intermittent fingerprint is
+`4C4806C310C9712081E6E202A3492B74CAFEC0A2D87439870961DDDDADEAEE82`.
+Exhaustive manifest comparison found exactly one changed path: the untracked
+runner grew four bytes to accept two standard TeX spacing spellings in the
+product-floor numeric predicate. Production source, tests, Git status/index,
+and every other file binding are identical. Per the contract's phase-
+dependency rule, only product-floor evidence was invalidated and rerun.
+
+The final whole-root secret scan covered 56,407 files /
+1,793,343,145 bytes and all three current OAuth sensitive values via fixed-
+string patterns supplied only on stdin. It found zero exact-hit files, zero
+multiline-secret omissions, zero `auth.json`, and no request capture whose
+`secretScan` was not `passed`.
+
+The [implementation/evidence record](research/repa-gate-23-integrated-learning-system-product-loop-implementation-evidence-2026-08-23.md)
+is now complete as an unreviewed candidate. The retained Whole-Gate reviewer
+`01a02d7f-8926-7562-82c3-06d2fadb1143` remains the required independent
+implementation/evidence reviewer under run
+`G23-WG-20260823-5F9B9860-01`. No implementation/evidence verdict, Whole-Gate
+acceptance, commit, integration, publication, release, provider-reliability,
+pedagogy, educational-efficacy, or next-Gate claim follows from this handoff.
+
+## 2026-08-24 Gate 23 first implementation/evidence review repair candidate
+
+The retained reviewer
+`01a02d7f-8926-7562-82c3-06d2fadb1143` returned **Revise** for the first Gate
+23 implementation/evidence pass under Whole-Gate run
+`G23-WG-20260823-5F9B9860-01`. Contract findings `G23-CR-001..003` remained
+closed. The pass opened three High implementation/evidence findings and no
+owner blocker or replacement contract finding:
+
+- `G23-IR-001` showed that compact learner-state correction required source
+  Turn terminal time to be strictly less than the correction Turn admission,
+  although accepted Turn time is nondecreasing and permits equality.
+- `G23-IR-002` showed that six selected phases depended on an older untracked
+  runner whose exact blob or bound diff had not been retained, so the claimed
+  dependency-local evidence reuse was not independently recoverable.
+- `G23-IR-003` showed that the provider runner called `SessionPrompt.Service`
+  below the accepted retained-carrier/mounted-handler admission boundary.
+
+The executor repair keeps the accepted contract and existing owners. The
+predecessor query now admits terminal time equal to current admission while
+retaining exact same-Session completed-source/current-running identity.
+Learner-state permission issue/settlement metadata floors at the exact durable
+invocation admission so capability truth cannot predate its disposition. The
+durable-successor regression freezes the completed source and immediately
+following correction Turn to one timestamp, then requires the compact input to
+expand and settle through the existing owner; the four Gate 23 SessionPrompt
+tests pass with 73 assertions, and learner-state allow/prompt/deny/replay passes
+with 15 assertions.
+
+The qualification runner now uses the generated v2 SDK against the mounted
+production Session handler, the same entry shape used by the local primary
+TUI. Every provider-bearing Turn captures `session.start`, exact-Turn
+`awaitTurn`, and `session.messages`, then joins the HTTP prefix to durable
+Session/Turn/Input/learner-occurrence/Assistant/model-operation/Context/tool/
+terminal truth. `recovery-35-carrier-final` reran setup and every affected
+semantic phase after runner stabilization. Its 11 selected phases contain 33
+provider requests, including one collision request blocked before transport,
+and 60 carrier calls. All bind candidate
+`BAECF0C39344F1ED4555D21AE114E236A0A2C3E161D10B7B8198FBCE35E43CC3`
+and the exact 148,156-byte runner
+`E63F903FA64D0D78D10A026DEB989F46F331EEBACB580B83908BC435E4D7CE68`;
+all pass with unchanged pre/post fingerprints, disposed runtimes,
+checkpointed databases, absent WAL/SHM, and absent isolated credentials.
+Earlier `recovery-27..34` evidence remains retained only as accepted-history or
+diagnostic material and is not promoted by the repair.
+
+The current implementation/test/runner package is 16 paths / 1,243,728 bytes
+at canonical manifest
+`243538E5280C8E0937C53BD3F2855CCB7D3CFB2D3FA82A79539D637EE5E4B572`.
+The full qualification root now contains 75,109 files / 2,392,473,963 bytes,
+141 provider captures / 331 captured provider requests, and 37 carrier
+captures / 192 carrier calls. Every capture-local secret scan passed. A fresh
+whole-root scan supplied all three current OAuth-sensitive strings only on
+stdin and found zero exact-hit files, zero multiline-pattern omissions, and
+zero `auth.json` artifacts.
+
+This is an unstaged, uncommitted repair candidate on unchanged baseline
+`e2bcaa62a2b7f475528ad3c37e230bc8062d1270`. Executor evidence supports
+closure, but `G23-IR-001..003`, implementation/evidence, and Whole Gate remain
+open until the same reviewer returns its closure verdict. No commit,
+integration, publication, release, provider-reliability, pedagogy,
+educational-efficacy, or next-Gate claim follows.
+
+## 2026-08-24 Gate 23 implementation/evidence and Whole-Gate acceptance
+
+The retained reviewer
+`01a02d7f-8926-7562-82c3-06d2fadb1143` completed the implementation/evidence
+closure pass under `G23-WG-20260823-5F9B9860-01` and returned **Accept** for
+both implementation/evidence and the Whole Gate. Contract findings
+`G23-CR-001..003` remained closed. The closure pass closed
+`G23-IR-001..003`, opened no replacement or new finding, and reported no owner
+blocker or material acceptance-changing unknown:
+
+- `G23-IR-001` is closed. The accepted nondecreasing predecessor predicate,
+  exact same-Session lifecycle/identity checks, and invocation-time permission
+  floor eliminate the legal equal-time rejection. Reviewer-side execution of
+  the forced equal-time successor trace passed with 32 assertions.
+- `G23-IR-002` is closed. `recovery-35-carrier-final` is the sole selected
+  namespace; all 11 phases bind one current candidate and runner with unchanged
+  pre/post fingerprints. Final database hashes and matched comparison starts
+  independently agree with the manifests, and no `recovery-27..34` artifact is
+  inherited or promoted.
+- `G23-IR-003` is closed. The selected runner traverses generated SDK → mounted
+  production Session handler → released-v1 SessionPrompt for every product
+  Turn and binds 60 carrier calls to exact Session/Turn/Input/occurrence/
+  Assistant/model/Context/tool/terminal truth. Unchanged deterministic TUI
+  evidence binds the visual primary UI to that same SDK seam. The provider run
+  does not claim human visual rendering, and the accepted contract admits the
+  same mounted-handler boundary.
+
+The reviewer independently recomputed the exact 16-path / 1,243,728-byte
+package and canonical manifest
+`243538E5280C8E0937C53BD3F2855CCB7D3CFB2D3FA82A79539D637EE5E4B572`.
+It confirmed no schema, trigger, constraint, or migration change; 33 selected
+provider requests and 60 selected carrier calls; finite ceilings; runtime
+disposal; database checkpoint/sidecar cleanup; isolated credential cleanup;
+matched product-floor/intermittent controls; fresh-successor isolation;
+zero-write/no-activity truth; and no contradictory selected evidence. The
+reviewer did not repeat the full-root aggregate secret scan, but inspected the
+selected capture-local scans, redaction, hashes, ceilings, cleanup, and final
+manifests without finding a conflict.
+
+Review left the checkout unchanged at `HEAD == origin/main ==
+e2bcaa62a2b7f475528ad3c37e230bc8062d1270`, with the exact reviewed 21-entry /
+4-untracked / 0-staged path set and no Git lock. No credential access,
+provider call, retained-database mutation, Git mutation, network publication,
+commit, integration, or external effect occurred during closure.
+
+Gate 23 contract/theory, implementation/evidence, and Whole Gate are now
+accepted. The package remains unstaged, uncommitted, unintegrated, and
+unpublished; integration is a separate governed step. This acceptance makes no
+release, provider-reliability, supported-platform, pedagogy,
+educational-efficacy, or next-Gate claim. The reviewer task is retired and must
+not be reused.
+
+## 2026-08-24 Gate 23 local integration
+
+After Whole-Gate acceptance, the maintainer explicitly authorized local
+integration and commit. The exact accepted 16-path implementation/test/runner
+package was staged without the five post-run documentation paths and committed
+on `main` as:
+
+`db3ae0c80068a4f574de687edca18075fbdc1bc8 feat(opencode): integrate learning-system product loop`
+
+The commit has parent
+`e2bcaa62a2b7f475528ad3c37e230bc8062d1270` and exactly the 16 accepted paths.
+The accepted Windows working-tree package remains 1,243,728 bytes at manifest
+`243538E5280C8E0937C53BD3F2855CCB7D3CFB2D3FA82A79539D637EE5E4B572`.
+Git's existing clean filter produced a behavior-equivalent 1,230,882-byte
+commit-tree package at manifest
+`CABB42A293E0C4EB74AD6976E45067739DDC5FACE46DC0DE241B2A9BABCCE024`.
+Byte-by-byte comparison after replacing CRLF with LF in the working files found
+12,846 removed carriage returns across six paths and zero non-EOL difference:
+
+- `packages/opencode/src/learning-command/runtime.ts`;
+- `packages/opencode/src/session/processor.ts`;
+- `packages/opencode/src/session/tools.ts`;
+- `packages/opencode/src/tool/learning-command.ts`;
+- `packages/opencode/src/tool/registry.ts`; and
+- `packages/opencode/test/tool/registry.test.ts`.
+
+The accepted package tests and provider/carrier evidence remain candidate-
+bound because no implementation byte changed between review closure and
+staging; the commit-tree check establishes the sole clean-filter projection.
+This documentation successor records local integration and the exact Git
+normalization boundary. No push was authorized: `origin/main` remains at
+`e2bcaa62a2b7f475528ad3c37e230bc8062d1270`. No publication, release,
+provider-reliability, supported-platform, pedagogy, educational-efficacy, or
+next-Gate claim follows.
