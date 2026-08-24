@@ -21,6 +21,12 @@
 - Tracked OpenCode documentation and preview-v2 material may remain as fork
   provenance or maintenance evidence. Treat it as non-authoritative unless the
   current documentation map explicitly admits it for the question at hand.
+- `building/` is the product-understanding and scenario entry point. The
+  canonical compact constitution remains in the product foundation, and the
+  four cross-implementation scenario oracles live in
+  `building/learning-situations.md`; neither current source shape nor a
+  `building/` hypothesis silently revises accepted architecture or runtime
+  direction.
 
 ## Product origin checksum
 
@@ -258,6 +264,28 @@ learning tools.
 - Do not generate the whole repository or scaffold speculative subsystems.
 - Do not create an abstraction unless it names a current invariant or has more than one real consumer.
 - Do not introduce `manager`, `service`, `repository`, `controller`, or compatibility layers without a concrete boundary they protect.
+- For forward refactor or successor work, begin with the product constitution
+  and cross-implementation learning situations. The current runtime, types,
+  schemas, tools, and closed-Gate tests are behavior and problem evidence, not
+  the default architecture search graph. Their existence or passage does not
+  create a future retention requirement.
+- Before changing learning behavior, durable meaning, or an architecture
+  boundary, state the semantic difference described in
+  `building/development.md`: current and intended learner-visible behavior,
+  model/program responsibility, persistence need, and a distinguishing
+  scenario. The default is no new durable concept. A new long-term owner,
+  record kind, or default learning tool requires at least two real scenario
+  consumers and evidence that the current shared structure cannot faithfully
+  express them.
+- When narrowing a successor slice, reduce breadth rather than deleting the
+  learning loop. A minimum faithful system still receives the current request,
+  forms a bounded situation, chooses and executes a learning move, preserves
+  future-changing information only when useful, and chooses again from revised
+  context.
+- Encode accepted refactor boundaries in the cheapest decisive repository
+  checks—such as package dependencies, schema and tool-catalog snapshots, and
+  scenario tests—so a locally convenient return to duplicated owner machinery
+  or an oversized default Tutor surface cannot pass unnoticed.
 - Critical contracts require an explanation of ownership, legal state transitions, persistence, recovery, and failure behavior before implementation.
 - Prompts are not a substitute for domain rules, authorization, or state transitions.
 - The registered default build, startup, and package composition must implement
@@ -355,6 +383,15 @@ learning tools.
   disappears after writing without a completion callback, classify its edits as
   an orphaned candidate, suspend acceptance claims, and recover them in a
   top-level task before further implementation.
+- For consequential refactors, separate product interpretation, architecture
+  criticism, and implementation responsibility even when one top-level task
+  performs them sequentially. Product interpretation derives observable
+  behavior from the foundation, scenarios, and learner evidence before local
+  implementation detail can redefine the problem; architecture criticism then
+  inspects current code without mutation; implementation receives the clarified
+  semantic difference and allowed boundary rather than choosing an easier
+  product interpretation. Read-only children may isolate the first two roles;
+  mutation remains with the top-level executor.
 - At a consequential parent decision boundary, identify the coherent decision
   the main agent still owns, any bounded high-entropy investigation suited to a
   fresh worker, and whether one independent review question could still change

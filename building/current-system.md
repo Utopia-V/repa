@@ -2,6 +2,8 @@
 
 本章按与文档同一 Git revision 的代码介绍当前系统。它回答“今天实际怎样运行”，便于共同建设者定位行为、阅读实现，并把新的观察带回前面的产品问题。
 
+这份说明拥有当前实现事实，不拥有下一版架构。后续重构应先从 [Product constitution](../docs/foundation/00-product-origin.md#product-constitution) 和 [跨实现行为 oracle](learning-situations.md#四个跨实现行为-oracle) 推导需要保留的学习行为，再把本章和源码当作 behavior/problem evidence。候选新内核与当前实现、ADR 和 roadmap 的冲突集中记录在 [Gate 23 之后的重构方向](../docs/research/repa-post-gate-23-refactor-direction-2026-08-24.md)，不能从某个现有类型或测试的存在推导保留义务。
+
 ## 使用入口
 
 Repa 是一个 TypeScript/Bun 项目，主要交互界面是终端 TUI。第一次运行源码前，先按照 [准备环境](development.md#准备环境) 为当前 worktree 设置独立的 LearnerHome 数据库；随后从仓库根目录启动：

@@ -27,6 +27,46 @@ interleaving, relearning, explanation, application, and real work may all be
 useful under different conditions. No one of them is the architecture or the
 mandatory continuation of teaching.
 
+## Product constitution
+
+The following six invariants are the compact product-level check for later
+design and implementation. They summarize this foundation; they do not make a
+particular runtime, database, record envelope, policy mechanism, or Context
+encoding part of the product.
+
+1. **The current request is the center of the current interaction.** An exact
+   learner request governs what it specifies. Goals, deadlines, prior
+   judgments, and old suggestions may inform the response but do not silently
+   replace that request.
+2. **The learner, models, and program own different work.** The learner does
+   the understanding, recall, reasoning, practice, creation, and application.
+   Models handle open-language interpretation, teaching, research, and local
+   semantic judgment. The program owns trusted time, identity, source,
+   permission, persistence, transactions, indexes, legal state changes, and
+   repeatable computation.
+3. **Durable extraction must have a future behavioral consumer.** Ordinary
+   conversation may remain in its original Session. A separate long-term
+   meaning is earned only when it can plausibly change later explanation,
+   practice, review, material choice, or learning advice.
+4. **Sources and derived understanding remain distinct.** Learner words,
+   material, attempts, work, and direct observations retain their source
+   meaning. Reports, evidence summaries, learner-state judgments, and advice
+   remain fallible, source-bearing, and correctable rather than becoming truth
+   merely because they were committed.
+5. **Context is a bounded projection, not the product state.** Omission from a
+   model sample does not mean absence, and inclusion does not require the model
+   to use a record. Context exists to support the current move and preserves a
+   route to exact detail when needed.
+6. **Partial structure is a legal open-world state.** Repa must be able to
+   begin with a name, one material, one problem, or a coarse provisional view.
+   It may earn more structure during use; a complete course model, prerequisite
+   graph, or mastery map is not an admission requirement.
+
+The minimum faithful product boundary is the complete learning loop described
+below, not any one storage model, tool catalog, or teaching move. The canonical
+cross-implementation situations that exercise this constitution live in
+[`building/learning-situations.md`](../../building/learning-situations.md).
+
 ## Where the Tutor lives
 
 `Tutor` names the behavior of the integrated Learning System, not the role

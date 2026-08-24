@@ -568,6 +568,19 @@ a decision and its provenance; it is not a correctness axiom.
 The live method and findings are recorded in the
 [pre-Gate-17 global hazard audit](research/pre-gate-17-global-hazard-audit-2026-07-27.md).
 
+The 2026-08-24 post-Gate-23 maintainer direction changes the forward search
+boundary without changing current runtime truth or reopening a closed Gate.
+Future refactor work starts from the compact product constitution and four
+cross-implementation learning situations; current code, schemas, tools and
+closed-Gate tests remain behavior and problem evidence rather than an automatic
+next-architecture template. Candidate `Learning Record`, `Learning Object`,
+`Learning Policy`, harness-independent kernel and Pi directions conflict with
+current owners in different ways and are not implementation authority. Their
+exact disposition is recorded in the
+[post-Gate-23 refactor direction and conflict register](research/repa-post-gate-23-refactor-direction-2026-08-24.md).
+This documentation correction creates no Gate 24, code change, migration,
+runtime replacement, publication or release claim.
+
 This file is the sole owner of volatile Gate disposition and the current
 control point. Stable product meaning belongs to the foundation and accepted
 ADRs; architecture owns the current system boundaries; Roadmap 09 owns Gate
@@ -623,6 +636,7 @@ reopen chains, and evidence qualifications live in the
 - [System architecture](architecture/00-system-architecture.md)
 - [Native learning data model](architecture/01-native-learning-data-model.md)
 - [One-time fork roadmap](roadmap/09-one-time-opencode-fork-baseline.md)
+- [Post-Gate-23 learning-kernel refactor direction and conflict register](research/repa-post-gate-23-refactor-direction-2026-08-24.md)
 - [Fork provenance and Gate ledger](fork-ledger.md)
 
 ## Gate records

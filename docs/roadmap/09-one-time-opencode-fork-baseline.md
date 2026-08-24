@@ -92,7 +92,7 @@ remains downstream of the correction.
 Original date: 2026-07-13
 
 Recalibrated: 2026-07-14, 2026-07-17, 2026-07-21, 2026-07-29, 2026-07-30,
-2026-08-02, 2026-08-08, 2026-08-09, and 2026-08-13
+2026-08-02, 2026-08-08, 2026-08-09, 2026-08-13, and 2026-08-24
 
 Documentation reconciled: 2026-07-27
 
@@ -104,6 +104,29 @@ and [native learning data model](../architecture/01-native-learning-data-model.m
 Evidence: [Fork provenance and Gate ledger](../fork-ledger.md)
 
 Legacy evidence: [Pre-fork Repa asset disposition audit](../research/pre-fork-repa-asset-audit-2026-07-13.md)
+
+## Forward-refactor boundary after Gate 23
+
+Gates 0–23 remain the accepted engineering topology for the current released-v1
+runtime; their exact evidence provenance remains in the fork ledger. They are
+not a template that the next architecture must reproduce noun by noun, table by
+table, tool by tool, or Gate by Gate. After Gate 23, maintainer direction
+requires forward refactor work to begin with the compact product constitution,
+the four cross-implementation learning situations, and an explicit
+learner-visible semantic difference.
+Current code and closed-Gate tests remain behavior and problem evidence; their
+local implementation shape does not become a future retention requirement.
+
+The candidate common `Learning Record`, `Learning Object`, move-oriented
+`Learning Policy`, harness-independent learning kernel, smaller Tutor tool
+surface and Pi-based vertical slice are intentionally not added as new Gates in
+this roadmap. They conflict with current authority separation, ordinary-Agent
+semantic ownership, or ADR-0014 runtime direction to different degrees. The
+[post-Gate-23 direction and conflict register](../research/repa-post-gate-23-refactor-direction-2026-08-24.md)
+owns their unresolved disposition. Before any candidate becomes a Gate, its
+product and architecture conflicts must be resolved in the owning documents and
+its scenario evidence must justify the new boundary. No Gate 24, current-runtime
+replacement, migration or deletion follows from this recalibration.
 
 ## Goal
 

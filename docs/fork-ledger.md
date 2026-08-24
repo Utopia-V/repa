@@ -5777,3 +5777,36 @@ normalization boundary. No push was authorized: `origin/main` remains at
 `e2bcaa62a2b7f475528ad3c37e230bc8062d1270`. No publication, release,
 provider-reliability, supported-platform, pedagogy, educational-efficacy, or
 next-Gate claim follows.
+
+## 2026-08-24 post-Gate-23 forward-search correction provenance
+
+After Gate 23 local integration, the maintainer authorized propagation of a
+forward development and refactor correction. The correction does not reject the
+accepted product loop or treat the current runtime as unreal. It changes what
+future agents may infer from that implementation: current source, schemas,
+tools, domain owners and passing tests are behavior and problem evidence, not an
+architecture oracle whose complete shape must be reproduced.
+
+The documentation successor:
+
+- consolidates six stable product invariants in the product foundation;
+- promotes four cross-implementation learning situations as documentation-level
+  behavior oracles without claiming an executable suite or current pass;
+- requires a learner-visible semantic difference before implementation,
+  defaults new persistent concepts and default Tutor tools to absent, separates
+  product interpretation from architecture criticism and implementation, and
+  preserves the complete loop in any minimum faithful slice;
+- records shared `Learning Record`, `Learning Object`, `Learning Policy`,
+  harness-independent kernel, smaller Tutor tool surface and Pi host as
+  candidates rather than accepted architecture; and
+- routes each conflict with ADR-0012, ADR-0014, current architecture and current
+  implementation through the
+  [post-Gate-23 direction record](research/repa-post-gate-23-refactor-direction-2026-08-24.md).
+
+Roadmap 09 now states that its closed topology remains current-runtime
+provenance rather than the automatic next search graph. No accepted Gate is
+reopened, no Gate 24 is created, and no production source, test, schema,
+migration, runtime, publication, release or provider-reliability claim follows
+from this documentation-only correction. Candidate technical directions
+require their own evidence, owning-decision revisions and applicable
+independent Gate review before implementation authority exists.
