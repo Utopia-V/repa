@@ -2,8 +2,8 @@
 
 Status: **contract/theory and implementation/evidence accepted;
 `G23-CR-001..003` and `G23-IR-001..003` closed; Whole Gate accepted;
-locally integrated at implementation commit `db3ae0c80068`; not pushed or
-released**
+published on `origin/main` through prototype-version commit `3517b2044e70`;
+not released**
 
 Date: 2026-08-23
 
@@ -717,5 +717,5 @@ At this candidate cut:
   intermittent-use phases pass through the primary-TUI SDK/mounted-handler
   boundary with matched controls and retained diagnostics;
 - both required Gate layers and the Whole Gate are accepted and locally
-  integrated; and
-- no push, publication, release, or next-Gate claim follows.
+  integrated and published on `origin/main`; and
+- no release or next-Gate claim follows.

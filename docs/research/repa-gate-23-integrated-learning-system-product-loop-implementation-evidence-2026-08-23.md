@@ -2,8 +2,8 @@
 
 Status: **implementation/evidence accepted; `G23-IR-001..003` closed;
 contract/theory and implementation/evidence both accepted; Whole Gate
-accepted; locally integrated at implementation commit `db3ae0c80068`; not
-pushed or released**
+accepted; published on `origin/main` through prototype-version commit
+`3517b2044e70`; not released**
 
 Date: 2026-08-23; repair cut 2026-08-24
 
@@ -420,12 +420,12 @@ surface, or educational-effect claim was added.
   through the primary-TUI SDK/mounted-handler boundary under one current
   runner; all selected phases pass with matched controls and finite per-run
   ceilings;
-- integration: the accepted implementation package is committed locally on
-  `main` at `db3ae0c80068`; and
-- Whole Gate: **accepted and locally integrated**; push, publication, release,
-  provider reliability, pedagogy, educational efficacy, and next-Gate
+- integration: the accepted implementation package is committed at
+  `db3ae0c80068` and published on `origin/main` through `3517b2044e70`; and
+- Whole Gate: **accepted, integrated, and published**; release, provider
+  reliability, pedagogy, educational efficacy, and next-Gate
   authority: **absent**.
 
-This local integration does not publish the branch or authorize release or the
-next Gate. `origin/main` remains at the pre-integration baseline until a
-separate push is authorized.
+Publication does not create a release or authorize the next Gate. The explicit
+`0.0.1-experimental.0` designation remains an initial experimental prototype,
+not a usable or supported product claim.

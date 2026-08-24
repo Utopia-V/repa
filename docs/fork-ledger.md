@@ -5834,3 +5834,39 @@ migration, runtime, publication, release or provider-reliability claim follows
 from this documentation-only correction. Candidate technical directions
 require their own evidence, owning-decision revisions and applicable
 independent Gate review before implementation authority exists.
+
+## 2026-08-24 prototype publication and development-branch retirement
+
+The maintainer authorized publication of the locally integrated mainline,
+designation of the initial experimental prototype, and retirement of every
+current development branch. `main` was fast-forward pushed from Gate 22 status
+commit `e2bcaa62a2b7f475528ad3c37e230bc8062d1270` through prototype-version
+commit `3517b2044e706a6c72b52ed61986dc8235da464f` without force update.
+
+Before deletion, the local Gate 20, Gate 20A and Gate 21A branches were verified
+as ancestors of `main`. Both commits on `codex/building-repa` were independently
+verified patch-equivalent to commits already in `main`. Its worktree and the
+clean detached `d480` worktree were removed, then these local branches were
+deleted:
+
+- `codex/building-repa`;
+- `codex/gate-20-future-attention`;
+- `codex/gate-20a-assignment-authority`; and
+- `codex/gate-21a-tutor-flow`.
+
+The remote branches `origin/codex/building-repa` and
+`origin/codex/gate-20a-assignment-authority` were deleted after the mainline
+push. The already-absent Gate 20 remote-tracking ref was pruned. `origin` now
+exposes only `main`, and the local repository now has only the `main` branch.
+
+Detached worktree `C:\Users\Discordance\.codex\worktrees\0afc\repa` is
+deliberately retained. It has no development branch and still contains 149
+uncommitted historical working-tree entries; deleting it would be a different
+data-discard action. The primary checkout and this retained detached snapshot
+are the only remaining registered worktrees.
+
+This status successor records the actual publication and cleanup result and is
+itself published on `origin/main`. No release or version tag was created.
+Version `0.0.1-experimental.0` remains an unusable initial experimental
+prototype, not a compatibility, support, provider-reliability, platform,
+pedagogy, educational-efficacy, or next-Gate claim.
