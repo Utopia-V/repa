@@ -5778,6 +5778,30 @@ normalization boundary. No push was authorized: `origin/main` remains at
 provider-reliability, supported-platform, pedagogy, educational-efficacy, or
 next-Gate claim follows.
 
+## 2026-08-24 initial experimental prototype version
+
+The maintainer corrected the product-maturity interpretation after local Gate
+23 integration: executable startup seams and accepted Gate evidence do not make
+the current system usable. Repa is now explicitly versioned
+`0.0.1-experimental.0` and classified as an **initial experimental prototype,
+not currently usable**. This supersedes any conversational or documentation
+inference from a CLI/database smoke test, a passing Gate, or a complete local
+Agent spine to product usability, reliability, support, release readiness, or
+educational efficacy.
+
+The root `package.json` owns the Repa product version, default
+`experimental` channel, and prototype stage. `packages/opencode/package.json`
+mirrors the executable package version. The development entry binds those
+values before loading the CLI, while the build script now derives its default
+version/channel from Repa's root metadata rather than the OpenCode npm latest
+version. Remaining workspace package versions at `1.17.18` preserve inherited
+OpenCode package/provenance identity and are not Repa's product version.
+
+This designation is not a release or tag and grants no compatibility,
+migration, provider-reliability, supported-platform, usability, pedagogy, or
+next-Gate claim. Publication and development-branch retirement remain separate
+Git actions recorded by their actual results.
+
 ## 2026-08-24 post-Gate-23 forward-search correction provenance
 
 After Gate 23 local integration, the maintainer authorized propagation of a

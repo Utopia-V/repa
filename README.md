@@ -1,5 +1,11 @@
 # Repa
 
+> **Development status — `0.0.1-experimental.0`: initial experimental
+> prototype.** Repa is not currently a usable product, release, or supported
+> learning tool. The descriptions below state the intended product and the
+> engineering behavior available for investigation; they are not a usability,
+> reliability, compatibility, or educational-effect promise.
+
 Repa is a terminal-native, local-first learning system. Its Tutor helps a
 learner work through difficult material, choose a useful next move, connect
 learning to real courses and assignments, and continue across days without
@@ -27,7 +33,8 @@ detail when the present move needs it.
 
 ## Current form
 
-Repa is implemented in TypeScript and Bun. The main interface is a
+The current implementation is the `0.0.1-experimental.0` prototype. Repa is
+implemented in TypeScript and Bun. The main interface is a
 natural-language terminal TUI. Direct run, attach, local server, and ACP use the
 same Session, model, tool, permission, and learning-state runtime for scripts
 and integrations.

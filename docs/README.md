@@ -1,5 +1,11 @@
 # Repa documentation
 
+Current product maturity: **`0.0.1-experimental.0`, initial experimental
+prototype, not currently usable.** Gate acceptance and executable engineering
+evidence do not establish a usable product, release, supported workflow,
+reliability, compatibility, or educational efficacy. OpenCode `v1.17.18`
+remains fork provenance, not the Repa product version.
+
 Status: Gates 17 and 19 are closed at their exact accepted boundaries. Gate
 18's accepted implementation remains current runtime evidence, while its
 Session-deletion/Context-retention subsection is bounded-reopened together with

@@ -4,7 +4,9 @@ Status: Maintainer-directed forward-development record, 2026-08-24. The search
 and derivation constraints in this document are active. Named technical shapes
 remain candidates where the conflict register says so. This document is not an
 ADR, a Gate contract, a code-migration authorization, or a replacement for the
-current status map.
+current status map. The current implementation is versioned
+`0.0.1-experimental.0` as an initial experimental prototype and is not presently
+usable; accepted Gate behavior remains evidence, not a usability claim.
 
 ## Purpose and lifecycle
 

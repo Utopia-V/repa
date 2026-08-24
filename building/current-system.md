@@ -1,5 +1,7 @@
 # 当前的 Repa
 
+当前代码对应 `0.0.1-experimental.0` 初始实验性原型。它可以提供实现与行为证据，但目前不能被当作可用产品、受支持工具或发布候选。本章中的“当前系统”只表示这份 Git revision 实际包含什么，不表示学习体验已经可用。
+
 本章按与文档同一 Git revision 的代码介绍当前系统。它回答“今天实际怎样运行”，便于共同建设者定位行为、阅读实现，并把新的观察带回前面的产品问题。
 
 这份说明拥有当前实现事实，不拥有下一版架构。后续重构应先从 [Product constitution](../docs/foundation/00-product-origin.md#product-constitution) 和 [跨实现行为 oracle](learning-situations.md#四个跨实现行为-oracle) 推导需要保留的学习行为，再把本章和源码当作 behavior/problem evidence。候选新内核与当前实现、ADR 和 roadmap 的冲突集中记录在 [Gate 23 之后的重构方向](../docs/research/repa-post-gate-23-refactor-direction-2026-08-24.md)，不能从某个现有类型或测试的存在推导保留义务。

@@ -1,12 +1,17 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
   "name": "repa",
+  "version": "0.0.1-experimental.0",
   "description": "Terminal-native agentic learning system",
   "private": true,
   "type": "module",
   "packageManager": "bun@1.3.14",
+  "repa": {
+    "channel": "experimental",
+    "stage": "initial-experimental-prototype"
+  },
   "scripts": {
-    "dev": "bun run --cwd packages/opencode --conditions=browser src/index.ts",
+    "dev": "bun run --cwd packages/opencode dev",
     "lint": "oxlint",
     "typecheck": "bun turbo typecheck",
     "upgrade-opentui": "bun run script/upgrade-opentui.ts",

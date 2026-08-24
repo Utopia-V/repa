@@ -2,6 +2,8 @@
 
 这份指南帮助新的共同建设者启动项目、找到相关代码，并完成一次与产品问题相连的改动。具体目录里的 `AGENTS.md` 会补充局部维护规则；这里保留整条开发路径。
 
+当前产品版本是 `0.0.1-experimental.0`，阶段为初始实验性原型，尚不可用。根 `package.json` 拥有 Repa 产品版本和默认 `experimental` channel，`packages/opencode/package.json` 保持可执行包版本一致；开发入口和构建脚本从这两个 owner 产生实际 CLI/产物版本。工作区内仍为 `1.17.18` 的继承包保留 OpenCode 来源与维护身份，不代表 Repa 产品版本。
+
 ## 准备环境
 
 Repa 使用 TypeScript 和 Bun。仓库根目录的 `package.json` 固定了 Bun 版本，目前为 `1.3.14`。
@@ -9,6 +11,7 @@ Repa 使用 TypeScript 和 Bun。仓库根目录的 `package.json` 固定了 Bun
 ```powershell
 bun --version
 bun install
+bun run dev --version
 ```
 
 当前目录是本次 Agent 的工作目录，LearnerHome 数据库默认位于用户数据目录。源码分支启动时会检查并迁移它所连接的数据库，因此日常开发应先为当前 worktree 指定独立路径：
