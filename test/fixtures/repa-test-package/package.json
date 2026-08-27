@@ -1,0 +1,15 @@
+{
+  "name": "repa-test-package",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "keywords": ["pi-package"],
+  "peerDependencies": {
+    "typebox": "*"
+  },
+  "pi": {
+    "extensions": ["./extensions"],
+    "skills": ["./skills"],
+    "prompts": ["./prompts"]
+  }
+}

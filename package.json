@@ -1,0 +1,28 @@
+{
+  "name": "repa",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "repa": "dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "check": "tsc --noEmit",
+    "start": "tsx src/cli.ts",
+    "test": "node --import tsx --test test/application.test.ts"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "dependencies": {
+    "@earendil-works/pi-ai": "0.84.3",
+    "@earendil-works/pi-coding-agent": "0.84.3",
+    "typebox": "1.3.7"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.21",
+    "tsx": "4.23.12",
+    "typescript": "5.9.3"
+  }
+}
