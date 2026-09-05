@@ -1,37 +1,9 @@
-# Deepening
+# 复杂依赖簇
 
-How to deepen a cluster of shallow modules safely, given its dependencies. Assumes the vocabulary in [SKILL.md](SKILL.md): **module**, **interface**, **seam**, **adapter**.
+当一项职责已经成立，而依赖使 interface 与 owner 难以判断时使用本参考。
 
-## Dependency categories
+沿真实数据与控制路径理解相关的身份、状态、生命周期、顺序、失败、恢复、权限和成本。依赖位于函数、进程、文件、数据库或网络只是实现事实，不直接决定 module 形状。
 
-When assessing a candidate for deepening, classify its dependencies. The category determines how the deepened module is tested across its seam.
+共同拥有一项责任并随之变化的行为可以集中起来；具有独立身份、权限、生命周期或恢复责任的行为即使代码相似，也可能需要保持分离。Seam 落在这些语义真正变化的位置，test double 服从已经成立的 seam。
 
-### 1. In-process
-
-Pure computation, in-memory state, no I/O. Always deepenable: merge the modules and test through the new interface directly. No adapter needed.
-
-### 2. Local-substitutable
-
-Dependencies that have local test stand-ins (PGLite for Postgres, in-memory filesystem). Deepenable if the stand-in exists. The deepened module is tested with the stand-in running in the test suite. The seam is internal; no port at the module's external interface.
-
-### 3. Remote but owned (Ports & Adapters)
-
-Your own services across a network boundary (microservices, internal APIs). Define a **port** (interface) at the seam. The deep module owns the logic; the transport is injected as an **adapter**. Tests use an in-memory adapter. Production uses an HTTP/gRPC/queue adapter.
-
-Recommendation shape: *"Define a port at the seam, implement an HTTP adapter for production and an in-memory adapter for testing, so the logic sits in one deep module even though it's deployed across a network."*
-
-### 4. True external (Mock)
-
-Third-party services (Stripe, Twilio, etc.) you don't control. The deepened module takes the external dependency as an injected port; tests provide a mock adapter.
-
-## Seam discipline
-
-- **One adapter means a hypothetical seam. Two adapters means a real one.** Don't introduce a port unless at least two adapters are justified (typically production + test). A single-adapter seam is just indirection.
-- **Internal seams vs external seams.** A deep module can have internal seams (private to its implementation, used by its own tests) as well as the external seam at its interface. Don't expose internal seams through the interface just because tests use them.
-
-## Testing strategy: replace, don't layer
-
-- Old unit tests on shallow modules become waste once tests at the deepened module's interface exist; delete them.
-- Write new tests at the deepened module's interface. The **interface is the test surface**.
-- Tests assert on observable outcomes through the interface, not internal state.
-- Tests should survive internal refactors, since they describe behaviour, not implementation. If a test has to change when the implementation changes, it's testing past the interface.
+迁移时先让新 interface 完整承担职责，再移除旧路径与下游补偿。保留仍保护独特行为或风险的证据，不用文件更少、adapter 更多或测试更方便证明设计更深。

@@ -1,8 +1,16 @@
 # Repa
 
-Repa 是一个独立、本地优先的学习 Agent 应用。当前实现完成了第一条可运行细线：学习者可以打开自己的本地学习者空间，通过最小 TUI 与 Pi 支持的 provider 流式对话，正常关闭后恢复同一个 Pi Session，并在明确授权后加载兼容的 Pi Package、Extension、skill 和 prompt。
+Repa 是一个独立、本地优先的学习 Agent 应用。用户可以选择任意本地目录作为学习空间，让一般 Agent 使用普通文件、通用工具和可安装能力参与开放的长期学习。Repa 将 Pi 作为内部 SDK，复用它的模型与 provider、Agent loop、Session、通用工具和扩展运行时。
 
-当前版本只实现普通 Agent 对话路径；学习计划、学习者记忆、学习 Wiki、来源材料和历史搜索尚未进入生产实现。
+当前实现完成了第一条可运行细线：用户可以通过最小 TUI 与 Pi 支持的 provider 流式对话，正常关闭后恢复同一个 Pi Session，并在明确信任后加载兼容的 Pi Package、Extension、Skill 和 prompt。Pi 通用工具与学习语境的内部注入 Extension 尚未进入当前实现。
+
+## 产品模型
+
+学习空间的内容和目录结构由用户和 Agent 自由组织。Repa 可以默认在 `.repa/` 中保存与该空间关联的 Session、配置和可重建缓存；空间位置与推荐布局可由用户调整。
+
+学习语境是一份持续注入、可由用户和 Agent 增删改查的数据。Repa 内部 Extension 在每次 Agent run 开始前取得其当前视图。Markdown 是最简单的实验候选，也可以继续评估更适合局部编辑和前端共用的数据结构。Pi Session JSONL 保存实际交流，Agent 在当前工作需要过去细节时自行搜索。
+
+材料处理、规划、知识整理和可视化等能力通过 Pi Package、Extension、Skill 或 prompt 加入。Repa 可以发布官方扩展，也可以加载兼容的 Pi 社区扩展。
 
 ## 环境与安装
 
@@ -51,15 +59,15 @@ TUI 支持两个本地命令：
 
 ## Package 与 Extension 信任
 
-默认情况下，Repa 不加载 Pi Package、Extension、skill 或 prompt。只有显式加入 `--trust-extensions` 后，才会读取 Pi 的全局资源和学习者空间中的项目资源：
+默认情况下，Repa 不加载 Pi Package、Extension、Skill 或 prompt。只有显式加入 `--trust-extensions` 后，才会读取 Pi 的全局资源和学习空间中的项目资源：
 
 ```powershell
 npm start -- C:\Learning\my-space --trust-extensions
 ```
 
-Package 和 Extension 中的代码以 Repa 宿主进程的完整权限运行，skill 也可以向模型提供任意指令；这不是沙箱。TUI 会在每次启用这些资源时显示这一信任含义。安装第三方 Package 前应先审查其来源和代码。
+Package 和 Extension 中的代码以 Repa 宿主进程的完整权限运行，Skill 也可以向模型提供任意指令；这不是沙箱。TUI 会在每次启用这些资源时显示这一信任含义。安装第三方 Package 前应先审查其来源和代码。
 
-Repa 关闭 Pi 默认的 `read`、`write`、`edit`、`bash` 等 coding tools，只提供一个同名兼容 `read`。这个 `read` 只能读取当前已启用 skill 自己目录中的文本资源，用于按需加载完整 `SKILL.md` 及其配套说明；它不会恢复任意文件访问或整套默认 coding tools。受信任的 tool-only Extension 仍可注册自己的工具。
+当前细线关闭了 Pi 默认的 `read`、`write`、`edit`、`bash` 等工具，只保留用于读取已启用 Skill 资源的兼容 `read`。后续主体实现将直接启用 Pi 的通用文件、搜索和执行工具，学习空间作为它们的工作目录。
 
 ## Application interface
 
@@ -91,4 +99,6 @@ npm run build
 node dist/cli.js C:\Learning\my-space
 ```
 
-架构与产品边界以 [CONTEXT.md](CONTEXT.md)、[通过 Node SDK 嵌入 Pi](docs/adr/0001-embed-pi-through-node-sdk.md) 和 GitHub Issue [#3](https://github.com/Utopia-V/repa/issues/3)、[#4](https://github.com/Utopia-V/repa/issues/4) 为准。
+稳定领域语义以 [CONTEXT.md](CONTEXT.md) 为准，已接受的工程取舍见 [架构决策记录](docs/adr/)；Pi 嵌入边界由 [将 Pi 作为 Repa 的内部 Agent SDK](docs/adr/0001-embed-pi-through-node-sdk.md) 持有。
+
+当前产品模型见 GitHub Issue [#5](https://github.com/Utopia-V/repa/issues/5)；[#6](https://github.com/Utopia-V/repa/issues/6) 负责接入可编辑学习语境并启用 Pi 通用工具。[#7](https://github.com/Utopia-V/repa/issues/7)、[#8](https://github.com/Utopia-V/repa/issues/8) 和 [#9](https://github.com/Utopia-V/repa/issues/9) 分别记录可视化、规划与知识整理的扩展想法。[#3](https://github.com/Utopia-V/repa/issues/3) 是已退役的早期规格；[#4](https://github.com/Utopia-V/repa/issues/4) 描述当前已经跑通的对话细线。
