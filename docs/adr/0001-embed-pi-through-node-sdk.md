@@ -1,7 +1,19 @@
 # 将 Pi 作为 Repa 的内部 Agent SDK
 
+本记录约定目标架构；现有 TUI 的配置和运行方式见 [README](../../README.md#运行现有-tui)。
+
 Repa 通过 Pi 的公开 Node SDK 调用 `createAgentSession`、`ModelRuntime`、`SessionManager` 和 `DefaultResourceLoader`。Pi 在 Repa 内部提供模型与 provider、Agent loop、Session、streaming、retry、compaction、通用工具以及 Package、Extension、Skill 和 prompt 的运行能力。
 
 Repa 拥有用户面对的学习空间、学习语境、Application interface、配置与前端。Pi 的类型和生命周期集中在内部适配层，Pi 保持为实现依赖。Repa 直接复用 Pi 的通用工具和扩展格式；社区与 Repa 官方能力都可以使用兼容的 Pi Package、Extension 和 Skill 交付。
+
+模型连接直接在 Repa 中配置，支持 API key、本地模型服务及 provider 实际提供的登录方式。Repa 提供自己的凭据存储，复用 Pi 的模型枚举、登录与认证状态管理。连接可以命名以区分端点或账号，空间和会话仅保存必要引用。凭据由应用侧管理，公开配置、会话历史与学习语境不承载连接凭据明文；前端显示连接状态与可选模型。模型不可用时保留请求并报告可处理错误，自动更换模型须有已配置的回退策略。
+
+可继承的运行设置按应用默认、空间设置与会话选择覆盖，并可显示有效值的来源；仅允许适合相应作用域的项目参与覆盖。应用持有连接、默认运行设置、已安装能力及本机信任与授权；空间持有材料、语境、能力约定及可覆盖的设置；会话持有当前选择的运行选项，前端持有布局、主题、快捷键和草稿。影响 Agent 运行的常规配置和插件版本在后续运行中生效，已有实例保留实际配置。
+
+安装包附带空间与会话入口、文档阅读编辑、材料关联、语境编辑、Agent 基础工具与学习协作约定，官方能力采用同样的公开接口并支持替换或关闭。未配置模型时本地内容能力仍可用，空语境允许开始交流。默认学习协作围绕实际目标与反馈形成内容，具体课程结构与方法按使用需要发展。
+
+第三方能力通过明确的安装或启用操作进入，展示来源、版本、能力与执行环境，已启用能力沿用已有授权。空间中的扩展声明作为建议使用的能力展示，阅读资料与运行附带代码分别处理；本机信任和授权保存在应用侧，空间文件不能自行授予权限。
+
+Pi 承担 Agent 扩展的运行，前端宿主承担界面组件的加载；可替换前端、客户端与组件之间的责任由[公开应用协议的决策](0004-connect-replaceable-frontends-through-application-protocol.md)持有。
 
 相关复用边界与一手来源见 [Pi 生态对 Repa 的可复用性调查](../research/pi-ecosystem-compatibility.md)。
