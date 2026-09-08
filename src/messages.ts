@@ -1,0 +1,120 @@
+import { createHash } from "node:crypto";
+import type { SessionEntry } from "@earendil-works/pi-coding-agent";
+import type { Block, Message } from "./protocol.js";
+
+export class Resources {
+  readonly #values = new Map<string, { mimeType: string; data: Buffer }>();
+  add(mimeType: string, data: string): { id: string; mimeType: string } {
+    if (!/^[\w.+-]+\/[\w.+-]+$/.test(mimeType))
+      mimeType = "application/octet-stream";
+    const bytes = Buffer.from(data, "base64");
+    const id = createHash("sha256")
+      .update(mimeType)
+      .update("\0")
+      .update(bytes)
+      .digest("hex");
+    if (!this.#values.has(id)) this.#values.set(id, { mimeType, data: bytes });
+    return { id, mimeType };
+  }
+  get(id: string) {
+    return this.#values.get(id);
+  }
+  clear(): void {
+    this.#values.clear();
+  }
+}
+
+function record(value: unknown): Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+export function blocks(content: unknown, resources: Resources): Block[] {
+  if (typeof content === "string") return [{ type: "text", text: content }];
+  if (!Array.isArray(content)) return [];
+  return content.map((value) => {
+    const part = record(value);
+    if (part.type === "text" && typeof part.text === "string")
+      return { type: "text", text: part.text };
+    if (part.type === "thinking" && typeof part.thinking === "string")
+      return { type: "thinking", text: part.thinking };
+    if (
+      part.type === "image" &&
+      typeof part.mimeType === "string" &&
+      typeof part.data === "string"
+    )
+      return {
+        type: "resource",
+        resource: resources.add(part.mimeType, part.data),
+      };
+    if (part.type === "toolCall")
+      return {
+        type: "tool_call",
+        id: String(part.id),
+        name: String(part.name),
+        arguments: part.arguments ?? {},
+      };
+    return { type: "extension", data: JSON.parse(JSON.stringify(value)) };
+  });
+}
+
+export function messageView(
+  id: string,
+  raw: unknown,
+  resources: Resources,
+): Message {
+  const message = record(raw);
+  const role =
+    message.role === "user" || message.role === "assistant"
+      ? message.role
+      : message.role === "toolResult"
+        ? "tool"
+        : "context";
+  return {
+    id,
+    role,
+    content: blocks(message.content, resources),
+    timestamp: typeof message.timestamp === "number" ? message.timestamp : 0,
+    ...(typeof message.toolCallId === "string"
+      ? { toolCallId: message.toolCallId }
+      : {}),
+    ...(typeof message.toolName === "string" ? { name: message.toolName } : {}),
+    ...(typeof message.errorMessage === "string"
+      ? { error: message.errorMessage }
+      : message.isError
+        ? { error: "工具执行失败。" }
+        : {}),
+    ...(message.details !== undefined
+      ? { details: JSON.parse(JSON.stringify(message.details)) }
+      : {}),
+  };
+}
+
+export function historyView(
+  entries: SessionEntry[],
+  resources: Resources,
+): Message[] {
+  return entries.flatMap((entry) => {
+    if (entry.type === "message")
+      return [messageView(entry.id, entry.message, resources)];
+    if (entry.type === "custom_message")
+      return [
+        messageView(
+          entry.id,
+          { ...entry, role: "custom", timestamp: Date.parse(entry.timestamp) },
+          resources,
+        ),
+      ];
+    if (entry.type === "compaction" || entry.type === "branch_summary")
+      return [
+        {
+          id: entry.id,
+          role: "context" as const,
+          content: [{ type: "text" as const, text: entry.summary }],
+          timestamp: Date.parse(entry.timestamp),
+        },
+      ];
+    return [];
+  });
+}

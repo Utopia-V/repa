@@ -1,544 +1,1101 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { fork, spawn, type ChildProcess } from "node:child_process";
+import { randomUUID } from "node:crypto";
+import { once } from "node:events";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test, { type TestContext } from "node:test";
 import { fileURLToPath } from "node:url";
-
+import { WebSocket } from "ws";
 import {
   fauxAssistantMessage,
   fauxProvider,
   fauxToolCall,
   type Context,
-  type FauxProviderHandle,
   type FauxResponseStep,
 } from "@earendil-works/pi-ai";
 import { ModelRuntime } from "@earendil-works/pi-coding-agent";
-
+import { ConnectionError, RepaClient, RpcError } from "../src/client.js";
+import { REPA_BASE_PROMPT } from "../src/pi-host.js";
 import {
-  openRepa,
-  type RepaApplication,
-  type RepaEvent,
-} from "../src/application.js";
-import { REPA_BASE_PROMPT, type PiModelOverride } from "../src/pi-host.js";
+  isTerminal,
+  type Change,
+  type Delivery,
+  type Run,
+  type SessionKey,
+  type Snapshot,
+} from "../src/protocol.js";
+import {
+  startRepaServer,
+  type Connection,
+  type ServerOptions,
+} from "../src/server.js";
 
 const testDirectory = path.dirname(fileURLToPath(import.meta.url));
-const fixturePackage = path.join(testDirectory, "fixtures", "repa-test-package");
-const brokenPackage = path.join(testDirectory, "fixtures", "repa-broken-package");
+const fixturePackage = path.join(testDirectory, "fixtures/repa-test-package");
+const brokenPackage = path.join(testDirectory, "fixtures/repa-broken-package");
 const fixtureSkillPath = path.join(
   fixturePackage,
-  "skills",
-  "fixture-learning-skill",
-  "SKILL.md",
+  "skills/fixture-learning-skill/SKILL.md",
 );
+const cliPath = fileURLToPath(new URL("../src/cli.ts", import.meta.url));
 
-interface TestSpace {
-  root: string;
-  learnerSpace: string;
-  agentDir: string;
-}
-
-interface OpenFixtureOptions {
-  packages?: string[];
-  trustExtensions?: boolean;
-  resume?: boolean;
-  contextWindow?: number;
-  maxTokens?: number;
-  tokensPerSecond?: number;
-  compaction?: { enabled: boolean; reserveTokens: number; keepRecentTokens: number };
-}
-
-class EventCollector {
-  readonly events: RepaEvent[] = [];
-  readonly done: Promise<void>;
-  readonly #waiters: Array<{
-    predicate: (event: RepaEvent) => boolean;
-    resolve: (event: RepaEvent) => void;
-    reject: (error: Error) => void;
-    timer: NodeJS.Timeout;
-  }> = [];
-
-  constructor(source: AsyncIterable<RepaEvent>) {
-    this.done = this.#consume(source);
-  }
-
-  async waitFor(
-    predicate: (event: RepaEvent) => boolean,
-    message: string,
-    timeoutMilliseconds = 8_000,
-  ): Promise<RepaEvent> {
-    const existing = this.events.find(predicate);
-    if (existing) return existing;
-
-    return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        const index = this.#waiters.findIndex((waiter) => waiter.timer === timer);
-        if (index >= 0) this.#waiters.splice(index, 1);
-        reject(new Error(`${message}\n已观察事件：${JSON.stringify(this.events, null, 2)}`));
-      }, timeoutMilliseconds);
-      this.#waiters.push({ predicate, resolve, reject, timer });
-    });
-  }
-
-  async settle(): Promise<void> {
-    await new Promise<void>((resolve) => setImmediate(resolve));
-  }
-
-  async #consume(source: AsyncIterable<RepaEvent>): Promise<void> {
-    try {
-      for await (const event of source) {
-        this.events.push(event);
-        for (const waiter of [...this.#waiters]) {
-          if (!waiter.predicate(event)) continue;
-          clearTimeout(waiter.timer);
-          this.#waiters.splice(this.#waiters.indexOf(waiter), 1);
-          waiter.resolve(event);
-        }
-      }
-    } catch (error) {
-      const failure = error instanceof Error ? error : new Error(String(error));
-      for (const waiter of this.#waiters.splice(0)) {
-        clearTimeout(waiter.timer);
-        waiter.reject(failure);
-      }
-      throw failure;
-    }
+async function until<T>(
+  read: () => T | Promise<T>,
+  predicate: (value: T) => boolean,
+  timeout = 8000,
+): Promise<T> {
+  const deadline = Date.now() + timeout;
+  for (;;) {
+    const value = await read();
+    if (predicate(value)) return value;
+    if (Date.now() > deadline)
+      throw new Error(`等待状态超时：${JSON.stringify(value)}`);
+    await new Promise((resolve) => setTimeout(resolve, 10));
   }
 }
-
-function messageText(message: Context["messages"][number]): string {
+function textOf(message: { content: unknown }): string {
   if (typeof message.content === "string") return message.content;
-  return message.content
-    .map((part) => {
-      if (part.type === "text") return part.text;
-      if (part.type === "thinking") return part.thinking;
-      if (part.type === "toolCall") return `${part.name}:${JSON.stringify(part.arguments)}`;
-      if (part.type === "image") return "";
-      return "";
-    })
-    .join("\n");
+  return Array.isArray(message.content)
+    ? message.content
+        .map((part) => (typeof part.text === "string" ? part.text : ""))
+        .join("\n")
+    : "";
 }
-
-function latestMessageText(context: Context, role: Context["messages"][number]["role"]): string {
-  const message = [...context.messages].reverse().find((candidate) => candidate.role === role);
-  return message ? messageText(message) : "";
+function latest(context: Context, role: string): string {
+  const message = context.messages.findLast((x) => x.role === role);
+  return message ? textOf(message) : "";
 }
+const sessionText = (state: Snapshot) =>
+  state.sessions.flatMap((session) => session.messages.map(textOf)).join("\n");
 
-function assistantText(events: RepaEvent[]): string {
-  return events
-    .flatMap((event) => (event.type === "assistant_text_delta" ? [event.delta] : []))
-    .join("");
+interface FixtureOptions extends ServerOptions {
+  speed?: number;
+  retry?: boolean;
+  retryDelayMs?: number;
+  smallContext?: boolean;
+  packages?: string[];
 }
-
-async function createTestSpace(
-  testContext: TestContext,
-  options: OpenFixtureOptions = {},
-): Promise<TestSpace> {
-  const root = await mkdtemp(path.join(os.tmpdir(), "repa-acceptance-"));
-  const learnerSpace = path.join(root, "learner");
+async function files(t: TestContext, options: FixtureOptions = {}) {
+  const root = await mkdtemp(path.join(os.tmpdir(), "repa-test-"));
+  const directory = path.join(root, "learning");
   const agentDir = path.join(root, "agent");
-  await mkdir(path.join(learnerSpace, ".pi"), { recursive: true });
-  await mkdir(agentDir, { recursive: true });
+  await mkdir(path.join(directory, ".pi"), { recursive: true });
+  await mkdir(agentDir);
   await writeFile(
     path.join(agentDir, "settings.json"),
-    `${JSON.stringify(
-      {
-        extensions: ["!**/*"],
-        skills: ["!**/*"],
-        prompts: ["!**/*"],
-        themes: ["!**/*"],
-      },
-      null,
-      2,
-    )}\n`,
-    "utf8",
+    JSON.stringify({
+      extensions: ["!**/*"],
+      skills: ["!**/*"],
+      prompts: ["!**/*"],
+      themes: ["!**/*"],
+    }),
   );
   await writeFile(
-    path.join(learnerSpace, ".pi", "settings.json"),
-    `${JSON.stringify(
-      {
-        packages: options.packages ?? [fixturePackage],
-        retry: { enabled: false },
-        compaction: options.compaction ?? {
-          enabled: true,
-          reserveTokens: 400,
-          keepRecentTokens: 200,
-        },
+    path.join(directory, ".pi/settings.json"),
+    JSON.stringify({
+      packages: options.packages ?? [fixturePackage],
+      retry: {
+        enabled: options.retry ?? false,
+        maxRetries: 2,
+        baseDelayMs: options.retryDelayMs ?? 1,
       },
-      null,
-      2,
-    )}\n`,
-    "utf8",
+      compaction: { enabled: true, reserveTokens: 400, keepRecentTokens: 200 },
+    }),
   );
-  testContext.after(async () => {
+  const cleanups: Array<() => void | Promise<void>> = [];
+  t.after(async () => {
+    const errors: unknown[] = [];
+    for (const cleanup of cleanups.reverse()) {
+      try {
+        await cleanup();
+      } catch (error) {
+        errors.push(error);
+      }
+    }
     await rm(root, { recursive: true, force: true });
+    if (errors.length) throw new AggregateError(errors, "测试资源清理失败。");
   });
-  return { root, learnerSpace, agentDir };
+  return {
+    root,
+    directory,
+    agentDir,
+    beforeCleanup: (cleanup: () => void | Promise<void>) => {
+      cleanups.push(cleanup);
+    },
+  };
 }
-
-async function createModelOverride(
-  space: TestSpace,
-  options: OpenFixtureOptions = {},
-): Promise<{ faux: FauxProviderHandle; override: PiModelOverride }> {
+async function model(agentDir: string, options: FixtureOptions = {}) {
   const faux = fauxProvider({
-    api: `repa-test-api-${path.basename(space.root)}`,
-    provider: `repa-test-provider-${path.basename(space.root)}`,
+    api: `repa-api-${randomUUID()}`,
+    provider: `repa-provider-${randomUUID()}`,
     models: [
       {
-        id: "repa-test-model",
-        name: "Repa Test Model",
+        id: "test",
+        name: "test",
         reasoning: false,
         input: ["text"],
-        contextWindow: options.contextWindow ?? 16_384,
-        maxTokens: options.maxTokens ?? 512,
+        contextWindow: options.smallContext ? 1600 : 16384,
+        maxTokens: options.smallContext ? 256 : 512,
       },
     ],
-    tokensPerSecond: options.tokensPerSecond ?? 0,
+    tokensPerSecond: options.speed ?? 0,
     tokenSize: { min: 1, max: 1 },
   });
   const modelRuntime = await ModelRuntime.create({
-    authPath: path.join(space.agentDir, "auth.json"),
+    authPath: path.join(agentDir, "auth.json"),
     modelsPath: null,
     allowModelNetwork: false,
     refreshOnCreate: false,
   });
   modelRuntime.registerNativeProvider(faux.provider);
+  return { faux, override: { modelRuntime, model: faux.getModel() } };
+}
+async function fixture(t: TestContext, options: FixtureOptions = {}) {
+  const spaceFiles = await files(t, options);
+  const { faux, override } = await model(spaceFiles.agentDir, options);
+  const server = await startRepaServer({
+    ...options,
+    agentDir: spaceFiles.agentDir,
+    trustExtensions: options.trustExtensions ?? true,
+    modelOverride: options.modelOverride ?? override,
+  });
+  const clients: RepaClient[] = [];
+  const connect = async () => {
+    const client = await RepaClient.connect(server.connection);
+    clients.push(client);
+    return client;
+  };
+  const client = await connect();
+  spaceFiles.beforeCleanup(async () => {
+    await server.close();
+    await Promise.all(clients.map((x) => x.close()));
+  });
+  const space = await client.call("space.open", { path: spaceFiles.directory });
+  const session = await client.call("session.create", { spaceId: space.id });
+  const key: SessionKey = { spaceId: space.id, sessionId: session.sessionId };
+  let state: Snapshot = { lifecycle: "running", spaces: [], sessions: [] };
+  const changes: Change[] = [];
+  const deliveries: Delivery[] = [];
+  const watch = await client.watch(key, (snapshot, delivery) => {
+    state = snapshot;
+    deliveries.push(delivery);
+    if (delivery.type === "changes") changes.push(...delivery.changes);
+  });
+  const finish = async (id: string): Promise<Run> => {
+    const result = await until(
+      () => client.call("run.get", { spaceId: space.id, requestId: id }),
+      (value) => value.status !== "unknown" && isTerminal(value),
+    );
+    assert.notEqual(result.status, "unknown");
+    return result as Run;
+  };
+  const send = async (text: string) => {
+    const accepted = await client.call("run.submit", {
+      ...key,
+      requestId: randomUUID(),
+      text,
+    });
+    assert.equal(accepted.status, "accepted");
+    return finish(accepted.id);
+  };
   return {
+    ...spaceFiles,
+    server,
+    client,
+    clients,
+    connect,
     faux,
-    override: { modelRuntime, model: faux.getModel() },
+    key,
+    space,
+    session,
+    watch,
+    changes,
+    deliveries,
+    state: () => state,
+    send,
+    finish,
   };
 }
 
-async function openFixture(
-  testContext: TestContext,
-  options: OpenFixtureOptions = {},
-): Promise<{
-  space: TestSpace;
-  faux: FauxProviderHandle;
-  application: RepaApplication;
-  collector: EventCollector;
-}> {
-  const space = await createTestSpace(testContext, options);
-  const { faux, override } = await createModelOverride(space, options);
-  const opened = await openRepa(
-    {
-      learnerSpace: space.learnerSpace,
-      agentDir: space.agentDir,
-      resume: options.resume,
-      trustExtensions: options.trustExtensions ?? true,
-    },
-    { modelOverride: override },
-  );
-  assert.equal(opened.ok, true, opened.ok ? undefined : opened.error.message);
-  const application = opened.application;
-  const collector = new EventCollector(application.events);
-  await collector.waitFor((event) => event.type === "session_opened", "Session 未打开。");
-  testContext.after(async () => {
-    await application.command({ type: "close" });
-    await collector.done;
+test("公开协议支持两个客户端共享流式对话、受信任 prompt、skill 与结构化工具结果", async (t) => {
+  const f = await fixture(t);
+  const other = await f.connect();
+  let otherState: Snapshot | undefined;
+  await other.watch(f.key, (snapshot) => {
+    otherState = snapshot;
   });
-  return { space, faux, application, collector };
-}
-
-test("Application seam 流式对话并复用受信任 Package 的 prompt、skill 与 tool", async (t) => {
-  const { faux, application, collector } = await openFixture(t);
-
-  const responses: FauxResponseStep[] = [
+  f.faux.setResponses([
     (context) => {
-      assert.match(latestMessageText(context, "user"), /FIXTURE_PROMPT_EXPANDED/u);
-      const systemPrompt = context.systemPrompt ?? "";
-      assert.match(systemPrompt, /You are Repa, a general learning Agent\./u);
-      assert.match(systemPrompt, /fixture-learning-skill/u);
-      assert.doesNotMatch(systemPrompt, /expert coding assistant operating inside pi/iu);
-      const toolNames = (context.tools ?? []).map((tool) => tool.name).sort();
-      assert.deepEqual(toolNames, ["fixture_echo", "read"]);
-      return fauxAssistantMessage("普通流式回复");
+      assert.match(latest(context, "user"), /FIXTURE_PROMPT_EXPANDED/u);
+      assert.match(context.systemPrompt ?? "", /fixture-learning-skill/u);
+      assert.match(
+        context.systemPrompt ?? "",
+        /You are Repa, a general learning Agent/u,
+      );
+      assert.doesNotMatch(
+        context.systemPrompt ?? "",
+        /expert coding assistant operating inside pi/iu,
+      );
+      return fauxAssistantMessage("流式回复");
     },
     fauxAssistantMessage(fauxToolCall("fixture_echo", { message: "hello" }), {
       stopReason: "toolUse",
     }),
     (context) => {
-      assert.match(latestMessageText(context, "toolResult"), /fixture:hello/u);
-      return fauxAssistantMessage("扩展工具闭环完成");
+      assert.match(latest(context, "toolResult"), /fixture:hello/u);
+      return fauxAssistantMessage("工具完成");
     },
     fauxAssistantMessage(fauxToolCall("read", { path: fixtureSkillPath }), {
       stopReason: "toolUse",
     }),
     (context) => {
-      assert.match(latestMessageText(context, "toolResult"), /FULL_SKILL_INSTRUCTION_MARKER/u);
-      return fauxAssistantMessage("skill 完整说明已读取");
+      assert.match(
+        latest(context, "toolResult"),
+        /FULL_SKILL_INSTRUCTION_MARKER/u,
+      );
+      return fauxAssistantMessage("已读 skill");
     },
     fauxAssistantMessage(
       fauxToolCall("read", { path: path.join(fixturePackage, "package.json") }),
       { stopReason: "toolUse" },
     ),
     (context) => {
-      assert.match(latestMessageText(context, "toolResult"), /只允许访问当前已启用 skill/u);
-      return fauxAssistantMessage("越界读取已拒绝");
+      assert.match(
+        latest(context, "toolResult"),
+        /只允许访问当前已启用 skill/u,
+      );
+      return fauxAssistantMessage("读取范围正确");
     },
-  ];
-  faux.setResponses(responses);
-
-  const promptStart = collector.events.length;
-  await application.command({ type: "send", text: "/fixture-prompt" });
-  await collector.settle();
-  assert.match(assistantText(collector.events.slice(promptStart)), /普通流式回复/u);
-  assert(
-    collector.events.slice(promptStart).filter((event) => event.type === "assistant_text_delta")
-      .length > 1,
-    "普通回复应通过多个 text delta 流式返回。",
-  );
-
-  const extensionStart = collector.events.length;
-  await application.command({ type: "send", text: "调用扩展工具" });
-  await collector.settle();
-  const extensionEvents = collector.events.slice(extensionStart);
-  assert(
-    extensionEvents.some(
-      (event) =>
-        event.type === "tool_finished" &&
-        event.name === "fixture_echo" &&
-        !event.isError &&
-        event.output.includes("fixture:hello"),
-    ),
-  );
-  assert.match(assistantText(extensionEvents), /扩展工具闭环完成/u);
-
-  const skillStart = collector.events.length;
-  await application.command({ type: "send", text: "读取 fixture skill" });
-  await collector.settle();
-  const skillEvents = collector.events.slice(skillStart);
-  assert(
-    skillEvents.some(
-      (event) =>
-        event.type === "tool_finished" &&
-        event.name === "read" &&
-        !event.isError &&
-        event.output.includes("FULL_SKILL_INSTRUCTION_MARKER"),
-    ),
-  );
-  assert.match(assistantText(skillEvents), /skill 完整说明已读取/u);
-
-  const deniedReadStart = collector.events.length;
-  await application.command({ type: "send", text: "尝试读取 skill 目录之外的文件" });
-  await collector.settle();
-  const deniedReadEvents = collector.events.slice(deniedReadStart);
-  assert(
-    deniedReadEvents.some(
-      (event) =>
-        event.type === "tool_finished" &&
-        event.name === "read" &&
-        event.isError &&
-        event.output.includes("只允许访问当前已启用 skill"),
-    ),
-  );
-  assert.match(assistantText(deniedReadEvents), /越界读取已拒绝/u);
-  assert(collector.events.some((event) => event.type === "extension_trust"));
-  assert.equal(collector.events.some((event) => event.type === "error"), false);
-});
-
-test("未显式信任时不加载项目 Package、skill 或 prompt", async (t) => {
-  const { faux, application, collector } = await openFixture(t, { trustExtensions: false });
-  faux.setResponses([
-    (context) => {
-      assert.equal(latestMessageText(context, "user"), "/fixture-prompt");
-      assert.doesNotMatch(context.systemPrompt ?? "", /fixture-learning-skill/u);
-      assert.deepEqual((context.tools ?? []).map((tool) => tool.name), ["read"]);
-      return fauxAssistantMessage("UNTRUSTED_RESOURCES_DISABLED");
-    },
+    fauxAssistantMessage(fauxToolCall("fixture_media", {}), {
+      stopReason: "toolUse",
+    }),
+    fauxAssistantMessage("媒体完成"),
   ]);
-
-  await application.command({ type: "send", text: "/fixture-prompt" });
-  await collector.settle();
-  assert.match(assistantText(collector.events), /UNTRUSTED_RESOURCES_DISABLED/u);
-  assert.equal(collector.events.some((event) => event.type === "extension_trust"), false);
-  assert.equal(
-    collector.events.some(
-      (event) => event.type === "tool_started" && event.name === "fixture_echo",
-    ),
-    false,
+  for (const input of [
+    "/fixture-prompt",
+    "调用工具",
+    "读取 skill",
+    "越界读取",
+    "返回媒体",
+  ])
+    assert.equal((await f.send(input)).status, "completed");
+  await until(
+    () => otherState,
+    (x) => !!x && sessionText(x).includes("媒体完成"),
   );
+  assert.equal(sessionText(otherState!), sessionText(f.state()));
+  assert(f.changes.filter((x) => x.type === "delta").length > 5);
+  assert(
+    f.changes.some(
+      (x) =>
+        x.type === "tool" &&
+        x.name === "fixture_echo" &&
+        x.status === "completed",
+    ),
+  );
+  const messages = f.state().sessions[0]!.messages;
+  assert.equal(new Set(messages.map((x) => x.id)).size, messages.length);
+  assert(messages.every((x) => !x.streaming));
+  const media = messages.find(
+    (x) => x.role === "tool" && textOf(x).includes("FIXTURE_MEDIA"),
+  )!;
+  assert.deepEqual(media.details, { answer: 42, sequence: [1, 2] });
+  const resource = media.content.find((x) => x.type === "resource");
+  assert.equal(resource?.type, "resource");
+  const response = await other.resource(resource.resource.id);
+  assert.equal(response.headers.get("content-type"), "image/png");
+  assert.equal(new Uint8Array(await response.arrayBuffer())[0], 137);
+  const url = new URL(
+    `/resources/${resource.resource.id}`,
+    f.server.connection.url.replace(/^ws/, "http"),
+  );
+  assert.equal((await fetch(url)).status, 401);
 });
 
-test("Application seam 可以取消生成，并把 provider 失败变成可恢复错误", async (t) => {
-  const { faux, application, collector } = await openFixture(t, { tokensPerSecond: 20 });
-  faux.setResponses([
-    fauxAssistantMessage("等待取消的流式内容。".repeat(80)),
-    fauxAssistantMessage("", { stopReason: "error", errorMessage: "provider exploded" }),
-    fauxAssistantMessage("错误后仍可继续"),
-  ]);
-
-  const send = application.command({ type: "send", text: "请生成很长的内容" });
-  await collector.waitFor(
-    (event) => event.type === "assistant_text_delta",
-    "取消测试没有观察到首个流式增量。",
-  );
-  await application.command({ type: "cancel" });
-  await send;
-  await collector.settle();
-  assert(collector.events.some((event) => event.type === "generation_cancelled"));
-  assert(
-    collector.events.some(
-      (event) => event.type === "turn_finished" && event.status === "cancelled",
-    ),
-  );
-
-  const failureStart = collector.events.length;
-  await application.command({ type: "send", text: "触发 provider 失败" });
-  await collector.settle();
-  const failureEvents = collector.events.slice(failureStart);
-  assert(
-    failureEvents.some(
-      (event) =>
-        event.type === "error" &&
-        event.code === "provider" &&
-        event.recoverable &&
-        event.message.includes("provider exploded"),
-    ),
-    `provider 失败事件不符合稳定类别：${JSON.stringify(failureEvents, null, 2)}`,
-  );
-  assert(
-    failureEvents.some(
-      (event) => event.type === "turn_finished" && event.status === "failed",
-    ),
-  );
-
-  const recoveryStart = collector.events.length;
-  await application.command({ type: "send", text: "失败后继续" });
-  await collector.settle();
-  assert.match(assistantText(collector.events.slice(recoveryStart)), /错误后仍可继续/u);
-});
-
-test("关闭后重新打开同一学习者空间会恢复原 Pi Session", async (t) => {
-  const space = await createTestSpace(t);
-  const firstModel = await createModelOverride(space);
-  firstModel.faux.setResponses([fauxAssistantMessage("FIRST_SESSION_REPLY")]);
-  const firstOpen = await openRepa(
-    {
-      learnerSpace: space.learnerSpace,
-      agentDir: space.agentDir,
-      trustExtensions: true,
+test("未授权扩展保持禁用；只读查看与新建会话不启动 Pi", async (t) => {
+  let opened = 0;
+  const data = await files(t);
+  const provider = await model(data.agentDir);
+  const f = await fixture(t, {
+    trustExtensions: false,
+    modelOverride: async () => {
+      opened++;
+      return provider.override;
     },
-    { modelOverride: firstModel.override },
-  );
-  assert.equal(firstOpen.ok, true, firstOpen.ok ? undefined : firstOpen.error.message);
-  const firstCollector = new EventCollector(firstOpen.application.events);
-  const firstOpened = await firstCollector.waitFor(
-    (event) => event.type === "session_opened",
-    "首次 Session 未打开。",
-  );
-  assert.equal(firstOpened.type, "session_opened");
-  assert.equal(firstOpened.restored, false);
-  await firstOpen.application.command({ type: "send", text: "FIRST_SESSION_USER" });
-  await firstOpen.application.command({ type: "close" });
-  await firstCollector.done;
-
-  const secondModel = await createModelOverride(space);
-  secondModel.faux.setResponses([
-    (context) => {
-      const transcript = context.messages.map(messageText).join("\n");
-      assert.match(transcript, /FIRST_SESSION_USER/u);
-      assert.match(transcript, /FIRST_SESSION_REPLY/u);
-      return fauxAssistantMessage("RESUMED_SESSION_REPLY");
-    },
-  ]);
-  const secondOpen = await openRepa(
-    {
-      learnerSpace: space.learnerSpace,
-      agentDir: space.agentDir,
-      trustExtensions: true,
-    },
-    { modelOverride: secondModel.override },
-  );
-  assert.equal(secondOpen.ok, true, secondOpen.ok ? undefined : secondOpen.error.message);
-  const secondCollector = new EventCollector(secondOpen.application.events);
-  const secondOpened = await secondCollector.waitFor(
-    (event) => event.type === "session_opened",
-    "恢复 Session 未打开。",
-  );
-  assert.equal(secondOpened.type, "session_opened");
-  assert.equal(secondOpened.restored, true);
-  assert.equal(secondOpened.sessionId, firstOpened.sessionId);
-
-  const resumeStart = secondCollector.events.length;
-  await secondOpen.application.command({ type: "send", text: "恢复后继续" });
-  await secondCollector.settle();
-  assert.match(assistantText(secondCollector.events.slice(resumeStart)), /RESUMED_SESSION_REPLY/u);
-  await secondOpen.application.command({ type: "close" });
-  await secondCollector.done;
-});
-
-test("标准 compaction 完成后仍能通过同一 seam 继续对话", async (t) => {
-  const { faux, application, collector } = await openFixture(t, {
-    contextWindow: 1_600,
-    maxTokens: 256,
-    compaction: { enabled: true, reserveTokens: 400, keepRecentTokens: 200 },
   });
-  const scripted: FauxResponseStep = (context, _options, state) => {
-    if (!(context.systemPrompt ?? "").includes(REPA_BASE_PROMPT)) {
-      return fauxAssistantMessage("STANDARD_COMPACTION_SUMMARY");
-    }
-    return fauxAssistantMessage(`NORMAL_REPLY_${state.callCount}:` + "学习上下文。".repeat(80));
-  };
-  faux.setResponses(Array.from({ length: 40 }, () => scripted));
+  await f.client.call("session.get", f.key);
+  await f.client.call("session.list", { spaceId: f.space.id });
+  await f.client.call("session.create", { spaceId: f.space.id });
+  assert.equal(opened, 0);
+  provider.faux.setResponses([
+    (context) => {
+      assert.equal(latest(context, "user"), "/fixture-prompt");
+      assert.doesNotMatch(
+        context.systemPrompt ?? "",
+        /fixture-learning-skill/u,
+      );
+      assert.deepEqual(
+        context.tools?.map((x) => x.name),
+        ["read"],
+      );
+      return fauxAssistantMessage("普通输入");
+    },
+  ]);
+  await f.send("/fixture-prompt");
+  assert.equal(opened, 1);
+  const summaries = await f.client.call("session.list", {
+    spaceId: f.space.id,
+  });
+  assert.equal(summaries[0]?.sessionId, f.key.sessionId);
+  assert(summaries.every((summary) => !Object.hasOwn(summary, "messages")));
+});
 
-  for (let index = 0; index < 10; index += 1) {
-    await application.command({
-      type: "send",
-      text: `LONG_USER_${index}:` + "需要保留的学习对话。".repeat(80),
-    });
-    if (
-      collector.events.some(
-        (event) => event.type === "compaction_finished" && !event.aborted,
-      )
-    ) {
-      break;
-    }
-  }
-
+test("Pi 重试成功后任务完成，中间错误不形成最终失败；真正失败后可继续", async (t) => {
+  const f = await fixture(t, { retry: true });
+  f.faux.setResponses([
+    fauxAssistantMessage("", {
+      stopReason: "error",
+      errorMessage: "503 service unavailable",
+    }),
+    fauxAssistantMessage("重试成功"),
+    fauxAssistantMessage("", {
+      stopReason: "error",
+      errorMessage: "invalid request parameters",
+    }),
+    fauxAssistantMessage("失败后继续"),
+  ]);
+  const recovered = await f.send("触发暂时错误");
+  assert.equal(recovered.status, "completed");
   assert(
-    collector.events.some((event) => event.type === "compaction_started"),
-    "未观察到 Pi 标准 compaction 启动。",
-  );
-  assert(
-    collector.events.some(
-      (event) => event.type === "compaction_finished" && !event.aborted,
+    f.changes.some(
+      (x) =>
+        x.type === "run" &&
+        x.run.id === recovered.id &&
+        x.run.phase === "retry",
     ),
-    "未观察到 Pi 标准 compaction 完成。",
   );
+  assert.deepEqual(
+    f.changes
+      .filter(
+        (x) =>
+          x.type === "run" && x.run.id === recovered.id && isTerminal(x.run),
+      )
+      .map((x) => x.type === "run" && x.run.status),
+    ["completed"],
+  );
+  const failed = await f.send("触发永久错误");
+  assert.equal(failed.status, "failed");
+  assert.match(failed.error?.message ?? "", /invalid request/u);
+  assert.equal((await f.send("继续")).status, "completed");
+});
 
-  const continuationStart = collector.events.length;
-  await application.command({ type: "send", text: "压缩后继续" });
-  await collector.settle();
-  assert.match(assistantText(collector.events.slice(continuationStart)), /NORMAL_REPLY_/u);
-  assert.equal(
-    collector.events
-      .slice(continuationStart)
-      .some((event) => event.type === "turn_finished" && event.status === "completed"),
-    true,
+test("取消等待实际停止，多会话运行互不替换，重复提交只执行一次", async (t) => {
+  const f = await fixture(t, { speed: 100 });
+  const second = await f.client.call("session.create", { spaceId: f.space.id });
+  let calls = 0;
+  f.faux.setResponses([
+    () => {
+      calls++;
+      return fauxAssistantMessage("A".repeat(1000));
+    },
+    () => {
+      calls++;
+      return fauxAssistantMessage("B".repeat(50));
+    },
+  ]);
+  const request = { ...f.key, requestId: randomUUID(), text: "长回复" };
+  const other = await f.connect();
+  const results = await Promise.all([
+    f.client.call("run.submit", request),
+    other.call("run.submit", request),
+  ]);
+  assert.equal(results[0].id, results[1].id);
+  await until(
+    () => f.changes,
+    (xs) => xs.some((x) => x.type === "delta"),
+  );
+  const b = await other.call("run.submit", {
+    spaceId: f.space.id,
+    sessionId: second.sessionId,
+    requestId: randomUUID(),
+    text: "另一个会话",
+  });
+  await f.client.call("session.get", {
+    spaceId: f.space.id,
+    sessionId: second.sessionId,
+  });
+  await assert.rejects(
+    other.call("run.submit", { ...request, text: "另一个请求" }),
+    (e) =>
+      e instanceof RpcError &&
+      (e.data as { code: string }).code === "request_conflict",
+  );
+  const cancelling = await f.client.call("run.cancel", {
+    spaceId: f.space.id,
+    requestId: request.requestId,
+  });
+  assert.equal(cancelling.status, "cancelling");
+  assert.equal((await f.finish(request.requestId)).status, "cancelled");
+  assert.equal((await f.finish(b.id)).status, "completed");
+  assert.equal(calls, 2);
+  assert.deepEqual(
+    await f.client.call("run.get", {
+      spaceId: f.space.id,
+      requestId: "not-seen",
+    }),
+    { id: "not-seen", status: "unknown" },
   );
 });
 
-test("Extension 与 Session 打开失败使用稳定错误类别", async (t) => {
-  const broken = await openFixture(t, { packages: [fixturePackage, brokenPackage] });
-  const extensionError = await broken.collector.waitFor(
-    (event) =>
-      event.type === "error" &&
-      event.code === "extension" &&
-      event.message.includes("BROKEN_EXTENSION_MARKER"),
-    "损坏 Extension 没有转换成稳定错误事件。",
+test("会话与任务跨后端恢复，空会话也持久保存，分支不更改原会话", async (t) => {
+  const f = await fixture(t);
+  f.faux.setResponses([
+    fauxAssistantMessage("原始回复"),
+    fauxAssistantMessage("分支回复"),
+  ]);
+  const run = await f.send("原始问题");
+  const old = await f.client.call("session.get", f.key);
+  const branch = await f.client.call("session.branch", {
+    ...f.key,
+    messageId: old.messages.at(-1)!.id,
+  });
+  assert.notEqual(branch.sessionId, old.sessionId);
+  const branchedRun = await f.client.call("run.submit", {
+    spaceId: f.space.id,
+    sessionId: branch.sessionId,
+    requestId: randomUUID(),
+    text: "分支问题",
+  });
+  await f.finish(branchedRun.id);
+  assert.deepEqual(
+    (await f.client.call("session.get", f.key)).messages,
+    old.messages,
   );
-  assert.equal(extensionError.type, "error");
-  assert.equal(extensionError.operation, "extension");
-  assert.equal(extensionError.recoverable, true);
+  const empty = await f.client.call("session.create", { spaceId: f.space.id });
+  await f.server.close();
+  let opened = 0;
+  const next = await startRepaServer({
+    agentDir: f.agentDir,
+    modelOverride: async () => {
+      opened++;
+      throw new Error("读取历史不应启动模型");
+    },
+  });
+  f.beforeCleanup(async () => next.close());
+  const client = await RepaClient.connect(next.connection);
+  f.beforeCleanup(async () => client.close());
+  assert.equal(
+    (await client.call("space.open", { path: f.directory })).id,
+    f.space.id,
+  );
+  const restored = await client.call("session.get", f.key);
+  assert.deepEqual(restored.messages, old.messages);
+  assert.equal(
+    (
+      await client.call("session.get", {
+        spaceId: f.space.id,
+        sessionId: empty.sessionId,
+      })
+    ).messages.length,
+    0,
+  );
+  assert.equal(
+    (
+      await client.call("run.submit", {
+        ...f.key,
+        requestId: run.id,
+        text: run.text,
+      })
+    ).status,
+    "completed",
+  );
+  assert.equal(opened, 0);
+});
 
-  const root = await mkdtemp(path.join(os.tmpdir(), "repa-invalid-space-"));
-  t.after(async () => rm(root, { recursive: true, force: true }));
-  const filePath = path.join(root, "not-a-directory");
-  await writeFile(filePath, "file", "utf8");
-  const failedOpen = await openRepa({ learnerSpace: filePath });
-  assert.equal(failedOpen.ok, false);
-  assert.equal(failedOpen.error.code, "session");
-  assert.equal(failedOpen.error.operation, "open");
-  assert.equal(failedOpen.error.recoverable, false);
+test("断线后按游标继续；事件缓存过期时重建快照", async (t) => {
+  const f = await fixture(t, { eventBufferSize: 2 });
+  let index = f.deliveries.length;
+  await Promise.all([f.client.reconnect(), f.client.reconnect()]);
+  assert.equal(f.deliveries.length, index + 1);
+  assert.equal(f.deliveries[index]?.type, "changes");
+  const dispose = f.client.onConnectionChange((connected) => {
+    if (!connected)
+      for (let i = 0; i < 3; i++)
+        f.server.application.createSession(f.space.id);
+  });
+  index = f.deliveries.length;
+  await f.client.reconnect();
+  dispose();
+  assert.equal(f.deliveries[index]?.type, "snapshot");
+  assert.deepEqual(
+    f.watch.snapshot,
+    await f.client.call("state.get", { scope: f.key }),
+  );
+});
+
+test("最后一个前端离开后等待既有交互，重新连接可回答并继续", async (t) => {
+  const f = await fixture(t, { exitWhenDetached: true, disconnectGraceMs: 20 });
+  f.faux.setResponses([
+    fauxAssistantMessage(fauxToolCall("fixture_question", {}), {
+      stopReason: "toolUse",
+    }),
+    (context) => {
+      assert.match(latest(context, "toolResult"), /真实回答/u);
+      return fauxAssistantMessage("交互完成");
+    },
+  ]);
+  const run = await f.client.call("run.submit", {
+    ...f.key,
+    requestId: randomUUID(),
+    text: "需要询问",
+  });
+  await until(f.state, (state) => state.sessions[0]?.interactions.length === 1);
+  const pending = f.state().sessions[0]!.interactions[0]!;
+  const second = await f.connect();
+  await f.client.close();
+  assert.equal(
+    (await second.call("state.get", { scope: f.key })).lifecycle,
+    "running",
+  );
+  await second.close();
+  await until(
+    () => f.server.application.snapshot(f.key),
+    (state) => state.lifecycle === "draining",
+  );
+  assert.equal(
+    f.server.application.getRun(f.space.id, run.id).status,
+    "waiting",
+  );
+  const reopened = await f.connect();
+  const snapshot = await reopened.call("state.get", { scope: f.key });
+  assert.equal(snapshot.lifecycle, "running");
+  assert.equal(snapshot.sessions[0]!.interactions[0]!.id, pending.id);
+  await reopened.call("interaction.reply", {
+    ...f.key,
+    id: pending.id,
+    value: "真实回答",
+  });
+  await until(
+    () => reopened.call("run.get", { spaceId: f.space.id, requestId: run.id }),
+    (value) => value.status === "completed",
+  );
+  await assert.rejects(
+    reopened.call("interaction.reply", {
+      ...f.key,
+      id: pending.id,
+      value: "再次回答",
+    }),
+    (e) => e instanceof RpcError,
+  );
+  await reopened.close();
+  await f.server.closed;
+  assert.equal(
+    f.server.application.getRun(f.space.id, run.id).status,
+    "completed",
+  );
+});
+
+test("关闭最后客户端后完成已启动生成，完整退出则取消并保留记录", async (t) => {
+  const f = await fixture(t, { exitWhenDetached: true, speed: 200 });
+  f.faux.setResponses([fauxAssistantMessage("后台完成".repeat(10))]);
+  const run = await f.client.call("run.submit", {
+    ...f.key,
+    requestId: randomUUID(),
+    text: "后台任务",
+  });
+  await until(
+    () => f.changes,
+    (x) => x.some((e) => e.type === "delta"),
+  );
+  await f.client.close();
+  await f.server.closed;
+  assert.equal(
+    f.server.application.getRun(f.space.id, run.id).status,
+    "completed",
+  );
+  const cancel = await fixture(t, { speed: 100 });
+  cancel.faux.setResponses([fauxAssistantMessage("未结束".repeat(500))]);
+  const active = await cancel.client.call("run.submit", {
+    ...cancel.key,
+    requestId: randomUUID(),
+    text: "停止任务",
+  });
+  await until(
+    () => cancel.changes,
+    (x) => x.some((e) => e.type === "delta"),
+  );
+  await cancel.client.call("shutdown", { mode: "cancel" });
+  await cancel.server.closed;
+  assert.equal(
+    cancel.server.application.getRun(cancel.space.id, active.id).status,
+    "cancelled",
+  );
+});
+
+test("标准 Pi 压缩后仍通过同一协议继续，扩展故障有可观察诊断", async (t) => {
+  const f = await fixture(t, {
+    smallContext: true,
+    packages: [fixturePackage, brokenPackage],
+  });
+  const script: FauxResponseStep = (context, _options, state) =>
+    !(context.systemPrompt ?? "").includes(REPA_BASE_PROMPT)
+      ? fauxAssistantMessage("COMPACTION_SUMMARY")
+      : fauxAssistantMessage(
+          `REPLY_${state.callCount}:` + "学习内容。".repeat(80),
+        );
+  f.faux.setResponses(Array.from({ length: 40 }, () => script));
+  for (
+    let i = 0;
+    i < 10 &&
+    !f.changes.some((x) => x.type === "run" && x.run.phase === "compaction");
+    i++
+  )
+    await f.send("长请求".repeat(80));
+  assert(
+    f.changes.some((x) => x.type === "run" && x.run.phase === "compaction"),
+  );
+  assert.equal((await f.send("继续交流")).status, "completed");
+  assert(
+    f
+      .state()
+      .sessions[0]!.notices.some(
+        (x) =>
+          x.code === "extension" &&
+          x.message.includes("BROKEN_EXTENSION_MARKER"),
+      ),
+  );
+});
+
+test("进程被强制终止后，已受理请求恢复为中断，重复提交不重放工具", async (t) => {
+  const data = await files(t);
+  const child = fork(
+    path.join(testDirectory, "fixtures/server-worker.ts"),
+    [data.agentDir],
+    {
+      execArgv: ["--import", "tsx"],
+      stdio: ["ignore", "ignore", "pipe", "ipc"],
+    },
+  );
+  data.beforeCleanup(() => {
+    if (!child.signalCode && child.exitCode === null) child.kill("SIGKILL");
+  });
+  const [connection] = (await once(child, "message")) as [Connection];
+  const client = await RepaClient.connect(connection);
+  data.beforeCleanup(async () => client.close());
+  const space = await client.call("space.open", { path: data.directory });
+  const session = await client.call("session.create", { spaceId: space.id });
+  const key = { spaceId: space.id, sessionId: session.sessionId };
+  const params = { ...key, requestId: randomUUID(), text: "等待回答期间中断" };
+  await client.call("run.submit", params);
+  await until(
+    () => client.call("session.get", key),
+    (x) => x.interactions.length === 1,
+  );
+  const exited = once(child, "exit");
+  child.kill("SIGKILL");
+  await exited;
+  await client.close();
+  let invoked = false;
+  const server = await startRepaServer({
+    agentDir: data.agentDir,
+    modelOverride: async () => {
+      invoked = true;
+      throw new Error("不应自动恢复执行");
+    },
+  });
+  data.beforeCleanup(async () => server.close());
+  const restored = await RepaClient.connect(server.connection);
+  data.beforeCleanup(async () => restored.close());
+  await until(
+    async () => {
+      try {
+        await restored.call("space.open", { path: data.directory });
+        return true;
+      } catch (error) {
+        if (
+          !(error instanceof RpcError) ||
+          (error.data as { code: string }).code !== "space_in_use"
+        )
+          throw error;
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        return false;
+      }
+    },
+    Boolean,
+    16000,
+  );
+  assert.equal(
+    (
+      await restored.call("run.get", {
+        spaceId: space.id,
+        requestId: params.requestId,
+      })
+    ).status,
+    "interrupted",
+  );
+  assert.equal(
+    (await restored.call("run.submit", params)).status,
+    "interrupted",
+  );
+  assert.equal(invoked, false);
+});
+
+test("JSON-RPC 认证、版本、参数、批处理与 HTTP 资源入口使用同一访问边界", async (t) => {
+  const f = await fixture(t);
+  const socket = new WebSocket(f.server.connection.url);
+  f.beforeCleanup(() => socket.terminate());
+  await once(socket, "open");
+  const rpc = async (payload: unknown) => {
+    const response = once(socket, "message");
+    socket.send(
+      typeof payload === "string" ? payload : JSON.stringify(payload),
+    );
+    return JSON.parse(String((await response)[0]));
+  };
+  assert.equal((await rpc("{")).error.code, -32700);
+  assert.equal(
+    (await rpc({ jsonrpc: "2.0", id: 1, method: "space.list" })).error.code,
+    -32001,
+  );
+  assert.equal(
+    (
+      await rpc({
+        jsonrpc: "2.0",
+        id: 2,
+        method: "initialize",
+        params: { versions: [99], token: f.server.connection.token },
+      })
+    ).error.code,
+    -32002,
+  );
+  assert.equal(
+    (
+      await rpc({
+        jsonrpc: "2.0",
+        id: 3,
+        method: "initialize",
+        params: { versions: [1], token: "incorrect" },
+      })
+    ).error.code,
+    -32001,
+  );
+  assert.equal(
+    (
+      await rpc({
+        jsonrpc: "2.0",
+        id: 4,
+        method: "initialize",
+        params: { versions: [1], token: f.server.connection.token },
+      })
+    ).result.version,
+    1,
+  );
+  const batch = await rpc([
+    { jsonrpc: "2.0", id: "a", method: "space.list", params: {} },
+    { jsonrpc: "2.0", method: "shutdown", params: { mode: "cancel" } },
+    { jsonrpc: "2.0", id: "b", method: "session.get", params: { wrong: 1 } },
+  ]);
+  assert.equal(batch.length, 2);
+  assert.equal(
+    batch.find((x: { id: string }) => x.id === "b").error.code,
+    -32602,
+  );
+  assert.equal(
+    (await f.client.call("state.get", { scope: {} })).lifecycle,
+    "running",
+  );
+  const url = new URL(
+    "/protocol.json",
+    f.server.connection.url.replace(/^ws/, "http"),
+  );
+  assert.equal((await fetch(url)).status, 401);
+  const schema = (await (
+    await fetch(url, {
+      headers: { Authorization: `Bearer ${f.server.connection.token}` },
+    })
+  ).json()) as { methods: object };
+  assert(Object.hasOwn(schema.methods, "run.submit"));
+});
+
+function collectProcess(child: ChildProcess) {
+  let output = "";
+  child.stdout?.on("data", (data) => {
+    output += String(data);
+  });
+  child.stderr?.on("data", (data) => {
+    output += String(data);
+  });
+  const exited = once(child, "exit");
+  return { output: () => output, exited };
+}
+
+test("实际 TUI 通过公开客户端连接现有后端并完成对话", async (t) => {
+  const f = await fixture(t);
+  f.faux.setResponses([fauxAssistantMessage("TUI_PROTOCOL_REPLY")]);
+  const endpoint = path.join(f.root, "connection.json");
+  await writeFile(
+    endpoint,
+    JSON.stringify({
+      ...f.server.connection,
+      pid: process.pid,
+      trustExtensions: true,
+      agentDir: f.agentDir,
+    }),
+    { mode: 0o600 },
+  );
+  const child = spawn(
+    process.execPath,
+    ["--import", "tsx", cliPath, f.directory, "--connect", endpoint],
+    { stdio: ["pipe", "pipe", "pipe"] },
+  );
+  const state = collectProcess(child);
+  f.beforeCleanup(() => {
+    if (!child.signalCode && child.exitCode === null) child.kill();
+  });
+  await until(state.output, (x) => x.includes("命令："));
+  child.stdin.write("请回答\n");
+  await until(state.output, (x) => x.includes("TUI_PROTOCOL_REPLY"));
+  child.stdin.end();
+  assert.equal((await state.exited)[0], 0, state.output());
+});
+
+test("默认 TUI 共享独立后端，关闭一个前端不退出另一个，最后离开清理连接文件", async (t) => {
+  const data = await files(t);
+  const runtime = path.join(data.root, "runtime");
+  await mkdir(runtime);
+  const env = { ...process.env, XDG_RUNTIME_DIR: runtime };
+  const args = [
+    "--import",
+    "tsx",
+    cliPath,
+    data.directory,
+    "--agent-dir",
+    data.agentDir,
+  ];
+  const first = spawn(process.execPath, args, {
+    env,
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+  const a = collectProcess(first);
+  data.beforeCleanup(() => {
+    if (!first.signalCode && first.exitCode === null) first.kill();
+  });
+  const second = spawn(process.execPath, [...args, "--new-session"], {
+    env,
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+  const b = collectProcess(second);
+  data.beforeCleanup(() => {
+    if (!second.signalCode && second.exitCode === null) second.kill();
+  });
+  await until(a.output, (x) => x.includes("命令："));
+  const endpointFile = path.join(
+    runtime,
+    `repa-${process.getuid?.() ?? os.userInfo().username}`,
+    "connection.json",
+  );
+  const connection = JSON.parse(
+    await readFile(endpointFile, "utf8"),
+  ) as Connection;
+  data.beforeCleanup(async () => {
+    try {
+      const client = await RepaClient.connect(connection, {
+        requestTimeoutMs: 500,
+      });
+      await client.call("shutdown", { mode: "cancel" });
+      await client.close();
+    } catch {}
+  });
+  await until(b.output, (x) => x.includes("命令："));
+  first.stdin.end();
+  assert.equal((await a.exited)[0], 0, a.output());
+  assert.equal(second.exitCode, null);
+  second.stdin.end();
+  assert.equal((await b.exited)[0], 0, b.output());
+  await until(async () => {
+    try {
+      await readFile(endpointFile);
+      return false;
+    } catch (error) {
+      return (error as NodeJS.ErrnoException).code === "ENOENT";
+    }
+  }, Boolean);
+});
+
+test("已受理请求丢失应答后客户端不自动重发，可以按原请求标识核对", async (t) => {
+  const f = await fixture(t);
+  let calls = 0;
+  f.faux.setResponses([
+    () => {
+      calls++;
+      return fauxAssistantMessage("仅执行一次");
+    },
+  ]);
+  let reconnect: Promise<void> | undefined;
+  const stop = f.server.application.watch(f.key, undefined, (delivery) => {
+    if (
+      !reconnect &&
+      delivery.type === "changes" &&
+      delivery.changes.some(
+        (x) => x.type === "run" && x.run.status === "accepted",
+      )
+    )
+      reconnect = f.client.reconnect();
+  });
+  const requestId = randomUUID();
+  await assert.rejects(
+    f.client.call("run.submit", { ...f.key, requestId, text: "受理后断开" }),
+    ConnectionError,
+  );
+  await reconnect;
+  stop();
+  assert.equal((await f.finish(requestId)).status, "completed");
+  assert.equal(calls, 1);
+});
+
+test("不同后端不能同时占用同一空间，释放后可由另一个后端接续", async (t) => {
+  const f = await fixture(t);
+  const server = await startRepaServer({ agentDir: f.agentDir });
+  f.beforeCleanup(async () => server.close());
+  const client = await RepaClient.connect(server.connection);
+  f.beforeCleanup(async () => client.close());
+  await assert.rejects(
+    client.call("space.open", { path: f.directory }),
+    (error) =>
+      error instanceof RpcError &&
+      (error.data as { code: string }).code === "space_in_use",
+  );
+  f.faux.setResponses([fauxAssistantMessage("原后端继续")]);
+  assert.equal((await f.send("继续使用空间")).status, "completed");
+  await f.server.close();
+  assert.equal(
+    (await client.call("space.open", { path: f.directory })).id,
+    f.space.id,
+  );
+  assert.match(
+    textOf((await client.call("session.get", f.key)).messages.at(-1)!),
+    /原后端继续/u,
+  );
+  await server.close();
+  await until(() => client.closed, Boolean);
+});
+
+test("在自动重试等待期间取消会结束本次任务，不再启动下一次模型调用", async (t) => {
+  const f = await fixture(t, { retry: true, retryDelayMs: 1000 });
+  let calls = 0;
+  f.faux.setResponses([
+    () => {
+      calls++;
+      return fauxAssistantMessage("", {
+        stopReason: "error",
+        errorMessage: "503 service unavailable",
+      });
+    },
+    () => {
+      calls++;
+      return fauxAssistantMessage("不应执行的重试");
+    },
+  ]);
+  const run = await f.client.call("run.submit", {
+    ...f.key,
+    requestId: randomUUID(),
+    text: "重试期间取消",
+  });
+  await until(
+    f.state,
+    (state) =>
+      state.sessions[0]?.runs.some(
+        (x) => x.id === run.id && x.phase === "retry",
+      ) ?? false,
+  );
+  await f.client.call("run.cancel", { spaceId: f.space.id, requestId: run.id });
+  assert.equal((await f.finish(run.id)).status, "cancelled");
+  assert.equal(calls, 1);
+});
+
+test("TUI 重新打开时展示待回答问题，并通过原交互回复", async (t) => {
+  const f = await fixture(t);
+  f.faux.setResponses([
+    fauxAssistantMessage(fauxToolCall("fixture_question", {}), {
+      stopReason: "toolUse",
+    }),
+    (context) => {
+      assert.equal(latest(context, "toolResult"), "TUI_ANSWER");
+      return fauxAssistantMessage("TUI_RESUMED");
+    },
+  ]);
+  const run = await f.client.call("run.submit", {
+    ...f.key,
+    requestId: randomUUID(),
+    text: "保留待回答问题",
+  });
+  await until(f.state, (state) => state.sessions[0]?.interactions.length === 1);
+  const endpoint = path.join(f.root, "pending-connection.json");
+  await writeFile(
+    endpoint,
+    JSON.stringify({
+      ...f.server.connection,
+      pid: process.pid,
+      trustExtensions: true,
+    }),
+    { mode: 0o600 },
+  );
+  const child = spawn(
+    process.execPath,
+    ["--import", "tsx", cliPath, f.directory, "--connect", endpoint],
+    { stdio: ["pipe", "pipe", "pipe"] },
+  );
+  const output = collectProcess(child);
+  f.beforeCleanup(() => {
+    if (!child.signalCode && child.exitCode === null) child.kill();
+  });
+  await until(
+    output.output,
+    (value) => value.includes("FIXTURE_QUESTION") && value.includes("命令："),
+  );
+  child.stdin.write("TUI_ANSWER\n");
+  await until(output.output, (value) => value.includes("TUI_RESUMED"));
+  child.stdin.end();
+  await output.exited;
+  assert.equal((await f.finish(run.id)).status, "completed");
+});
+
+test("同一后端中的不同学习空间分别拥有任务标识与订阅范围", async (t) => {
+  const f = await fixture(t);
+  const other = await f.client.call("space.open", {
+    path: path.join(f.root, "second-space"),
+  });
+  const second = await f.client.call("session.create", { spaceId: other.id });
+  const requestId = randomUUID();
+  const respond: FauxResponseStep = (context) =>
+    fauxAssistantMessage(latest(context, "user"));
+  f.faux.setResponses([respond, respond]);
+  await Promise.all([
+    f.client.call("run.submit", { ...f.key, requestId, text: "SPACE_A_ONLY" }),
+    f.client.call("run.submit", {
+      spaceId: other.id,
+      sessionId: second.sessionId,
+      requestId,
+      text: "SPACE_B_ONLY",
+    }),
+  ]);
+  await f.finish(requestId);
+  await until(
+    () => f.client.call("run.get", { spaceId: other.id, requestId }),
+    (run) => run.status === "completed",
+  );
+  assert.match(sessionText(f.state()), /SPACE_A_ONLY/u);
+  assert.doesNotMatch(sessionText(f.state()), /SPACE_B_ONLY/u);
+  assert.equal(
+    (
+      await f.client.call("session.get", {
+        spaceId: other.id,
+        sessionId: second.sessionId,
+      })
+    ).runs[0]?.text,
+    "SPACE_B_ONLY",
+  );
+  assert.equal((await f.client.call("space.list", {})).length, 2);
 });

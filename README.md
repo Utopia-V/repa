@@ -2,7 +2,7 @@
 
 Repa 是一个独立、本地优先的学习 Agent 应用。用户在自己的学习空间中保留材料、笔记、目标和反馈，与 Agent 持续推进学习。LLM 结合当前情境理解、解释和调整安排，程序承担内容操作、确定性检查和运行管理，减少重复交代背景与手工维护的负担。
 
-以下设计概览描述已经确定的产品行为与架构。当前代码提供最小 TUI、流式对话、正常关闭后的会话恢复，以及明确信任后的兼容 Pi 扩展加载；图形前端、共同内容操作、学习语境注入与执行沙箱仍待实现。现有代码的运行方式见[运行现有 TUI](#运行现有-tui)。
+以下设计概览描述已经确定的产品行为与架构。当前代码提供独立本机后端、公开应用协议、无 UI 客户端与 TUI，支持多会话、共享观察、断线恢复和明确信任后的兼容 Pi 扩展加载；图形组件宿主、共同内容操作、学习语境注入与执行沙箱仍待实现。现有代码的运行方式见[运行现有 TUI](#运行现有-tui)。
 
 ## 设计概览
 
@@ -118,93 +118,126 @@ flowchart TB
 
 ## 运行现有 TUI
 
-以下命令对应仓库当前实现。将示例路径替换为实际学习空间目录。
-
-### 环境与安装
-
-需要 Node.js 22.19.0 或更高版本。依赖版本由 `package-lock.json` 固定。
+需要 Node.js 22.19.0 或更高版本。依赖由 `package-lock.json` 固定。
 
 ```sh
 npm ci --ignore-scripts
 npm run check
 npm test
+npm run build
 ```
 
-测试使用真实 Pi Node SDK、临时本地目录和 Pi 提供的确定性 faux provider，不读取开发者凭据、不访问网络，也不会产生付费模型调用。
+测试通过本地 WebSocket、HTTP、真实 Pi SDK 和独立 Node 进程检查运行行为；模型调用使用确定性 faux provider，认证与学习空间使用临时目录。当前端到端验证覆盖 Linux，其他系统的进程启动、文件锁与退出行为仍需验证。
 
-### 配置 provider
+### 配置模型
 
-以下是当前最小 TUI 的配置方式，它复用 Pi 的 provider、模型与认证配置；目标应用将通过自己的配置界面与凭据存储接入这些能力。当前可以先运行仓库锁定版本的 Pi：
+当前版本复用 Pi 的模型和认证配置；目标应用的模型连接界面与独立凭据管理见设计概览。可以运行仓库锁定版本的 Pi，使用 `/login` 配置认证，并使用 `/model` 选择默认模型：
 
 ```sh
 npm exec -- pi
 ```
 
-在 Pi 中使用 `/login` 配置认证，并使用 `/model` 选择默认模型。Pi 保存的全局配置位于其标准 agent 目录中；Repa 启动时读取同一配置。也可以按照相应 provider 的 Pi 说明通过环境变量提供 API key。
+后端读取 Pi 标准 agent 目录中的配置，也可通过 `--agent-dir <目录>` 指定配置目录。相应 provider 支持的 API key 环境变量仍可使用。查看和新建会话不启动 Pi 运行实例；发起任务时才加载运行资源。缺少可用模型时，任务保留请求并返回可处理的配置错误。
 
-Repa 的最小 TUI 暂不提供登录或模型选择界面。如果没有可用模型，Application 会返回可显示、可恢复的 `configuration` 错误事件，而不会把 Pi 内部异常泄漏给 TUI。
+### 启动与接续
 
-### 启动 TUI
-
-把第一个参数换成学习者希望长期持有的本地目录：
+将示例路径替换为实际学习空间目录：
 
 ```sh
 npm start -- /path/to/learning-space
+# 构建后也可直接运行
+node dist/cli.js /path/to/learning-space
 ```
 
-Repa 会在目录不存在时创建它，并把 Pi Session 保存在 `<learner-space>/.repa/sessions/`。再次用同一路径启动时，默认恢复最近的 Session；要开始新的 Session，使用：
+TUI 自动连接或启动独立的本机后端，打印连接文件的位置。同一系统用户的后续普通启动使用该后端，可以同时查看不同空间或会话。默认选择空间中最近活动的会话；`--new-session` 新建一段交流。
+
+| 命令 | 行为 |
+| --- | --- |
+| `/cancel` | 请求取消当前会话的任务，最终结果在实际停止后更新。 |
+| `/new` | 新建并查看会话，其他会话的任务继续运行。 |
+| `/sessions`、`/use <会话ID>` | 列出会话摘要，或切换查看对象。 |
+| `/branch <消息ID>` | 从已保存的消息建立新会话，保留原会话及其运行；未配对的工具调用不能作为分支终点。 |
+| `/status <请求ID>` | 查询原请求的受理与执行状态。 |
+| `/exit` | 关闭当前前端；最后一个前端离开后，后端完成已启动任务再退出。 |
+| `/quit` | 完整退出后端，停止任务并保留已有历史及执行结果。 |
+
+生成期间按 `Ctrl+C` 请求取消，空闲时按 `Ctrl+C` 关闭当前前端。扩展需要回答时，TUI 显示问题并接收回答；确认题使用 `yes` 或 `no`，选择题可以输入选项编号，`/dismiss` 取消该交互。所有前端离开后，待回答的交互仍由后端保留；重新连接可以继续。
+
+会话 JSONL 保存在 `<space>/.repa/sessions/`。空间身份与任务的受理、终态记录位于 `.repa/runtime/`，备份时应保留这些持久数据。运行锁由 `proper-lockfile` 管理并在正常退出时释放；强制终止后，旧锁需要经过约十秒的失效期才能重新取得。恢复后的未完成任务标记为 `interrupted`，供核对结果，不自动重新执行。
+
+### 独立后端与其他前端
+
+可以显式启动后端，再让多个前端通过连接文件接入：
 
 ```sh
-npm start -- /path/to/learning-space --new-session
+npm start -- serve --connection-file /path/to/repa-connection.json
+npm start -- /path/to/learning-space --connect /path/to/repa-connection.json
 ```
 
-TUI 支持两个本地命令：
-
-- `/cancel`：取消正在进行的生成。
-- `/exit`：正常关闭应用并保留 Session。
-
-生成期间按 `Ctrl+C` 会取消生成；空闲时按 `Ctrl+C` 会正常关闭。
+独立启动的后端默认保持运行；加入 `--exit-when-detached` 后采用最后一个前端离开即收尾退出的行为。端口默认由系统分配，`--port` 可以指定端口。监听地址为本机 `127.0.0.1`，连接文件包含地址与访问令牌，按仅当前用户可读写的权限创建。默认启动的连接文件和诊断日志位于系统运行时目录；它们不进入学习空间。
 
 ### Package 与 Extension 信任
 
-当前最小 TUI 默认不加载 Pi Package、Extension、Skill 或 prompt。只有显式加入 `--trust-extensions` 后，才会读取 Pi 的全局资源和学习空间中的项目资源：
+后端默认不加载 Pi Package、Extension、Skill 或 prompt。通过 `--trust-extensions` 显式启用 Pi 全局资源和空间中的项目资源：
 
 ```sh
 npm start -- /path/to/learning-space --trust-extensions
+# 或为独立后端启用
+npm start -- serve --connection-file /path/to/repa-connection.json --trust-extensions
 ```
 
-Package 和 Extension 中的代码以 Repa 宿主进程的完整权限运行，Skill 也可以向模型提供任意指令；这不是沙箱。TUI 会在每次启用这些资源时显示这一信任含义。安装第三方 Package 前应先审查其来源和代码。
+信任配置属于后端进程。若已有后端未启用扩展信任，可以完整退出后重新启动，或使用独立连接文件启动另一后端。启用的插件代码以宿主进程权限运行；当前命令沙箱尚未接入。
 
-当前实现关闭了 Pi 默认的 `read`、`write`、`edit`、`bash` 等工具，只保留用于读取已启用 Skill 资源的兼容 `read`。后续主体实现将复用 Pi 的通用文件、搜索和执行工具，学习空间作为它们的工作目录，内容读写通过适配接入共享操作。
+当前保留读取已启用 Skill 资源的兼容 `read` 工具，通用内容读写和命令工具将在相应模块接入。兼容的扩展工具、prompt 与 Skill 可以使用；扩展的选择、确认、输入和编辑器交互通过后端转为待回答问题。依赖 Pi 专用 TUI 组件的扩展需要前端适配。
 
-### Application interface
+### 公开应用接口
 
-TUI 和测试使用同一个 Repa Application command/event interface。调用方只需要打开学习者空间、消费事件并发送 `send`、`cancel` 或 `close` 命令，不需要了解 Pi 对象、provider payload 或 Session 文件布局。
+[协议 schema](src/protocol.ts)同时持有方法参数、返回值、消息和订阅数据结构，TypeScript 类型从同一来源推导，后端与客户端均执行校验。协议版本为 `1`；连接时通过 `initialize` 提交令牌和支持的版本。公开调用采用 JSON-RPC 2.0，经 `/rpc` WebSocket 传输，Repa 操作使用带 `id` 的请求。
+
+| 方法 | 责任 |
+| --- | --- |
+| `space.open`、`space.list` | 打开本地空间并取得稳定身份，或列出后端已打开的空间。 |
+| `session.create`、`session.list`、`session.get`、`session.branch`、`session.close` | 创建、列举摘要、读取历史、建立分支和释放运行实例；查看历史不启动 Agent。 |
+| `run.submit`、`run.get`、`run.cancel` | 受理请求、查询结果和请求取消。 |
+| `interaction.reply` | 回答仍有效的交互；已经回答、取消或过期的交互不能再次使用。 |
+| `state.get`、`subscription.start`、`subscription.stop` | 按应用、空间或会话范围读取快照和订阅变化。 |
+| `client.detach`、`shutdown` | 离开后端，或请求完成现有任务后退出、取消任务后退出。 |
+
+`run.submit` 使用调用方生成的 `requestId`，它与 JSON-RPC 应答配对用的 `id` 含义不同。同一空间内重复提交相同请求只返回既有状态；复用标识提交不同内容会得到冲突。`accepted` 表示受理记录已保存，终态在 Pi 完整收尾后产生。`run.get` 找不到记录时明确返回 `unknown`。
+
+订阅先提供快照，再提供变化。客户端重连时携带原游标，后端缓存仍可接续时重放遗漏变化，否则发送新快照。客户端维护本地状态副本；连接丢失或应答超时的操作不会自动重发，调用方通过请求标识核对结果。查询得到的会话列表按最近活动排序，只包含摘要；完整消息通过 `session.get` 或相应范围的状态订阅取得。
+
+[无 UI 客户端](src/client.ts)使用标准 WebSocket、Fetch 和 Web Crypto，可供 Node 程序和浏览器前端使用。构建后的包提供独立的 `repa/client` 与 `repa/protocol` 入口；浏览器通过构建工具引入客户端，无须包含后端或 Pi。
 
 ```typescript
-import { openRepa } from "./src/index.js";
+import { readFile } from "node:fs/promises";
+import { RepaClient } from "repa/client";
 
-const opened = await openRepa({ learnerSpace: "/path/to/learning-space" });
-if (!opened.ok) throw new Error(opened.error.message);
+const connection = JSON.parse(
+  await readFile("/path/to/repa-connection.json", "utf8"),
+);
+const client = await RepaClient.connect(connection);
+const space = await client.call("space.open", { path: "/path/to/learning-space" });
+const session = await client.call("session.create", { spaceId: space.id });
+const watch = await client.watch(
+  { spaceId: space.id, sessionId: session.sessionId },
+  (snapshot) => console.log(snapshot.sessions[0]?.runs.at(-1)),
+);
 
-const eventsFinished = (async () => {
-  for await (const event of opened.application.events) {
-    if (event.type === "assistant_text_delta") process.stdout.write(event.delta);
-  }
-})();
+const requestId = crypto.randomUUID();
+const receipt = await client.call("run.submit", {
+  spaceId: space.id,
+  sessionId: session.sessionId,
+  requestId,
+  text: "解释虚拟内存",
+});
+console.log(receipt); // 受理结果；最终执行状态由订阅或 run.get 取得。
 
-await opened.application.command({ type: "send", text: "解释虚拟内存" });
-await opened.application.command({ type: "close" });
-await eventsFinished;
+// 界面关闭时调用。已受理任务由后端继续管理。
+await watch.stop();
+await client.close();
 ```
 
-当前 Application 将 Pi 的流式文本、工具状态、取消、compaction 和关闭映射为 Repa 事件，并通过类别和 `recoverable` 标记表达错误。
-
-### 构建
-
-```sh
-npm run build
-node dist/cli.js /path/to/learning-space
-```
+消息保留文本、思考、工具调用、资源与扩展数据结构。流式消息通过 `replaces` 与保存后的历史消息身份衔接。资源从 HTTP `/resources/<id>` 获取，schema 从 `/protocol.json` 获取，两者都使用 `Authorization: Bearer <token>`；客户端的 `resource(id)` 已处理认证。具体的交互页面渲染与执行权限按 ADR 0005 后续接入。
 
 GitHub Issue [#5](https://github.com/Utopia-V/repa/issues/5) 是产品主议题，当前设计语义与工程取舍见上面的项目文档。[#6](https://github.com/Utopia-V/repa/issues/6) 记录学习语境与通用工具接入，[#7](https://github.com/Utopia-V/repa/issues/7)、[#8](https://github.com/Utopia-V/repa/issues/8)、[#9](https://github.com/Utopia-V/repa/issues/9) 分别保留可视化、规划与知识整理的扩展想法；[#4](https://github.com/Utopia-V/repa/issues/4) 描述已有对话实现，早期规格 [#3](https://github.com/Utopia-V/repa/issues/3) 已退役。

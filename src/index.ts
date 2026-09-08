@@ -1,10 +1,16 @@
+export { RepaApplication, type ApplicationOptions } from "./application.js";
 export {
-  openRepa,
-  type OpenRepaOptions,
-  type OpenRepaResult,
-  type RepaApplication,
-  type RepaCommand,
-  type RepaErrorCode,
-  type RepaErrorEvent,
-  type RepaEvent,
-} from "./application.js";
+  startRepaServer,
+  type RepaServer,
+  type ServerOptions,
+  type Connection,
+} from "./server.js";
+export {
+  RepaClient,
+  RpcError,
+  ConnectionError,
+  type Watch,
+  type ClientConnection,
+  type ClientOptions,
+} from "./client.js";
+export * from "./protocol.js";
