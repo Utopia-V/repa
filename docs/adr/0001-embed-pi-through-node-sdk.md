@@ -4,7 +4,7 @@
 
 Repa 通过 Pi 的公开 Node SDK 调用 `createAgentSession`、`ModelRuntime`、`SessionManager` 和 `DefaultResourceLoader`。Pi 在 Repa 内部提供模型与 provider、Agent loop、Session、streaming、retry、compaction、通用工具以及 Package、Extension、Skill 和 prompt 的运行能力。
 
-Repa 拥有用户面对的学习空间、学习语境、Application interface、配置与前端。Pi 的类型和生命周期集中在内部适配层，Pi 保持为实现依赖。Repa 直接复用 Pi 的通用工具和扩展格式；社区与 Repa 官方能力都可以使用兼容的 Pi Package、Extension 和 Skill 交付。
+Repa 拥有用户面对的学习空间、学习语境、Application interface、配置与前端。Pi 的类型和生命周期集中在内部适配层，Pi 保持为实现依赖。会话适配层负责会话文件、历史消息、分支与运行实例的接入，应用层通过会话身份、历史快照和运行操作管理实际工作。Repa 直接复用 Pi 的通用工具和扩展格式；社区与 Repa 官方能力都可以使用兼容的 Pi Package、Extension 和 Skill 交付。
 
 模型连接直接在 Repa 中配置，支持 API key、本地模型服务及 provider 实际提供的登录方式。Repa 提供自己的凭据存储，复用 Pi 的模型枚举、登录与认证状态管理。连接可以命名以区分端点或账号，空间和会话仅保存必要引用。凭据由应用侧管理，公开配置、会话历史与学习语境不承载连接凭据明文；前端显示连接状态与可选模型。模型不可用时保留请求并报告可处理错误，自动更换模型须有已配置的回退策略。
 

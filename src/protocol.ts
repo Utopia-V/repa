@@ -118,6 +118,7 @@ export const SessionSchema = object({
   interactions: Type.Array(InteractionSchema),
   notices: Type.Array(NoticeSchema),
 });
+/** 会话当前状态的查询结果，与前端组件和布局独立。 */
 export type SessionView = Static<typeof SessionSchema>;
 export const SessionSummarySchema = object({
   ...key,

@@ -10,7 +10,7 @@
     "build": "tsc -p tsconfig.build.json",
     "check": "tsc --noEmit",
     "start": "tsx src/cli.ts",
-    "test": "node --import tsx --test test/application.test.ts"
+    "test": "node --import tsx --test test/application.test.ts test/run-journal.test.ts"
   },
   "engines": {
     "node": ">=22.19.0"

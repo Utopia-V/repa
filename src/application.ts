@@ -1,14 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, realpath } from "node:fs/promises";
 import path from "node:path";
+import { Resources } from "./messages.js";
+import { PiSessionStore, type StoredSession } from "./pi-sessions.js";
 import {
-  SessionManager,
-  type ExtensionUIDialogOptions,
-} from "@earendil-works/pi-coding-agent";
-import { historyView, Resources } from "./messages.js";
-import {
-  PiConversationHost,
+  type ConversationRuntime,
   type Dialog,
+  type DialogOptions,
   type HostEvent,
   type PiModelOverride,
 } from "./pi-host.js";
@@ -28,7 +26,7 @@ import {
   type Snapshot,
   type Space,
 } from "./protocol.js";
-import { persistSession, RuntimeStore } from "./runtime-store.js";
+import { RuntimeStore } from "./runtime-store.js";
 import { applyChange, contains, relevant } from "./state.js";
 
 export interface ApplicationOptions {
@@ -45,12 +43,16 @@ interface ActiveRun {
   controller: AbortController;
   done: Promise<void>;
 }
+interface SpaceRecord {
+  store: RuntimeStore;
+  sessions: PiSessionStore;
+}
 interface SessionRecord {
   store: RuntimeStore;
-  manager: SessionManager;
+  session: StoredSession;
   view: SessionView;
-  host?: PiConversationHost;
-  opening?: Promise<PiConversationHost>;
+  host?: ConversationRuntime;
+  opening?: Promise<ConversationRuntime>;
   active?: ActiveRun;
   closing?: Promise<void>;
 }
@@ -70,7 +72,7 @@ export class RepaApplication {
     spaces: [],
     sessions: [],
   };
-  readonly #spaces = new Map<string, RuntimeStore>();
+  readonly #spaces = new Map<string, SpaceRecord>();
   readonly #openingSpaces = new Map<string, Promise<Space>>();
   readonly #sessions = new Map<string, SessionRecord>();
   readonly #pending = new Map<string, PendingReply>();
@@ -123,9 +125,9 @@ export class RepaApplication {
     await mkdir(path.resolve(directory), { recursive: true });
     directory = await realpath(directory);
     const existing = [...this.#spaces.values()].find(
-      (x) => x.space.path === directory,
+      (x) => x.store.space.path === directory,
     );
-    if (existing) return structuredClone(existing.space);
+    if (existing) return structuredClone(existing.store.space);
     const opening = this.#openingSpaces.get(directory);
     if (opening) return opening;
     const promise = this.#openSpace(directory);
@@ -150,18 +152,12 @@ export class RepaApplication {
           "space_identity_conflict",
           "两个目录拥有相同的学习空间身份。",
         );
-      const sessions = await SessionManager.list(
-        directory,
-        store.sessionDirectory,
-      );
+      const sessions = new PiSessionStore(store.space.path, this.resources);
+      const existing = await sessions.list();
       this.#assertAccepting();
-      this.#spaces.set(store.space.id, store);
+      this.#spaces.set(store.space.id, { store, sessions });
       this.#emit({ type: "space", space: store.space });
-      for (const session of sessions)
-        this.#register(
-          store,
-          SessionManager.open(session.path, store.sessionDirectory, directory),
-        );
+      for (const session of existing) this.#register(store, session);
       return structuredClone(store.space);
     } catch (error) {
       store.release();
@@ -173,7 +169,7 @@ export class RepaApplication {
   }
 
   #store(id: string): RuntimeStore {
-    const store = this.#spaces.get(id);
+    const store = this.#spaces.get(id)?.store;
     if (!store) throw new RepaFault("not_found", "学习空间尚未打开。");
     return store;
   }
@@ -183,23 +179,22 @@ export class RepaApplication {
       throw new RepaFault("not_found", "会话不存在或所属学习空间尚未打开。");
     return record;
   }
-  #register(store: RuntimeStore, manager: SessionManager): SessionRecord {
-    const key = { spaceId: store.space.id, sessionId: manager.getSessionId() };
+  #register(store: RuntimeStore, session: StoredSession): SessionRecord {
+    const key = { spaceId: store.space.id, sessionId: session.id };
     const existing = this.#sessions.get(keyOf(key));
     if (existing) return existing;
-    const messages = historyView(manager.getBranch(), this.resources);
+    const stored = session.snapshot();
+    const { messages, createdAt } = stored;
     const firstUser = messages
       .find((x) => x.role === "user")
       ?.content.find((x) => x.type === "text");
     const runs = [...store.runs.values()].filter(
       (x) => x.sessionId === key.sessionId,
     );
-    const createdAt =
-      Date.parse(manager.getHeader()?.timestamp ?? "") || Date.now();
     const view: SessionView = {
       ...key,
       title:
-        manager.getSessionName() ??
+        stored.name ??
         (firstUser?.type === "text"
           ? firstUser.text.slice(0, 120)
           : (runs[0]?.text.slice(0, 120) ?? "新会话")),
@@ -217,7 +212,7 @@ export class RepaApplication {
       interactions: [],
       notices: [],
     };
-    const record: SessionRecord = { store, manager, view };
+    const record: SessionRecord = { store, session, view };
     this.#sessions.set(keyOf(key), record);
     this.#emit({ type: "session", session: view });
     return record;
@@ -226,7 +221,10 @@ export class RepaApplication {
   createSession(spaceId: string): SessionView {
     this.#assertAccepting();
     const store = this.#store(spaceId);
-    return structuredClone(this.#register(store, store.createSession()).view);
+    store.assertOwned();
+    return structuredClone(
+      this.#register(store, this.#spaces.get(spaceId)!.sessions.create()).view,
+    );
   }
   listSessions(spaceId: string): SessionSummary[] {
     this.#store(spaceId);
@@ -270,38 +268,9 @@ export class RepaApplication {
     this.#assertAccepting();
     const source = this.#record(params);
     source.store.assertOwned();
-    // A separate manager preserves the source runtime, including an ongoing Agent run.
-    const manager = SessionManager.open(
-      source.manager.getSessionFile()!,
-      source.store.sessionDirectory,
-      source.store.space.path,
-    );
-    const entry = manager.getEntry(params.messageId);
-    if (
-      !entry ||
-      !source.view.messages.some(
-        (x) => x.id === params.messageId && !x.streaming,
-      )
-    )
-      throw new RepaFault("invalid_branch_point", "请选择已经保存的历史消息。");
-    const pending = new Set<string>();
-    for (const item of manager.getBranch(entry.id)) {
-      if (item.type !== "message") continue;
-      if (item.message.role === "assistant")
-        for (const part of item.message.content) {
-          if (part.type === "toolCall") pending.add(part.id);
-        }
-      if (item.message.role === "toolResult")
-        pending.delete(item.message.toolCallId);
-    }
-    if (pending.size)
-      throw new RepaFault(
-        "invalid_branch_point",
-        "该位置仍有未配对的工具调用，请选择工具结果之后的消息。",
-      );
-    manager.createBranchedSession(entry.id);
     return structuredClone(
-      this.#register(source.store, persistSession(manager)).view,
+      this.#register(source.store, source.session.branch(params.messageId))
+        .view,
     );
   }
 
@@ -439,7 +408,7 @@ export class RepaApplication {
       this.#finishIfReady();
     }
   }
-  async #openHost(record: SessionRecord): Promise<PiConversationHost> {
+  async #openHost(record: SessionRecord): Promise<ConversationRuntime> {
     const modelOverride =
       typeof this.#options.modelOverride === "function"
         ? await this.#options.modelOverride(
@@ -447,13 +416,10 @@ export class RepaApplication {
             record.view.sessionId,
           )
         : this.#options.modelOverride;
-    return PiConversationHost.open({
-      learnerSpace: record.store.space.path,
+    return record.session.openRuntime({
       agentDir: this.#options.agentDir,
       trustExtensions: this.#options.trustExtensions ?? false,
-      sessionManager: record.manager,
       modelOverride,
-      resources: this.resources,
       onEvent: (event) => this.#hostEvent(record, event),
       ask: (dialog, options) => this.#ask(record, dialog, options),
     });
@@ -495,7 +461,7 @@ export class RepaApplication {
   #ask(
     record: SessionRecord,
     dialog: Dialog,
-    options?: ExtensionUIDialogOptions,
+    options?: DialogOptions,
   ): Promise<Reply> {
     const active = record.active;
     if (!active || active.controller.signal.aborted || options?.signal?.aborted)
@@ -694,7 +660,7 @@ export class RepaApplication {
           this.#notice(record, "shutdown", String(error));
         }
       }
-      for (const store of this.#spaces.values()) {
+      for (const { store } of this.#spaces.values()) {
         try {
           store.release();
         } catch (error) {

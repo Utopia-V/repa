@@ -1099,3 +1099,61 @@ test("同一后端中的不同学习空间分别拥有任务标识与订阅范�
   );
   assert.equal((await f.client.call("space.list", {})).length, 2);
 });
+
+test("从历史消息建立分支不会替换正在等待回答的原会话运行", async (t) => {
+  const f = await fixture(t);
+  f.faux.setResponses([
+    fauxAssistantMessage("可供分支的历史回复"),
+    fauxAssistantMessage(fauxToolCall("fixture_question", {}), {
+      stopReason: "toolUse",
+    }),
+    (context) => {
+      assert.equal(latest(context, "user"), "在分支里继续");
+      return fauxAssistantMessage("分支完成");
+    },
+    (context) => {
+      assert.equal(latest(context, "toolResult"), "原会话的回答");
+      return fauxAssistantMessage("原会话完成");
+    },
+  ]);
+  await f.send("先形成历史");
+  const before = await f.client.call("session.get", f.key);
+  const original = await f.client.call("run.submit", {
+    ...f.key,
+    requestId: randomUUID(),
+    text: "原会话等待回答",
+  });
+  await until(f.state, (state) => state.sessions[0]?.interactions.length === 1);
+  const question = f.state().sessions[0]!.interactions[0]!;
+  const branch = await f.client.call("session.branch", {
+    ...f.key,
+    messageId: before.messages.at(-1)!.id,
+  });
+  assert.deepEqual(branch.messages, before.messages);
+  const forked = await f.client.call("run.submit", {
+    spaceId: f.space.id,
+    sessionId: branch.sessionId,
+    requestId: randomUUID(),
+    text: "在分支里继续",
+  });
+  assert.equal((await f.finish(forked.id)).status, "completed");
+  assert.equal(
+    (
+      await f.client.call("run.get", {
+        spaceId: f.space.id,
+        requestId: original.id,
+      })
+    ).status,
+    "waiting",
+  );
+  assert.equal(
+    (await f.client.call("session.get", f.key)).interactions[0]?.id,
+    question.id,
+  );
+  await f.client.call("interaction.reply", {
+    ...f.key,
+    id: question.id,
+    value: "原会话的回答",
+  });
+  assert.equal((await f.finish(original.id)).status, "completed");
+});

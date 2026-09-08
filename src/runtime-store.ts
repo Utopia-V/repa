@@ -1,56 +1,65 @@
 import { randomUUID } from "node:crypto";
 import {
-  closeSync,
   existsSync,
-  fsyncSync,
   mkdirSync,
-  openSync,
   readFileSync,
   realpathSync,
-  truncateSync,
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
 import lockfile from "proper-lockfile";
-import { SessionManager } from "@earendil-works/pi-coding-agent";
-import { Check } from "typebox/value";
 import {
-  isTerminal,
-  RepaFault,
-  RunSchema,
-  type Run,
-  type Space,
-} from "./protocol.js";
+  readRunJournal,
+  appendRunRecord,
+  type RecordedRun,
+} from "./run-journal.js";
+import { isTerminal, RepaFault, type Run, type Space } from "./protocol.js";
 
-function durableWrite(file: string, text: string, flag: "a" | "wx"): void {
-  const fd = openSync(file, flag, 0o600);
-  try {
-    writeFileSync(fd, text);
-    fsyncSync(fd);
-  } finally {
-    closeSync(fd);
-  }
+function currentRun(record: RecordedRun): Run {
+  return {
+    ...record.request,
+    status: record.result?.status ?? "accepted",
+    phase: record.result ? "idle" : "preparing",
+    ...(record.result?.finishedAt === undefined
+      ? {}
+      : { finishedAt: record.result.finishedAt }),
+    ...(record.result?.error ? { error: record.result.error } : {}),
+  };
 }
 
-/** Pi deliberately defers empty sessions. Repa creates the header before exposing their identity. */
-export function persistSession(manager: SessionManager): SessionManager {
-  const file = manager.getSessionFile();
-  if (!file) throw new Error("会话缺少持久保存位置。");
-  if (!existsSync(file)) {
-    durableWrite(
-      file,
-      [manager.getHeader(), ...manager.getEntries()]
-        .map((x) => JSON.stringify(x))
-        .join("\n") + "\n",
-      "wx",
-    );
+function recordedRun(run: Run): RecordedRun {
+  const record: RecordedRun = {
+    request: {
+      id: run.id,
+      spaceId: run.spaceId,
+      sessionId: run.sessionId,
+      text: run.text,
+      createdAt: run.createdAt,
+    },
+  };
+  switch (run.status) {
+    case "accepted":
+      return record;
+    case "completed":
+    case "cancelled":
+    case "failed":
+    case "interrupted":
+      record.result = {
+        status: run.status,
+        ...(run.finishedAt === undefined ? {} : { finishedAt: run.finishedAt }),
+        ...(run.error ? { error: run.error } : {}),
+      };
+      return record;
+    default:
+      throw new RepaFault(
+        "invalid_run_record",
+        "运行过程状态由后端持有，不作为受理或终态写入日志。",
+      );
   }
-  return SessionManager.open(file, manager.getSessionDir(), manager.getCwd());
 }
 
 export class RuntimeStore {
   readonly space: Space;
-  readonly sessionDirectory: string;
   readonly runs = new Map<string, Run>();
   readonly #directory: string;
   readonly #unlock: () => void;
@@ -61,9 +70,7 @@ export class RuntimeStore {
     mkdirSync(directory, { recursive: true });
     directory = realpathSync(directory);
     this.#directory = path.join(directory, ".repa", "runtime");
-    this.sessionDirectory = path.join(directory, ".repa", "sessions");
     mkdirSync(this.#directory, { recursive: true });
-    mkdirSync(this.sessionDirectory, { recursive: true });
     try {
       this.#unlock = lockfile.lockSync(this.#directory, {
         lockfilePath: path.join(this.#directory, "owner.lock"),
@@ -83,11 +90,11 @@ export class RuntimeStore {
     try {
       const identity = path.join(this.#directory, "space.json");
       if (!existsSync(identity))
-        durableWrite(
-          identity,
-          JSON.stringify({ id: randomUUID() }) + "\n",
-          "wx",
-        );
+        writeFileSync(identity, JSON.stringify({ id: randomUUID() }) + "\n", {
+          flag: "wx",
+          mode: 0o600,
+          flush: true,
+        });
       const saved = JSON.parse(readFileSync(identity, "utf8"));
       if (
         typeof saved.id !== "string" ||
@@ -96,21 +103,9 @@ export class RuntimeStore {
         throw new Error("学习空间身份记录无效。");
       this.space = { id: saved.id, path: directory };
       const journal = path.join(this.#directory, "runs.jsonl");
-      if (existsSync(journal)) {
-        const bytes = readFileSync(journal);
-        const end = bytes.lastIndexOf(10) + 1;
-        // Only an unterminated tail can be a torn append; complete invalid records are errors.
-        for (const line of bytes
-          .subarray(0, end)
-          .toString("utf8")
-          .split("\n")
-          .filter(Boolean)) {
-          const run: unknown = JSON.parse(line);
-          if (!Check(RunSchema, run) || run.spaceId !== this.space.id)
-            throw new Error("任务记录无效；请检查学习空间的运行记录。");
-          this.runs.set(run.id, run);
-        }
-        if (end < bytes.length) truncateSync(journal, end);
+      for (const record of readRunJournal(journal, this.space.id)) {
+        const run = currentRun(record);
+        this.runs.set(run.id, run);
       }
       for (const run of this.runs.values()) {
         if (!isTerminal(run))
@@ -139,19 +134,8 @@ export class RuntimeStore {
 
   saveRun(run: Run): void {
     this.assertOwned();
-    durableWrite(
-      path.join(this.#directory, "runs.jsonl"),
-      JSON.stringify(run) + "\n",
-      "a",
-    );
+    appendRunRecord(path.join(this.#directory, "runs.jsonl"), recordedRun(run));
     this.runs.set(run.id, structuredClone(run));
-  }
-
-  createSession(): SessionManager {
-    this.assertOwned();
-    return persistSession(
-      SessionManager.create(this.space.path, this.sessionDirectory),
-    );
   }
 
   release(): void {

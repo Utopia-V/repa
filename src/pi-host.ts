@@ -8,7 +8,6 @@ import {
   getAgentDir,
   type AgentSession,
   type AgentSessionEvent,
-  type ExtensionUIDialogOptions,
   ModelRuntime,
   type SessionManager,
   SettingsManager,
@@ -39,6 +38,17 @@ export type Dialog = Pick<
   Interaction,
   "kind" | "title" | "message" | "options" | "initialValue"
 >;
+export interface DialogOptions {
+  signal?: AbortSignal;
+  timeout?: number;
+}
+export interface ConversationRuntime {
+  send(
+    text: string,
+  ): Promise<{ status: "completed" | "cancelled" | "failed"; error?: string }>;
+  cancel(): Promise<void>;
+  close(): Promise<void>;
+}
 export type HostEvent =
   | { type: "title"; title: string | undefined }
   | { type: "message"; message: Message; replaces?: string }
@@ -63,10 +73,10 @@ export interface OpenPiHostOptions {
   modelOverride?: PiModelOverride;
   resources: Resources;
   onEvent: (event: HostEvent) => void;
-  ask: (dialog: Dialog, options?: ExtensionUIDialogOptions) => Promise<Reply>;
+  ask: (dialog: Dialog, options?: DialogOptions) => Promise<Reply>;
 }
 
-export class PiConversationHost {
+export class PiConversationHost implements ConversationRuntime {
   readonly #session: AgentSession;
   readonly #settings: SettingsManager;
   readonly #options: OpenPiHostOptions;
