@@ -13,4 +13,4 @@
 - [`docs/adr/`](docs/adr/) — 已接受的持久决定与目标设计；拟议工作与之冲突时明确指出，不要静默覆盖。
 - [`docs/exec-plans/`](docs/exec-plans/README.md) — 执行计划（`active/` 进行中、`completed/` 归档）；跨多个任务或需要留下决策轨迹的工作先开计划。
 - [`docs/research/`](docs/research/) — 调查与研究记录。
-- 工程实践（分支 + PR agent 审查循环、本地强制脚本、golden principles）见 [ADR-0006](docs/adr/0006-adopt-repo-harness-practices.md)。
+- [docs/golden-principles.md](docs/golden-principles.md) — golden principles 与 doc-gardening 清理流程；工程实践（分支 + PR agent 审查循环、本地强制脚本）见 [ADR-0006](docs/adr/0006-adopt-repo-harness-practices.md)。
