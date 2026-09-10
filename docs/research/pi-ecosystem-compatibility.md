@@ -54,11 +54,11 @@ Pi 明确警告 package/extension 以完整系统权限运行，skill 也能指�
 
 | 生态类别 | Node SDK 宿主 | Rust + RPC | Repa 不使用 Pi |
 |---|---|---|---|
-| skill（标准 `SKILL.md`） | **直接复用**，可由 loader 发现或显式注入 | **直接复用**，由 Pi 子进程加载；Repa 只消费行为 | **Adapter**：复用文件/解析和约定，重做注入/按需读取 |
+| skill（标准 `SKILL.md`） | **直接复用**，可由 loader 发现或显式注入 | **直接复用**，由 Pi 子进程加载；Repa 只消费行为 | **Adapter**：复用文件和约定，按替代运行时的能力接入发现、注入与按需读取 |
 | tool-only extension（不依赖 TUI） | **直接复用** | **直接复用**，工具调用和结果走 RPC events | **Adapter**：重写 ExtensionAPI/tool schema 到 Repa tool API |
-| provider extension | **直接复用**，Node 侧认证/streaming/provider registry 均可接 | **直接复用**，由 Pi Node 进程持有 provider；Rust 只驱动模型 | **基本不可直接复用**，需重做 provider/auth/stream protocol |
-| commands/dialogs | **直接复用**；SDK 中 command 仍可调用，但 UI 要宿主提供 | **部分复用/Adapter**：四类 dialog 有 subprotocol，需客户端应答 | **Adapter**：命令解析、交互、状态全重做 |
-| custom TUI | **直接复用**，需嵌入/使用 Pi TUI 运行时 | **基本不可直接复用**；`custom()` 等降级 | **基本不可直接复用**，重做 UI |
+| provider extension | **直接复用**，Node 侧认证/streaming/provider registry 均可接 | **直接复用**，由 Pi Node 进程持有 provider；Rust 只驱动模型 | **基本不可直接复用**，需适配所选 provider/auth/stream 接口 |
+| commands/dialogs | **直接复用**；SDK 中 command 仍可调用，但 UI 要宿主提供 | **部分复用/Adapter**：四类 dialog 有 subprotocol，需客户端应答 | **Adapter**：命令解析、交互与状态需接入所选宿主 |
+| custom TUI | **直接复用**，需嵌入/使用 Pi TUI 运行时 | **基本不可直接复用**；`custom()` 等降级 | **基本不可直接复用**，需按所选前端适配或替代 |
 | coding-tool override | **Adapter**：若 Repa 工具契约同构才可直连 | **Adapter**：Pi 内覆写后通过 RPC 暴露，不是 Rust 本地覆写 | **Adapter/重写** |
 | session-internals（append entries/tree labels/runtime replacement） | **直接复用**，但宿主需遵守 Runtime 重绑语义 | **部分复用**：RPC 有 fork/tree/entries 等命令，不能任意使用 Node 对象 | **基本不可直接复用**，需映射到 Repa session model |
 | theme | **直接复用**仅对 Pi TUI；非 TUI 仅可读取数据 | **基本不可用**：RPC `getAllThemes/getTheme/setTheme` 降级 | **基本不可直接复用** |
@@ -76,7 +76,7 @@ Pi 明确警告 package/extension 以完整系统权限运行，skill 也能指�
 
 1. **Node SDK 架构（复用最高）**：Repa 直接调用 `createAgentSession`/Runtime，注入自己的 cwd、settings、session manager、tools 或 loader；可保留 Node extension、provider、skills、prompts、Pi session/compaction/retry/streaming。代价是 Repa 接受 Node/TypeScript runtime 与 Pi 的生命周期和资源布局，或明确写 adapter。
 2. **Rust + RPC 架构（复用中高）**：Repa 保持 Rust 主进程和自己的 UI/产品边界，Pi Node 子进程承载 agent/model/auth/tools/extensions/session。tool-only/provider/skill 复用度高；TUI custom、theme、editor/footer 只能降级；要实现可靠交互，Rust 必须实现 JSONL command/event 与 extension UI request/response。
-3. **未来不使用 Pi（复用最低）**：只能把 `SKILL.md`、Markdown prompts、JSON themes、tool/provider 设计思想作为数据或规范迁移；所有 extension runtime、package manager、认证、agent loop、session tree、retry/compaction/streaming、TUI/RPC 都需重做。不存在官方承诺的跨宿主 ABI，因此“直接运行 Pi extension”不成立。
+3. **不使用 Pi（需选择替代运行时）**：可迁移 `SKILL.md`、Markdown prompts、JSON themes 及相关工具约定，但需要为模型连接、认证、Agent loop、会话、重试、压缩、流式执行和扩展选择并整合替代能力。这些能力可以来自其他 SDK 或成熟组件，也可以按需要自研。Pi 没有承诺跨宿主 ABI，原有 Pi Extension 的直接兼容性需要另行适配；失去 Pi 的统一实现与扩展兼容性，不等于所有通用能力都必须从零重写。
 
 ## 8. 关键限定
 
