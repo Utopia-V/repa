@@ -31,3 +31,4 @@
 4. 检查 `docs/exec-plans/active/` 是否有已完成未归档的计划。
 5. 对照本原则清单逐条抽查新进代码（重点：5、6、7）。
 6. 检查 GitHub Issues 的陈旧标签与已解决未关闭项。
+7. 提交卫生：每次 commit 前核对 `git status --short` 与 `git show --stat`，只包含预期路径；禁止目录级 `git add`（本条由两次实际事故写入：未跟踪文件被误扫进提交）。
