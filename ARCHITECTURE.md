@@ -46,6 +46,7 @@ cli.ts ──▶ application.ts ──▶ pi-host.ts ──▶ skill-read-tool.t
 - 相对导入按 `.js` → `.ts` 的 specifier 映射解析；`src/` 外部已存在文件不计入方向规则。
 - type-only 判定以 `import type` 语句与纯内联 `type` 限定符为准（值与 type 混排按值处理）；动态 `import()` 视为值导入；`仅 re-export` 边只允许 `export ... from`。
 - Node 内置（`node:` 前缀）不计入方向规则。
+- 初版 taste invariants（原则见 [golden principles](docs/golden-principles.md)）：`src/` 单文件 ≤ 600 行；`src/` 内不写 TODO/FIXME（待办走 Issues 或执行计划）。
 
 ## 测试边界
 

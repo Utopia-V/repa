@@ -18,6 +18,9 @@ import ts from "typescript";
 
 const ARCH_DOC = "ARCHITECTURE.md";
 const SRC_DIR = "src";
+// 初版 taste invariants（原则见 docs/golden-principles.md，随 task 3 落地）：
+// 单文件行数上限 —— 文件是 agent 的认知单元，超过即拆层或抽共享模块
+const MAX_SOURCE_LINES = 600;
 
 async function walkTs(dir) {
   const out = [];
@@ -213,7 +216,26 @@ export async function checkArchitecture(root) {
       });
       continue;
     }
-    for (const { spec, typeOnly, kind, line } of extractImports(await readFile(file, "utf8"), file)) {
+    const source = await readFile(file, "utf8");
+    const lineCount = source.split("\n").length;
+    if (lineCount > MAX_SOURCE_LINES) {
+      violations.push({
+        file: key,
+        line: 0,
+        message: `源文件 ${lineCount} 行，超过上限 ${MAX_SOURCE_LINES} 行`,
+        remediation: `拆分到边表新模块或抽入共享工具（如 events.ts），并同步 ${ARCH_DOC} 边表`,
+      });
+    }
+    const todo = source.match(/\b(TODO|FIXME)\b/);
+    if (todo) {
+      violations.push({
+        file: key,
+        line: source.slice(0, todo.index).split("\n").length,
+        message: `src/ 内不留 ${todo[1]} 待办（仓库是唯一事实来源）`,
+        remediation: "待办记到 GitHub Issues 或 docs/exec-plans/，代码内只留指向它们的引用",
+      });
+    }
+    for (const { spec, typeOnly, kind, line } of extractImports(source, file)) {
       if (spec.startsWith("node:")) continue;
       if (spec.startsWith(".")) {
         const resolved = resolveInternalSpecifier(spec, file, srcDir);
@@ -420,7 +442,18 @@ async function selfTest() {
     assert.equal(r.violations.length, 1);
     assert.match(r.violations[0].message, /仅 re-export/);
 
-    console.log("self-test: 10 cases passed");
+    // 11 失败：文件超行数上限；12 失败：src 内 TODO
+    root = await makeRepo({
+      "ARCHITECTURE.md": table,
+      "src/a.ts": `// ${"x".repeat(10)}\n`.repeat(601),
+      "src/b.ts": "// TODO: 待办不该在这里\n",
+    });
+    r = await checkArchitecture(root);
+    assert.equal(r.violations.length, 2, JSON.stringify(r.violations));
+    assert.ok(r.violations.some((v) => v.message.includes("上限")));
+    assert.ok(r.violations.some((v) => v.message.includes("TODO")));
+
+    console.log("self-test: 12 cases passed");
   } finally {
     await rm(tmp, { recursive: true, force: true });
   }
