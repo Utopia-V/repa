@@ -1,6 +1,6 @@
 # 架构
 
-本文是 repa 的架构地图（system of record）：记录现状分层、允许的模块边与依赖边界，并指向决定其演进方向的 ADR。领域词汇见 [`CONTEXT.md`](CONTEXT.md)；本文与代码不一致时，以代码为准并回到本文修复。`src/` 依赖方向将由 `scripts/check-architecture.mjs` 按本文的模块边表机械化校验（脚本尚未落地，见[执行计划](docs/exec-plans/active/2026-09-11-repo-harness.md)任务 2）。
+本文是 repa 的架构地图（system of record）：记录现状分层、允许的模块边与依赖边界，并指向决定其演进方向的 ADR。领域词汇见 [`CONTEXT.md`](CONTEXT.md)；本文与代码不一致时，以代码为准并回到本文修复。`src/` 依赖方向由 `scripts/check-architecture.mjs` 按本文的模块边表机械化校验（随[执行计划](docs/exec-plans/active/2026-09-11-repo-harness.md)任务 2 落地）。
 
 ## 现状分层
 
@@ -43,9 +43,9 @@ cli.ts ──▶ application.ts ──▶ pi-host.ts ──▶ skill-read-tool.t
 ### 校验器规范（任务 2 实现时遵循）
 
 - 规则范围：`src/**/*.ts`；`test/` 不受边表约束，其对 `pi-host.ts` 的直接导入（`REPA_BASE_PROMPT`、`PiModelOverride`）作为已登记例外记录在本文「测试边界」。
-- 相对导入按 `.js` → `.ts` 的 specifier 映射解析。
-- type-only 判定以 `import type` 语句与内联 `type` 限定符为准。
-- Node 内置（`node:` 前缀）与 `src/` 外部模块不计入方向规则。
+- 相对导入按 `.js` → `.ts` 的 specifier 映射解析；`src/` 外部已存在文件不计入方向规则。
+- type-only 判定以 `import type` 语句与纯内联 `type` 限定符为准（值与 type 混排按值处理）；动态 `import()` 视为值导入；`仅 re-export` 边只允许 `export ... from`。
+- Node 内置（`node:` 前缀）不计入方向规则。
 
 ## 测试边界
 

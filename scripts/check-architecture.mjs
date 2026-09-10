@@ -3,13 +3,18 @@
 // 规则来源是 ARCHITECTURE.md「模块边表」，规范见其「校验器规范」小节；
 // 边表与本脚本的解释不一致时，以边表为准，修文档或修代码，不要绕过校验。
 //
+// 导入提取使用仓库既有 devDependency 的 TypeScript AST（而非源码正则），
+// 避免注释/模板字符串误报与动态导入漏报。
+//
 // 用法：
 //   node scripts/check-architecture.mjs                # 校验当前仓库
 //   node scripts/check-architecture.mjs --root <dir>   # 校验指定目录
 //   node scripts/check-architecture.mjs --self-test    # 运行内置自测（临时夹具）
 import { readdir, readFile } from "node:fs/promises";
+import { statSync as statSyncNow } from "node:fs";
 import path from "node:path";
 import process from "node:process";
+import ts from "typescript";
 
 const ARCH_DOC = "ARCHITECTURE.md";
 const SRC_DIR = "src";
@@ -24,7 +29,7 @@ async function walkTs(dir) {
   return out.sort();
 }
 
-// 从 ARCHITECTURE.md 提取模块边表。单元格内每个 `名字` 后可跟（仅 type）等注解。
+// 从 ARCHITECTURE.md 提取模块边表。单元格内每个 `名字` 后可跟（仅 type）、（仅 re-export）等注解。
 export function parseEdgeTable(markdown) {
   const rows = markdown
     .split("\n")
@@ -57,7 +62,11 @@ export function parseEdgeTable(markdown) {
       const name = m[1].trim();
       const annotation = m[2] ?? "";
       if (!name || name === "无") continue;
-      entries.push({ name, typeOnly: annotation.includes("仅 type") });
+      entries.push({
+        name,
+        typeOnly: annotation.includes("仅 type"),
+        reExportOnly: annotation.includes("仅 re-export"),
+      });
     }
     return entries;
   };
@@ -75,31 +84,102 @@ export function parseEdgeTable(markdown) {
   return table;
 }
 
-// 提取一个 .ts 文件的全部 import/export-from 语句。
-// typeOnly 判定依据 ARCHITECTURE.md 校验器规范：import type / export type 开头；
-// 命名导入中的内联 type 与值混排时按值处理（更强约束不受影响）。
-export function extractImports(source) {
+function lineOf(sourceFile, node) {
+  return sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1;
+}
+
+// 命名导入是否全部为内联 type（import { type A, type B }），且无默认/命名空间绑定。
+function isPureInlineType(clause) {
+  if (!clause || clause.isTypeOnly || clause.name || (clause.namedBindings && ts.isNamespaceImport(clause.namedBindings))) {
+    return false;
+  }
+  const nb = clause.namedBindings;
+  if (!nb || !ts.isNamedImports(nb) || nb.elements.length === 0) return false;
+  return nb.elements.every((e) => e.isTypeOnly);
+}
+
+// 提取一个 .ts 文件的全部依赖语句（静态 import、export-from、动态 import()）。
+export function extractImports(source, fileName = "inline.ts") {
+  const sourceFile = ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest, true);
   const statements = [];
-  const push = (typeOnly, spec, index) => {
-    const line = source.slice(0, index).split("\n").length;
-    statements.push({ spec, typeOnly, line });
+  const visit = (node) => {
+    if (ts.isImportDeclaration(node) && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
+      statements.push({
+        spec: node.moduleSpecifier.text,
+        typeOnly: Boolean(node.importClause?.isTypeOnly) || isPureInlineType(node.importClause),
+        kind: "import",
+        line: lineOf(sourceFile, node),
+      });
+    } else if (
+      ts.isExportDeclaration(node) &&
+      node.moduleSpecifier &&
+      ts.isStringLiteral(node.moduleSpecifier)
+    ) {
+      statements.push({
+        spec: node.moduleSpecifier.text,
+        typeOnly: Boolean(node.isTypeOnly) || isPureInlineTypeClause(node.exportClause),
+        kind: "export",
+        line: lineOf(sourceFile, node),
+      });
+    } else if (
+      ts.isCallExpression(node) &&
+      node.expression.kind === ts.SyntaxKind.ImportKeyword &&
+      node.arguments[0] &&
+      ts.isStringLiteral(node.arguments[0])
+    ) {
+      statements.push({
+        spec: node.arguments[0].text,
+        typeOnly: false,
+        kind: "dynamic-import",
+        line: lineOf(sourceFile, node),
+      });
+    }
+    ts.forEachChild(node, visit);
   };
-  for (const m of source.matchAll(/(?:^|\n)\s*(import|export)\s+(type\s+)?[\s\S]*?from\s*["']([^"']+)["']/g)) {
-    push(Boolean(m[2]), m[3], m.index);
-  }
-  for (const m of source.matchAll(/(?:^|\n)\s*import\s*["']([^"']+)["']/g)) {
-    push(false, m[1], m.index);
-  }
+  visit(sourceFile);
   return statements;
 }
 
+// export {...} from 的内联 type 判定（exportClause 是 NamedExports）。
+function isPureInlineTypeClause(clause) {
+  if (!clause || clause.isTypeOnly) return Boolean(clause?.isTypeOnly);
+  if (!ts.isNamedExports(clause) || clause.elements.length === 0) return false;
+  return clause.elements.every((e) => e.isTypeOnly);
+}
+
+// 相对 specifier 解析（.js → .ts 映射、.ts 直写、目录 index.ts）。
+// 返回 { target }：src/ 内已存在文件；{ exempt: true }：存在但在 src/ 外（规范豁免）；
+// { missing: true }：候选都不存在。
 function resolveInternalSpecifier(spec, fromFile, srcDir) {
   const abs = path.resolve(path.dirname(fromFile), spec);
   const candidates = [];
   if (spec.endsWith(".js")) candidates.push(abs.replace(/\.js$/, ".ts"));
+  if (spec.endsWith(".ts")) candidates.push(abs);
   candidates.push(abs + ".ts", path.join(abs, "index.ts"));
-  const found = candidates.find((p) => p.startsWith(srcDir + path.sep) && p.endsWith(".ts"));
-  return found ? path.relative(srcDir, found).split(path.sep).join("/") : null;
+  let existsSomewhere = false;
+  for (const p of candidates) {
+    let isFile = false;
+    try {
+      isFile = statSyncNow(p).isFile();
+    } catch {
+      isFile = false;
+    }
+    if (!isFile) continue;
+    existsSomewhere = true;
+    if (p.startsWith(srcDir + path.sep) && p.endsWith(".ts")) {
+      return { target: path.relative(srcDir, p).split(path.sep).join("/") };
+    }
+  }
+  if (existsSomewhere) return { exempt: true };
+  return { missing: true };
+}
+
+function isFile(rel, srcDir) {
+  try {
+    return statSyncNow(path.join(srcDir, rel)).isFile();
+  } catch {
+    return false;
+  }
 }
 
 export async function checkArchitecture(root) {
@@ -120,16 +200,27 @@ export async function checkArchitecture(root) {
       });
       continue;
     }
-    for (const { spec, typeOnly, line } of extractImports(await readFile(file, "utf8"))) {
+    for (const { spec, typeOnly, kind, line } of extractImports(await readFile(file, "utf8"), file)) {
       if (spec.startsWith("node:")) continue;
       if (spec.startsWith(".")) {
-        const target = resolveInternalSpecifier(spec, file, srcDir);
-        if (!target) {
+        const resolved = resolveInternalSpecifier(spec, file, srcDir);
+        if (resolved.missing) {
           violations.push({
             file: key,
             line,
             message: `无法解析的内部导入 "${spec}"`,
             remediation: "确认相对路径与 .js → .ts 映射是否正确（校验器规范）",
+          });
+          continue;
+        }
+        if (resolved.exempt) continue; // src/ 外部模块不计入方向规则
+        const target = resolved.target;
+        if (!isFile(target, srcDir)) {
+          violations.push({
+            file: key,
+            line,
+            message: `内部导入 "${spec}" 指向不存在的文件`,
+            remediation: "修正路径或创建目标文件",
           });
           continue;
         }
@@ -139,6 +230,16 @@ export async function checkArchitecture(root) {
             line,
             message: `内部边 \`${key}\` → \`${target}\` 未在边表登记`,
             remediation: `依赖合理时在 ${ARCH_DOC} 边表为 \`${key}\` 登记 \`${target}\`；否则调整分层（方向只能沿 cli → application → pi-host → skill-read-tool 前进）`,
+          });
+          continue;
+        }
+        const entry = row.internal.find((e) => e.name === target);
+        if (entry.reExportOnly && kind !== "export") {
+          violations.push({
+            file: key,
+            line,
+            message: `边表将 \`${key}\` → \`${target}\` 登记为仅 re-export，此处是 ${kind === "dynamic-import" ? "动态导入" : "普通导入"}`,
+            remediation: `改为 \`export ... from "${spec}"\`（公共出口只做转发）；确需普通导入时先修改 ${ARCH_DOC} 边表并说明理由`,
           });
         }
         continue;
@@ -158,7 +259,7 @@ export async function checkArchitecture(root) {
           file: key,
           line,
           message: `边表将 "${spec}" 登记为仅 type，此处是值导入`,
-          remediation: `改为 \`import type\`（或内联 type 限定符）；确需值导入时先修改 ${ARCH_DOC} 边表并说明理由`,
+          remediation: `改为 \`import type\`（或纯内联 type 限定符）；确需值导入时先修改 ${ARCH_DOC} 边表并说明理由`,
         });
       }
     }
@@ -171,8 +272,9 @@ async function selfTest() {
   const os = await import("node:os");
   const assert = (await import("node:assert/strict")).default;
   const tmp = await mkdtemp(path.join(os.tmpdir(), "check-arch-test-"));
+  let caseNo = 0;
   const makeRepo = async (files) => {
-    const root = path.join(tmp, await readdir(tmp).then((n) => `case${n.length}`));
+    const root = path.join(tmp, `case${caseNo++}`);
     for (const [rel, content] of Object.entries(files)) {
       await mkdir(path.dirname(path.join(root, rel)), { recursive: true });
       await writeFile(path.join(root, rel), content);
@@ -188,17 +290,18 @@ async function selfTest() {
 | \`a.ts\` | \`b.ts\` | \`left-pad\`（仅 type） |
 | \`b.ts\` | 无 | 无 |
 `;
+  const good = {
+    "ARCHITECTURE.md": table,
+    "src/a.ts": 'import { b } from "./b.js";\nimport type { M } from "left-pad";\nimport { type N } from "left-pad";\n',
+    "src/b.ts": "export const b = 1;\n",
+  };
   try {
-    // 通过：合法边 + type-only 第三方
-    let root = await makeRepo({
-      "ARCHITECTURE.md": table,
-      "src/a.ts": 'import { b } from "./b.js";\nimport type { M } from "left-pad";\n',
-      "src/b.ts": "export const b = 1;\n",
-    });
+    // 1 通过：合法边 + import type + 纯内联 type
+    let root = await makeRepo(good);
     let r = await checkArchitecture(root);
     assert.equal(r.violations.length, 0, `应无违例：${JSON.stringify(r.violations)}`);
 
-    // 失败：逆向内部边
+    // 2 失败：逆向内部边（含修复指引）
     root = await makeRepo({
       "ARCHITECTURE.md": table,
       "src/a.ts": "export const a = 1;\n",
@@ -209,7 +312,7 @@ async function selfTest() {
     assert.match(r.violations[0].message, /未在边表登记/);
     assert.match(r.violations[0].remediation, /ARCHITECTURE\.md/);
 
-    // 失败：仅 type 依赖被值导入
+    // 3 失败：仅 type 依赖被值导入（含修复指引）
     root = await makeRepo({
       "ARCHITECTURE.md": table,
       "src/a.ts": 'import { x } from "left-pad";\n',
@@ -218,8 +321,9 @@ async function selfTest() {
     r = await checkArchitecture(root);
     assert.equal(r.violations.length, 1);
     assert.match(r.violations[0].message, /仅 type/);
+    assert.match(r.violations[0].remediation, /import type/);
 
-    // 失败：未登记的源文件
+    // 4 失败：未登记的源文件
     root = await makeRepo({
       "ARCHITECTURE.md": table,
       "src/a.ts": "",
@@ -229,7 +333,57 @@ async function selfTest() {
     r = await checkArchitecture(root);
     assert.equal(r.violations.length, 1);
     assert.match(r.violations[0].message, /未在.*登记/);
-    console.log("self-test: 4 cases passed");
+
+    // 5 失败：未登记的第三方依赖；node: 豁免
+    root = await makeRepo({
+      "ARCHITECTURE.md": table,
+      "src/a.ts": 'import { strict } from "node:assert/strict";\nimport x from "left-right";\n',
+      "src/b.ts": "",
+    });
+    r = await checkArchitecture(root);
+    assert.equal(r.violations.length, 1);
+    assert.match(r.violations[0].message, /left-right/);
+
+    // 6 失败：仅 re-export 边被普通导入；export-from 放行
+    root = await makeRepo({
+      "ARCHITECTURE.md": table.replace(
+        "| `a.ts` | `b.ts` |",
+        "| `a.ts` | `b.ts`（仅 re-export） |",
+      ),
+      "src/a.ts": 'import { b } from "./b.js";\n',
+      "src/b.ts": "export const b = 1;\n",
+    });
+    r = await checkArchitecture(root);
+    assert.equal(r.violations.length, 1);
+    assert.match(r.violations[0].message, /仅 re-export/);
+    root = await makeRepo({
+      "ARCHITECTURE.md": table.replace(
+        "| `a.ts` | `b.ts` |",
+        "| `a.ts` | `b.ts`（仅 re-export） |",
+      ),
+      "src/a.ts": 'export { b } from "./b.js";\n',
+      "src/b.ts": "export const b = 1;\n",
+    });
+    r = await checkArchitecture(root);
+    assert.equal(r.violations.length, 0, JSON.stringify(r.violations));
+
+    // 7 失败：无法解析的内部导入；src/ 外存在文件豁免；动态导入按值处理
+    root = await makeRepo({
+      "ARCHITECTURE.md": table.replace("| `a.ts` | `b.ts` |", "| `a.ts` | `b.ts`、`outside.ts` |"),
+      "src/a.ts": 'import { g } from "./missing.js";\nimport { h } from "../outside.js";\nconst lazy = import("left-pad");\n',
+      "src/b.ts": "",
+      "outside.ts": "export const h = 1;\n",
+    });
+    r = await checkArchitecture(root);
+    assert.equal(r.violations.length, 2, JSON.stringify(r.violations));
+    assert.ok(r.violations.some((v) => v.message.includes("无法解析")));
+    assert.ok(r.violations.some((v) => v.message.includes("left-pad") && v.message.includes("仅 type")));
+
+    // 8 失败：边表缺失时抛错
+    root = await makeRepo({ "ARCHITECTURE.md": "# t\n\n没有表格\n", "src/a.ts": "" });
+    await assert.rejects(() => checkArchitecture(root), /未找到模块边表/);
+
+    console.log("self-test: 8 cases passed");
   } finally {
     await rm(tmp, { recursive: true, force: true });
   }

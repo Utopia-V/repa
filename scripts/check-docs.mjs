@@ -37,8 +37,9 @@ export async function collectMarkdown(root) {
 
 export function extractRelativeLinks(markdown) {
   const links = [];
-  for (const m of markdown.matchAll(/!?\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g)) {
-    let url = m[1];
+  // 支持标准形式：[t](url)、[t](<url>)、带 "标题"；reference-style 链接不在本仓库使用，暂不支持
+  for (const m of markdown.matchAll(/!?\[[^\]]*\]\(\s*(?:<([^>]+)>|([^)\s]+))(?:\s+"[^"]*")?\s*\)/g)) {
+    let url = m[1] ?? m[2];
     if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("mailto:")) continue;
     url = url.split("#")[0];
     if (!url) continue; // 纯锚点
@@ -134,6 +135,8 @@ async function selfTest() {
     let r = await checkDocs(root);
     assert.equal(r.violations.length, 5, `应 5 个违例：${JSON.stringify(r.violations, null, 1)}`);
     assert.ok(r.violations.some((v) => v.message.includes("nope.md")));
+    const broken = r.violations.find((v) => v.message.includes("nope.md"));
+    assert.match(broken.remediation, /相对路径/);
     assert.ok(r.violations.filter((v) => v.message.includes("固定小节")).length === 3);
     assert.ok(r.violations.some((v) => v.message.includes("0001")));
 
