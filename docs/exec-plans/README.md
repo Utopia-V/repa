@@ -1,6 +1,6 @@
 # 执行计划（exec-plans）
 
-执行计划是一等工件：跨多个任务的复杂工作在此成文，带进度与决策日志，并随代码一起进仓库。约定来自 [repo harness 实践](../adr/0004-adopt-repo-harness-practices.md)。
+执行计划是一等工件：跨多个任务的复杂工作在此成文，带进度与决策日志，并随代码一起进仓库。约定来自 [repo harness 实践](../adr/0006-adopt-repo-harness-practices.md)。
 
 ## 目录
 

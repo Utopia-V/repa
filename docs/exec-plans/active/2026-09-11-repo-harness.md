@@ -3,7 +3,7 @@
 - **状态**: active
 - **开始**: 2026-09-11
 - **来源**: [Harness engineering: leveraging Codex in an agent-first world](https://openai.com/index/harness-engineering/)（OpenAI，2026-02-11）
-- **决定记录**: [ADR-0004](../../adr/0004-adopt-repo-harness-practices.md)
+- **决定记录**: [ADR-0006](../../adr/0006-adopt-repo-harness-practices.md)
 
 ## 目的
 
@@ -27,7 +27,7 @@
 
 ## 任务分解
 
-0. **差距审计与蓝图（本计划）** — 建立 `docs/exec-plans/` 结构与约定；完成差距审计；以 [ADR-0004](../../adr/0004-adopt-repo-harness-practices.md) 记录决定。完成标志：本计划经 PR 交付并得到用户确认。
+0. **差距审计与蓝图（本计划）** — 建立 `docs/exec-plans/` 结构与约定；完成差距审计；以 [ADR-0006](../../adr/0006-adopt-repo-harness-practices.md) 记录决定。完成标志：本计划经 PR 交付并得到用户确认。
 1. **知识地图与 docs 体系整合** — `AGENTS.md` 保持目录形态（目标 100 行以内），补全指向：`CONTEXT.md`、`ARCHITECTURE.md`、`docs/adr/`、`docs/agents/`、`docs/exec-plans/`、`docs/research/`、golden principles；新增 `ARCHITECTURE.md` 记录现有分层与依赖方向，并列出允许的模块边与特例（`index.ts` 公共出口、`events` 的定位、Node 内置与第三方依赖不计入方向规则）。完成标志：所有指针指向存在的文件，交叉链接通过任务 2 的校验。
 2. **本地机械化强制脚本** — `scripts/check-docs.mjs`（docs 结构与相对链接校验）与 `scripts/check-architecture.mjs`（`src/` 依赖方向 + 初版 taste invariants），以一条 npm script 跑通全部校验。完成标志：当前代码库通过；故意制造违例时失败，且错误信息包含可执行的修复指引；校验规则与 `ARCHITECTURE.md` 的模块边表一致。
 3. **Golden principles 与清理流程** — `docs/golden-principles.md` 成文；可机械化条目接入校验脚本；定义周期性 doc-gardening 的触发方式与清单。完成标志：原则成文，可机械化条目有对应校验；doc-gardening 的触发方式（频率或触发事件）、执行者、清单位置与产物在文档中可验证。
