@@ -133,6 +133,19 @@ export function extractImports(source, fileName = "inline.ts") {
         kind: "dynamic-import",
         line: lineOf(sourceFile, node),
       });
+    } else if (
+      ts.isImportTypeNode(node) &&
+      node.argument &&
+      ts.isLiteralTypeNode(node.argument) &&
+      ts.isStringLiteral(node.argument.literal)
+    ) {
+      // type P = import("pkg").P —— 纯类型级依赖，仍须在边表登记
+      statements.push({
+        spec: node.argument.literal.text,
+        typeOnly: true,
+        kind: "import-type",
+        line: lineOf(sourceFile, node),
+      });
     }
     ts.forEachChild(node, visit);
   };
@@ -292,7 +305,7 @@ async function selfTest() {
 `;
   const good = {
     "ARCHITECTURE.md": table,
-    "src/a.ts": 'import { b } from "./b.js";\nimport type { M } from "left-pad";\nimport { type N } from "left-pad";\n',
+    "src/a.ts": 'import { b } from "./b.js";\nimport type { M } from "left-pad";\nimport { type N } from "left-pad";\nexport { type O } from "left-pad";\ntype P = import("left-pad").P;\n',
     "src/b.ts": "export const b = 1;\n",
   };
   try {
@@ -383,7 +396,31 @@ async function selfTest() {
     root = await makeRepo({ "ARCHITECTURE.md": "# t\n\n没有表格\n", "src/a.ts": "" });
     await assert.rejects(() => checkArchitecture(root), /未找到模块边表/);
 
-    console.log("self-test: 8 cases passed");
+    // 9 失败：命名空间导入按值处理；import-type 未登记第三方也报违例；已登记第三方 import-type 放行（见案例 1）
+    root = await makeRepo({
+      "ARCHITECTURE.md": table,
+      "src/a.ts": 'import * as ns from "left-pad";\ntype Q = import("left-right").Q;\n',
+      "src/b.ts": "",
+    });
+    r = await checkArchitecture(root);
+    assert.equal(r.violations.length, 2, JSON.stringify(r.violations));
+    assert.ok(r.violations.some((v) => v.message.includes("left-pad") && v.message.includes("仅 type")));
+    assert.ok(r.violations.some((v) => v.message.includes("left-right")));
+
+    // 10 失败：动态导入触发「仅 re-export」拒绝
+    root = await makeRepo({
+      "ARCHITECTURE.md": table.replace(
+        "| `a.ts` | `b.ts` |",
+        "| `a.ts` | `b.ts`（仅 re-export） |",
+      ),
+      "src/a.ts": 'const l = import("./b.js");\n',
+      "src/b.ts": "export const b = 1;\n",
+    });
+    r = await checkArchitecture(root);
+    assert.equal(r.violations.length, 1);
+    assert.match(r.violations[0].message, /仅 re-export/);
+
+    console.log("self-test: 10 cases passed");
   } finally {
     await rm(tmp, { recursive: true, force: true });
   }
