@@ -1,17 +1,5 @@
-## 文档语言
+## 项目约束
 
-项目自有文档使用简体中文。代码标识符、命令、协议字段、标签以及上游项目、包和接口的专有名称保持原文；必要时在首次出现处给出中文说明。第三方原始文档保持原貌。
-
-## Agent skills
-
-### Issue tracker
-
-Issue 与规格记录在 `Utopia-V/repa` 的 GitHub Issues 中。详见 `docs/agents/issue-tracker.md`。
-
-### Triage labels
-
-使用五个默认 triage 标签。详见 `docs/agents/triage-labels.md`。
-
-### Domain docs
-
-本仓库采用 single-context 领域文档布局：使用根目录的 `CONTEXT.md` 和 `docs/adr/`。详见 `docs/agents/domain.md`。
+- 项目自有文档使用简体中文。代码标识符、命令、协议字段、标签以及上游项目、包和接口的专有名称保持原文；必要时在首次出现处给出中文说明。第三方原始文档保持原貌。
+- Issue 与需要跨任务继续消费的规格记录在 `Utopia-V/repa` 的 GitHub Issues 中，使用已认证的 `gh` CLI 操作。
+- 本仓库只有一个领域 context。已接受且会改变未来解释的领域概念、关系和不变量进入根目录 `CONTEXT.md`；难以逆转、缺少上下文会令人意外且确有取舍的决定才进入 `docs/adr/`。两者都按真实内容惰性创建。
