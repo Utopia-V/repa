@@ -21,7 +21,7 @@
 | Golden principles 与周期性清理（garbage collection） | 无成文原则；一致性靠临时判断 | 原则未成文、可机械化条目未接入校验 | 任务 3 |
 | Agent 审查循环：agent 自审 + 额外 agent 审查，迭代至通过；PR 短生命周期 | 有 issue tracker 与 triage 约定（`docs/agents/issue-tracker.md`、`docs/agents/triage-labels.md`），无 PR 审查循环的落地实践 | 审查循环未成文、未实践 | 任务 4 |
 
-现状证据：`AGENTS.md` 17 行；`src/` 约 1.0k 行、`test/` 约 0.5k 行；仓库无 `.github/`、无 lint 依赖（`package.json` 仅 `check`/`test` 脚本）。
+现状证据：`AGENTS.md` 17 行；`src/` 约 1.0k 行、`test/` 约 0.5k 行；仓库无 `.github/`、无 lint 脚本与 lint 依赖（`package.json` 脚本仅有 `build`/`check`/`start`/`test`）。
 
 不在本次范围（后续增量）：GitHub Actions 远端 CI、agent legibility 基础设施（per-worktree 可启动实例、CDP 驱动 UI、日志/指标查询）。
 
