@@ -1,6 +1,6 @@
 # Pi 生态对 Repa 的可复用性调查
 
-第 1–8 节的调查基准是 `earendil-works/pi` 的固定提交 [`8fa7eebd235355522c8104166b4f1f959b4e2f10`](https://github.com/earendil-works/pi/tree/8fa7eebd235355522c8104166b4f1f959b4e2f10)，相应 GitHub 链接均固定到该提交。第 9 节补充本仓库锁定依赖 `@earendil-works/pi-coding-agent@0.84.3` 的局部核验。本记录为 Pi 嵌入决策和后续 integration prototype 提供事实依据；升级 Pi 固定版本时，应重新核对其中受影响的结论。
+第 1–8 节的调查基准是 `earendil-works/pi` 的固定提交 [`8fa7eebd235355522c8104166b4f1f959b4e2f10`](https://github.com/earendil-works/pi/tree/8fa7eebd235355522c8104166b4f1f959b4e2f10)，相应 GitHub 链接均固定到该提交。第 9–10 节补充本仓库锁定依赖 `@earendil-works/pi-coding-agent@0.84.3` 的局部核验，第 10 节另以固定版本的 Codex 编辑实现作比较。本记录为 Pi 嵌入决策和后续 integration prototype 提供事实依据；升级相关依赖时，应重新核对其中受影响的结论。
 
 ## 结论摘要
 
@@ -99,3 +99,27 @@ Pi 明确警告 package/extension 以完整系统权限运行，skill 也能指�
 | 仓库已有的 Pi 测试包，沿用原声明 | 1 | 1 | 1 |
 
 空过滤使用现有 package filter 的 `extensions`、`skills`、`prompts`、`themes` 空数组完成，Repa 入口文件保持为普通包文件。上述结果支持在宿主适配层分别装配包的 Agent、后台和前端部分，而不是将全部已安装包原样交给 Pi 的扩展发现规则。各类 Repa 入口的公开字段和运行契约仍属于待定义的宿主接口。
+
+## 10. Pi 0.84.3 的工具与服务复用边界
+
+本节核对[仓库锁定依赖](../../package-lock.json)中该包的 `package.json`、`dist/index.d.ts` 及下列模块的类型和实现。编辑行为通过公开工具工厂与内存 I/O 复现，没有调用模型或写入实际内容文件。
+
+| 能力 | 已有入口与实现 | 接入时保留的 Repa 责任 |
+| --- | --- | --- |
+| 读取、编辑与写入 | `createReadToolDefinition`、`createEditToolDefinition`、`createWriteToolDefinition` 及各自的 `operations`；模块为 `dist/core/tools/{read,edit,write}` | 授权、内容身份与修订、共同提交和资源关系；编辑行为须符合正文契约 |
+| 命令执行 | `createBashToolDefinition` 的 `BashOperations.exec`；工具外层已有流式输出、截断及完整输出保留 | 实际执行环境、权限与取消收尾；替换执行器不自动提供沙箱 |
+| 会话工作视图 | `SessionManager.buildContextEntries()`、`buildSessionContext()` 与分支查询，位于 `dist/core/session-manager` | Repa 语境快照的来源、比较与回填，以及公共数据投影 |
+| 凭据与认证 | `ModelRuntime.create({ authPath, credentials })`，位于 `dist/core/model-runtime` | 凭据位置、具名连接和实际认证关联；该版本的内部 `AuthStorage` 类未从包入口导出 |
+| Pi 运行设置 | `SettingsManager.fromStorage()`、`applyOverrides()` 等公开方法，位于 `dist/core/settings-manager` | Repa 的作用域、有效值来源、完整值覆盖与插件设置语义 |
+
+包安装与定位继续使用第 9 节所述入口。工具 I/O 的可替换性提供了接入位置，不能单独证明修改协调已经成立：`withFileMutationQueue` 只串行化同一文件的修改，不覆盖多文件操作，也不自动协调其他前端入口。
+
+`edit` 的 `applyEditsToNormalizedContent` 在精确匹配失败后使用规范化文本定位，再将受影响的行覆盖到原文本；范围外的其他行保留，但受影响行中未选中的字符仍可能改变。原文 `公式 x²；标记：ＡＢＣ`，以 `oldText: "ABC"`、`newText: "DEF"` 调用公开编辑工具，实际写回为 `公式 x2;标记:DEF`。同一验证中的下一行 `其他行 x²` 保持原样。实现还会先统一换行，再按检测到的样式恢复；混合 CRLF/LF 文件中未编辑行的换行也可能改变。相应实现位于 `dist/core/tools/edit.js` 与 `edit-diff.js`。
+
+Codex 对比基准为固定提交 [`3d2ee51ca2d5db578f328aa75e20aa22c0197c9a`](https://github.com/openai/codex/tree/3d2ee51ca2d5db578f328aa75e20aa22c0197c9a)，以下为源码与相邻测试核对，未运行其 Rust 测试：
+
+- [`seek_sequence.rs`](https://github.com/openai/codex/blob/3d2ee51ca2d5db578f328aa75e20aa22c0197c9a/codex-rs/apply-patch/src/seek_sequence.rs) 依次尝试精确、空白宽松和特定 Unicode 标点比较，返回匹配位置；比较过程不修改原行。其规则与 Pi 的整段 NFKC 规范化不同，不能假定两者接受相同输入。
+- [`file_update.rs`](https://github.com/openai/codex/blob/3d2ee51ca2d5db578f328aa75e20aa22c0197c9a/codex-rs/apply-patch/src/file_update.rs) 的 `PreserveLineEndings` 路径按补丁的上下文行分隔实际替换，保留上下文原文；[`text_file.rs`](https://github.com/openai/codex/blob/3d2ee51ca2d5db578f328aa75e20aa22c0197c9a/codex-rs/apply-patch/src/text_file.rs) 保存各行原有的换行方式并据此重建文件。
+- 该版本 [`ApplyPatchOptions` 的默认模式](https://github.com/openai/codex/blob/3d2ee51ca2d5db578f328aa75e20aa22c0197c9a/codex-rs/apply-patch/src/lib.rs#L62-L95) 是 `NormalizeToLf`；保留换行的路径仍沿用补齐末尾换行的约定。补丁按行替换，与 Repa 的局部文本替换粒度也有区别。
+
+可借鉴的机制是将定位时的宽松比较与实际修改分开，并从原内容保留未修改部分。采用范围仍以 Repa 的正文、冲突及恢复契约为准；有针对性地补足或替换不匹配的行为，其他适用工具和运行能力继续复用。
