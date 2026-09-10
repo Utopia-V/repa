@@ -8,7 +8,9 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "check": "tsc --noEmit",
+    "check": "tsc --noEmit && npm run lint:docs && npm run lint:arch",
+    "lint:docs": "node scripts/check-docs.mjs",
+    "lint:arch": "node scripts/check-architecture.mjs",
     "start": "tsx src/cli.ts",
     "test": "node --import tsx --test test/application.test.ts"
   },
