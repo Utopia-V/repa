@@ -48,4 +48,4 @@
 - 2026-09-11 同步 master（`07c6fefb6`、`41df96c16`）：`.agents/skills` 收敛与产品/架构设计落地，`docs/agents/` 约定并入 5 行版 `AGENTS.md`；ADR-0004/0005（应用协议、宿主权限）已占用编号，本计划的采用决定重编为 ADR-0006；审计基线按新 master 刷新。任务 1 的 `ARCHITECTURE.md` 需反映应用协议的目标设计。
 - 2026-09-11 任务 1 交付（PR #12，stacked on #11）：ARCHITECTURE.md（分层 + 边表 + 校验器规范，codex 审查 1 轮闭环）+ AGENTS.md 仓库地图（纯增量，16 行）。
 - 2026-09-11 任务 2 交付（PR #13，stacked on #12）：check-architecture（TypeScript AST 解析边表 + taste invariants：行数上限、TODO 禁令）+ check-docs（链接/小节/ADR 编号），`npm run check` 一条命令；codex 两轮审查闭环，自测 12 案例。
-- 2026-09-11 任务 3 交付（PR #14，stacked on #13）：golden principles 成文（3 条机械化接入脚本、4 条判断性），doc-gardening 触发/执行者/清单/产物成文。
+- 2026-09-11 任务 3 交付（PR #14，stacked on #13）：golden principles 成文（8 条：1 条纯机械化、3 条含机械化子项、3 条判断性、1 条流程；标签与脚本实际覆盖面逐条对齐），doc-gardening 触发/执行者/清单/产物成文。codex 审查 1 轮：5 条 finding（机械化标签夸大）全部采纳修正。
