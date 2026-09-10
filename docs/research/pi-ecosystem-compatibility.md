@@ -1,6 +1,6 @@
 # Pi 生态对 Repa 的可复用性调查
 
-调查基准是 `earendil-works/pi` 的固定提交 [`8fa7eebd235355522c8104166b4f1f959b4e2f10`](https://github.com/earendil-works/pi/tree/8fa7eebd235355522c8104166b4f1f959b4e2f10)，下文的 GitHub 链接均固定到该提交。本记录为 Pi 嵌入决策和后续 integration prototype 提供事实依据；升级 Pi 固定版本时，应重新核对其中受影响的结论。
+第 1–8 节的调查基准是 `earendil-works/pi` 的固定提交 [`8fa7eebd235355522c8104166b4f1f959b4e2f10`](https://github.com/earendil-works/pi/tree/8fa7eebd235355522c8104166b4f1f959b4e2f10)，相应 GitHub 链接均固定到该提交。第 9 节补充本仓库锁定依赖 `@earendil-works/pi-coding-agent@0.84.3` 的局部核验。本记录为 Pi 嵌入决策和后续 integration prototype 提供事实依据；升级 Pi 固定版本时，应重新核对其中受影响的结论。
 
 ## 结论摘要
 
@@ -83,3 +83,19 @@ Pi 明确警告 package/extension 以完整系统权限运行，skill 也能指�
 * 上述“可直接复用”指在 Pi Node runtime 中按官方 API 运行，不表示能把 TypeScript extension 编译成 Rust 原生插件。
 * RPC 能加载并运行 extension/package 资源，是因为 Pi Node 进程仍执行 `DefaultResourceLoader`/package resolution；Rust 端仅是协议消费者。
 * package/extension/skill 均是信任边界内的任意代码或任意模型指令；Repa 若把它们暴露给不受信项目，必须自行增加沙箱、审批或资源白名单。Pi 官方文档只提供 trust gating，不宣称 sandbox。
+
+## 9. Pi 0.84.3 的包入口边界补充
+
+本节依据仓库锁定依赖的 `package-manager`、`resource-loader` 和 `extensions` 类型与实现，以及使用 `SettingsManager.inMemory()` 的本地包解析探针。核验范围是包发现、位置解析与资源过滤，没有安装网络包、创建 AgentSession 或调用模型。
+
+`PackageManager.listConfiguredPackages()` 与 `getInstalledPath()` 可以在没有 Agent 运行实例时取得已配置包及其位置，因此 Repa 可以复用包来源与定位，再读取各宿主所需的入口信息。Pi 的工具执行仍要求 `ExtensionContext`，其中包含会话管理、模型和会话 UI 等能力；Extension loader 创建的运行时动作在 runner 绑定前是抛错占位。这两种接口分别服务包管理和会话中的扩展执行，不能将任意 Pi 工具直接视为独立后台函数。
+
+本地目录解析还有一项兼容细节：`resolveLocalExtensionSource()` 在目录没有 Pi manifest 或约定资源目录时，会把整个目录回退登记为 Extension。仅添加自定义 Repa 入口元数据不会改变这条规则。
+
+| 本地解析条件 | Extension 数 | Skill 数 | prompt 数 |
+| --- | --- | --- | --- |
+| 只有自定义 Repa 入口声明，作为普通本地包直接交给 Pi | 1 | 0 | 0 |
+| 同一目录由宿主将四类 Pi 资源过滤为空 | 0 | 0 | 0 |
+| 仓库已有的 Pi 测试包，沿用原声明 | 1 | 1 | 1 |
+
+空过滤使用现有 package filter 的 `extensions`、`skills`、`prompts`、`themes` 空数组完成，Repa 入口文件保持为普通包文件。上述结果支持在宿主适配层分别装配包的 Agent、后台和前端部分，而不是将全部已安装包原样交给 Pi 的扩展发现规则。各类 Repa 入口的公开字段和运行契约仍属于待定义的宿主接口。
