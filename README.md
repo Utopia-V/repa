@@ -74,6 +74,8 @@ Repa 的内容引用通过稳定身份在所属空间内解析，移动和改名
 
 官方编辑器默认自动保存，完成写入后才报告已保存。一次 Agent 请求可以产生多次内容操作，必须共同完成的正文、身份与引用变化才协调为同一项操作。取消 Agent 保留已完成的修改，进行中的内容操作按恢复规则收尾。
 
+保存不自动启动 Agent 或将普通文件全文加入上下文。普通文件可由 Agent 自行读取，也可按所选策略提供变化提示或合并差异；已关联学习语境的内容继续在新运行入口按当前视图处理。
+
 历史、撤回和中断恢复共用变更记录。撤回作为新操作保留能够区分的后续修改，重叠或含糊时保留当前内容并报告冲突。跨文件操作先准备恢复记录，再应用修改并确认完成；失败或重启后依据实际状态恢复。外部文件访问者不参与相同的提交协调，外部编辑的历史限于实际观察到的版本。
 
 恢复冲突时，实际文件仍可查看、比较和修复；依赖未确认身份、位置或组成的查询与修改返回待恢复信息，已确认无关的正常使用继续。内容模块核对并保存修复结果后解除相应状态，原中断事实保留。诊断可使用选定输入与既有独立模型处理能力，不要求先完整展开出现问题的学习语境。
@@ -210,6 +212,8 @@ Repa 提供内容读写、引用与组成、数据和资源传递、动作调用
 | [docs/adr/0004-connect-replaceable-frontends-through-application-protocol.md](docs/adr/0004-connect-replaceable-frontends-through-application-protocol.md) | 公开能力与请求输入、steer 与排队接续、前端状态、任务生命周期、组件宿主和扩展兼容 |
 | [docs/adr/0005-execute-display-content-with-host-permissions.md](docs/adr/0005-execute-display-content-with-host-permissions.md) | 调用授权、命令执行、展示实例与活跃资源、权限变更和历史产物 |
 | [docs/research/pi-ecosystem-compatibility.md](docs/research/pi-ecosystem-compatibility.md) | Pi 生态、公开复用入口与固定版本核验，以及 Codex 编辑行为对比；结论按文中调查基准解释 |
+
+具体接口集中记录在 [Repa v1 接口草案 #16](https://github.com/Utopia-V/repa/issues/16)，覆盖前后端协议、共享后台能力与组件宿主。该议题持有待实现的接口方案，当前可运行代码仍按下方的实现范围说明。
 
 [AGENTS.md](AGENTS.md) 和 [.agents/skills/](.agents/skills/) 保存项目协作约束与工程方法；`test/fixtures/` 中的 Markdown 是测试材料。产品决定由上表中的领域约定和架构决策持有，调查记录用于追溯技术依据。
 
