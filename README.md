@@ -217,6 +217,8 @@ Repa 提供内容读写、引用与组成、数据和资源传递、动作调用
 
 具体接口集中记录在 [Repa v1 接口草案 #16](https://github.com/Utopia-V/repa/issues/16)，覆盖前后端协议、共享后台能力与组件宿主。该议题持有待实现的接口方案，当前可运行代码仍按下方的实现范围说明。
 
+[docs/development/](docs/development/README.md) 组织已实现模块的开发说明，包括内容与恢复、Agent 接入及验证入口，随代码更新。
+
 [AGENTS.md](AGENTS.md) 和 [.agents/skills/](.agents/skills/) 保存项目协作约束与工程方法；`test/fixtures/` 中的 Markdown 是测试材料。产品决定由上表中的领域约定和架构决策持有，调查记录用于追溯技术依据。
 
 通用 Agent 行为的开发参照包括 Codex 的公开文档、源码与相邻测试，具体使用约定见 [AGENTS.md](AGENTS.md)。影响 Repa 行为的取舍及核验版本记录在相应 ADR。
@@ -235,11 +237,11 @@ Repa 提供内容读写、引用与组成、数据和资源传递、动作调用
 | 范围 | 当前代码与后续接入 |
 | --- | --- |
 | 应用协议、客户端与 TUI | 已有本机后端、协议 v1、无 UI 客户端、多空间多会话、订阅重连和运行记录；请求输入当前仅支持文本，steer、排队及指定旧任务接续尚未接入 |
-| 内容与学习语境 | 已有空间身份和 Pi 会话存储；共同内容操作、内容清单、长期资源与活跃使用管理及学习语境注入待接入 |
-| 扩展与配置 | 已有明确信任后的兼容 Pi 扩展加载；共享后台能力入口、独立模型连接管理、配置继承、可控提示装配与官方默认能力组合待接入 |
+| 内容与学习语境 | 已接通文件读写、精确修改、多文件补丁、内容身份与组成、操作查询、撤回与恢复、外部材料只读关联、不可变资源和学习语境注入；检索、独立复制与材料收集、资源清理及活跃使用管理待接入 |
+| 扩展与配置 | 已有明确信任后的 Pi 扩展加载、应用／空间／会话提示继承和实际提示装配；共享后台能力入口、独立模型连接管理、辅助调用提示配置与官方默认能力组合待接入 |
 | 前端与执行环境 | 图形组件宿主、多种请求输入、生成内容展示隔离及命令沙箱待实现 |
 
-实现时仍需确定公开字段与编码、包入口元数据、内容与恢复记录的具体存储，以及官方图形前端的宿主和内部框架。Web 组件接入形状是参考契约，Electron、React 和具体存储库均未被确定为必须依赖；SQLite 等方案按所属模块的恢复与性能需要选择。
+当前模块责任、调用示例、持久格式和验证入口见[开发指南](docs/development/README.md)。已经实现的字段由公开 schema 持有；后续仍需落实包入口元数据及官方图形前端的宿主和内部框架。Web 组件接入形状是参考契约，Electron、React 均未被确定为必须依赖。
 
 集成验证需覆盖上述连续操作，以及沙箱辅助程序的独立构建与平台接入、可执行展示的真实隔离边界。现有运行验证范围为 Linux，模型调用使用确定性 faux provider；接口调查与局部试验不替代平台和真实学习体验验证。安装体积、启动速度和运行开销由实现测量，结构上的职责共用不作为性能结论。
 
@@ -290,7 +292,7 @@ TUI 自动连接或启动独立的本机后端，打印连接文件的位置。�
 
 生成期间按 `Ctrl+C` 请求取消，空闲时按 `Ctrl+C` 关闭当前前端。扩展需要回答时，TUI 显示问题并接收回答；确认题使用 `yes` 或 `no`，选择题可以输入选项编号，`/dismiss` 取消该交互。所有前端离开后，待回答的交互仍由后端保留；重新连接可以继续。
 
-会话 JSONL 保存在 `<space>/.repa/sessions/`。空间身份与任务的受理、终态记录位于 `.repa/runtime/`，备份时应保留这些持久数据。
+会话 JSONL 保存在 `<space>/.repa/sessions/`。空间身份与任务记录位于 `.repa/runtime/`，内容身份、操作恢复记录与不可变资源位于 `.repa/content/`，空间和会话提示覆盖位于 `.repa/settings.json`。备份时应连同正文保留这些持久数据，具体责任见[内容、保存与恢复](docs/development/content.md)。
 
 运行日志采用独立的 `repa.run` 格式，当前磁盘格式版本为 `1`，记录请求事实与可选终态；运行进度由后端状态持有。旧版无版本记录继续按原格式读取，新记录使用当前格式追加，已有有效记录保持原样。遇到不支持的格式版本或完整的损坏记录时，停止恢复并保留原文件；只有尚未完成的末尾追加可以在完整记录校验后清除。
 
@@ -319,7 +321,7 @@ npm start -- serve --connection-file /path/to/repa-connection.json --trust-exten
 
 信任配置属于后端进程。若已有后端未启用扩展信任，可以完整退出后重新启动，或使用独立连接文件启动另一后端。启用的插件代码以宿主进程权限运行；当前命令沙箱尚未接入。
 
-当前保留读取已启用 Skill 资源的兼容 `read` 工具，通用内容读写和命令工具将在相应模块接入。兼容的扩展工具、prompt 与 Skill 可以使用；扩展的选择、确认、输入和编辑器交互通过后端转为待回答问题。依赖 Pi 专用 TUI 组件的扩展需要前端适配。
+当前提供 `read`、`edit`、`write`、`apply_patch` 内容工具，前端和 Agent 共用保存与恢复逻辑；读取也支持已启用 Skill 的自有资源。命令工具和沙箱尚未接入。兼容的扩展工具、prompt 与 Skill 可以使用；扩展的选择、确认、输入和编辑器交互通过后端转为待回答问题。依赖 Pi 专用 TUI 组件的扩展需要前端适配。
 
 ### 公开应用接口
 
@@ -332,6 +334,9 @@ npm start -- serve --connection-file /path/to/repa-connection.json --trust-exten
 | `space.open`、`space.list` | 打开本地空间并取得稳定身份，或列出后端已打开的空间。 |
 | `session.create`、`session.list`、`session.get`、`session.branch`、`session.close` | 创建、列举摘要、读取历史、建立分支和释放运行实例；查看历史不启动 Agent。 |
 | `run.submit`、`run.get`、`run.cancel` | 受理请求、查询结果和请求取消。 |
+| `content.*`、`operation.*` | 读取和保存文件，维护身份与组成，查询、撤回及核对恢复结果；具体方法见[内容接口](docs/development/content.md)。 |
+| `context.get`、`context.set`、`context.preview` | 读取或更换学习语境绑定，并预览当前完整文本和来源。 |
+| `settings.get`、`settings.set`、`settings.reset` | 读取提示覆盖与来源，按项保存或恢复继承。 |
 | `interaction.reply` | 回答仍有效的交互；已经回答、取消或过期的交互不能再次使用。 |
 | `state.get`、`subscription.start`、`subscription.stop` | 按应用、空间或会话范围读取快照和订阅变化。 |
 | `client.detach`、`shutdown` | 离开后端，或请求完成现有任务后退出、取消任务后退出。 |
@@ -371,6 +376,6 @@ await watch.stop();
 await client.close();
 ```
 
-消息保留文本、思考、工具调用、资源与扩展数据结构。流式消息通过 `replaces` 与保存后的历史消息身份衔接。资源从 HTTP `/resources/<id>` 获取，schema 从 `/protocol.json` 获取，两者都使用 `Authorization: Bearer <token>`；客户端的 `resource(id)` 已处理认证。具体的交互页面渲染与执行权限按 ADR 0005 后续接入。
+消息保留文本、思考、工具调用、资源与扩展数据结构。流式消息通过 `replaces` 与保存后的历史消息身份衔接。会话消息资源从 HTTP `/resources/<id>` 获取，空间不可变资源从 `/spaces/<spaceId>/resources/<id>` 获取，schema 从 `/protocol.json` 获取，均使用 `Authorization: Bearer <token>`。客户端的 `resource(id 或 ResourceRef)`、`uploadResource` 和 `readText` 处理认证与完整内容读取。具体的交互页面渲染与执行权限按 ADR 0005 后续接入。
 
 GitHub Issue [#5](https://github.com/Utopia-V/repa/issues/5) 是产品主议题，当前设计语义与工程取舍见上面的项目文档。[#6](https://github.com/Utopia-V/repa/issues/6) 记录学习语境与通用工具接入，[#7](https://github.com/Utopia-V/repa/issues/7)、[#8](https://github.com/Utopia-V/repa/issues/8)、[#9](https://github.com/Utopia-V/repa/issues/9) 分别保留可视化、规划与知识整理的扩展想法；[#4](https://github.com/Utopia-V/repa/issues/4) 描述已有对话实现，早期规格 [#3](https://github.com/Utopia-V/repa/issues/3) 已退役。

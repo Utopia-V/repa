@@ -1,16 +1,14 @@
 import { Type, type Static, type TSchema } from "typebox";
+import { object, IdSchema as id, literals } from "./schema.js";
+import { contentMethods } from "./content/protocol.js";
+import { ContentChangeResultSchema } from "./content/schema.js";
+import { PromptSettingsSchema, SettingsGetParamsSchema, SettingsSetParamsSchema, SettingsResetParamsSchema, SettingsViewSchema, SettingScopeSchema } from "./configuration/schema.js";
+export * from "./content/schema.js";
+export * from "./configuration/schema.js";
+export { RepaFault } from "./errors.js";
 
 export const PROTOCOL_VERSION = 1;
-const object = <T extends Record<string, TSchema>>(properties: T) =>
-  Type.Object(properties, { additionalProperties: false });
-const id = Type.String({
-  minLength: 1,
-  maxLength: 128,
-  pattern: "^[a-zA-Z0-9_-]+$",
-});
 const text = Type.String();
-const literals = <const T extends string[]>(values: readonly [...T]) =>
-  Type.Enum(values);
 const key = { spaceId: id, sessionId: id };
 export const SessionKeySchema = object(key);
 export type SessionKey = Static<typeof SessionKeySchema>;
@@ -72,6 +70,7 @@ export const RunSchema = object({
     "idle",
   ]),
   createdAt: Type.Number(),
+  promptSettings: Type.Optional(PromptSettingsSchema),
   finishedAt: Type.Optional(Type.Number()),
   error: Type.Optional(ErrorSchema),
 });
@@ -105,7 +104,7 @@ export const NoticeSchema = object({
 });
 export type Notice = Static<typeof NoticeSchema>;
 
-export const SpaceSchema = object({ id, path: text });
+export const SpaceSchema = object({ id, path: text, contentRevision: Type.Optional(text) });
 export type Space = Static<typeof SpaceSchema>;
 export const SessionSchema = object({
   ...key,
@@ -148,6 +147,9 @@ export const ScopeSchema = Type.Union([
 ]);
 export type Scope = Static<typeof ScopeSchema>;
 export const ChangeSchema = Type.Union([
+  object({ type: Type.Literal("content"), spaceId: id, revision: text,
+    paths: Type.Array(text), result: Type.Optional(ContentChangeResultSchema) }),
+  object({ type: Type.Literal("settings"), scope: SettingScopeSchema, namespace: text }),
   object({ type: Type.Literal("lifecycle"), lifecycle: LifecycleSchema }),
   object({ type: Type.Literal("space"), space: SpaceSchema }),
   object({ type: Type.Literal("session"), session: SessionSchema }),
@@ -202,6 +204,10 @@ const method = <P extends TSchema, R extends TSchema>(
   result: R,
 ) => ({ params, result });
 export const methods = {
+  ...contentMethods,
+  "settings.get": method(SettingsGetParamsSchema, SettingsViewSchema),
+  "settings.set": method(SettingsSetParamsSchema, SettingsViewSchema),
+  "settings.reset": method(SettingsResetParamsSchema, SettingsViewSchema),
   initialize: method(
     object({ versions: Type.Array(Type.Integer()), token: text }),
     object({
@@ -256,12 +262,3 @@ export const protocolSchema = {
   methods,
   delivery: DeliverySchema,
 };
-
-export class RepaFault extends Error {
-  constructor(
-    readonly code: string,
-    message: string,
-  ) {
-    super(message);
-  }
-}

@@ -1,11 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
+import { isDeepStrictEqual } from "node:util";
 import type { Model } from "@earendil-works/pi-ai";
 import {
   createAgentSession,
   DefaultResourceLoader,
   getAgentDir,
+  loadProjectContextFiles,
   type AgentSession,
   type AgentSessionEvent,
   ModelRuntime,
@@ -22,14 +24,19 @@ import type {
   Run,
 } from "./protocol.js";
 import { RepaFault } from "./protocol.js";
-import { createSkillReadTool } from "./skill-read-tool.js";
+import {
+  assembleSystemPrompt,
+  contextSnapshot,
+  makeContextMessage,
+  projectContext,
+  type WorkingMessage,
+} from "./agent/context.js";
+import { createContentTools } from "./agent/tools.js";
+import { FileChanges } from "./agent/file-changes.js";
+import type { PromptSettings } from "./configuration/schema.js";
+import type { ContentStore } from "./content/store.js";
 
-export const REPA_BASE_PROMPT = [
-  "You are Repa, a general learning Agent.",
-  "Help the learner with the current request using available learning resources and trusted tools when useful.",
-  "Keep model knowledge distinct from material supplied by the learner.",
-  "Do not force a fixed teaching workflow.",
-].join("\n");
+export { DEFAULT_BASE_PROMPT as REPA_BASE_PROMPT } from "./configuration/schema.js";
 export interface PiModelOverride {
   modelRuntime: ModelRuntime;
   model: Model<any>;
@@ -45,6 +52,7 @@ export interface DialogOptions {
 export interface ConversationRuntime {
   send(
     text: string,
+    settings: PromptSettings,
   ): Promise<{ status: "completed" | "cancelled" | "failed"; error?: string }>;
   cancel(): Promise<void>;
   close(): Promise<void>;
@@ -72,6 +80,7 @@ export interface OpenPiHostOptions {
   trustExtensions: boolean;
   modelOverride?: PiModelOverride;
   resources: Resources;
+  content: ContentStore;
   onEvent: (event: HostEvent) => void;
   ask: (dialog: Dialog, options?: DialogOptions) => Promise<Reply>;
 }
@@ -80,6 +89,9 @@ export class PiConversationHost implements ConversationRuntime {
   readonly #session: AgentSession;
   readonly #settings: SettingsManager;
   readonly #options: OpenPiHostOptions;
+  readonly #loader: DefaultResourceLoader;
+  readonly #agentDir: string;
+  readonly #fileChanges: FileChanges;
   readonly #unsubscribe: () => void;
   #liveId: string | undefined;
   #lastResult: {
@@ -88,16 +100,56 @@ export class PiConversationHost implements ConversationRuntime {
   } = { status: "completed" };
   #closed = false;
   #cancelled = false;
+  #sending = false;
+  #runSettings: PromptSettings | undefined;
+  #runPrompt = "";
 
   private constructor(
     session: AgentSession,
     settings: SettingsManager,
     options: OpenPiHostOptions,
+    loader: DefaultResourceLoader,
+    agentDir: string,
+    fileChanges: FileChanges,
   ) {
     this.#session = session;
     this.#settings = settings;
     this.#options = options;
+    this.#loader = loader;
+    this.#agentDir = agentDir;
+    this.#fileChanges = fileChanges;
     this.#unsubscribe = session.subscribe((event) => this.#onEvent(event));
+    // Pi 在每轮结束后刷新后续配置；保持本次运行的提示与背景。
+    const prepare = session.agent.prepareNextTurnWithContext;
+    session.agent.prepareNextTurnWithContext = async (turn, signal) => {
+      const update = await prepare?.(turn, signal);
+      const context = update?.context ?? turn.context;
+      this.#projectWorkingState();
+      session.agent.state.systemPrompt = this.#runPrompt;
+      return {
+        ...update,
+        context: {
+          ...context,
+          systemPrompt: this.#runPrompt,
+          messages: this.#projectMessages(context.messages),
+        },
+      };
+    };
+    // transformContext 位于每一次模型调用之前，包括首轮；保留 Pi 的扩展处理。
+    const transform = session.agent.transformContext;
+    session.agent.transformContext = async (messages, signal) => {
+      const change = await this.#fileChanges.prepare(this.#runSettings?.fileChanges ?? "on-demand");
+      if (change) {
+        await session.sendCustomMessage({ customType: "repa.file-changes", content: change.text, details: change.details, display: false }, { triggerTurn: false });
+        const added = session.messages.at(-1)!;
+        // 同时加入循环持有的输入与实际历史，工具后续轮继续使用同一条消息。
+        if (!messages.includes(added)) messages.push(added);
+      }
+      this.#projectWorkingState();
+      const projected = this.#projectMessages(messages);
+      return this.#projectMessages(transform ? await transform(projected, signal) : projected);
+    };
+    session.agent.state.systemPrompt = this.#runPrompt;
   }
 
   static async open(options: OpenPiHostOptions): Promise<PiConversationHost> {
@@ -106,6 +158,7 @@ export class PiConversationHost implements ConversationRuntime {
     const settings = SettingsManager.create(options.learnerSpace, agentDir, {
       projectTrusted: options.trustExtensions,
     });
+    let host: PiConversationHost | undefined;
     const loader = new DefaultResourceLoader({
       cwd: options.learnerSpace,
       agentDir,
@@ -115,13 +168,33 @@ export class PiConversationHost implements ConversationRuntime {
       noPromptTemplates: !options.trustExtensions,
       noThemes: true,
       noContextFiles: true,
-      systemPrompt: REPA_BASE_PROMPT,
+      systemPrompt: "",
       appendSystemPrompt: [],
+      // Pi 将 inline factories 放在磁盘扩展之后，确保 Repa 的来源开关最后生效。
+      extensionFactories: [{
+        name: "repa-context",
+        factory(pi) {
+          pi.on("before_agent_start", () => ({ systemPrompt: host ? host.#runPrompt : "" }));
+          pi.on("context", (event) => {
+            if (host) host.#projectWorkingState();
+            return { messages: host ? host.#projectMessages(event.messages) : event.messages };
+          });
+          pi.on("session_before_compact", (event) => {
+            if (!host) return;
+            // Pi 的摘要调用不经过 context hook，同样排除已经关闭的自动来源。
+            event.preparation.messagesToSummarize = host.#projectMessages(event.preparation.messagesToSummarize);
+            event.preparation.turnPrefixMessages = host.#projectMessages(event.preparation.turnPrefixMessages);
+          });
+          pi.on("session_compact", () => { if (host) host.#projectWorkingState(); });
+          pi.on("session_tree", () => { if (host) host.#projectWorkingState(); });
+        },
+      }],
     });
     await loader.reload({
       resolveProjectTrust: async () => options.trustExtensions,
     });
-    const readTool = await createSkillReadTool(options.learnerSpace, loader);
+    const fileChanges = new FileChanges(options.content);
+    const tools = await createContentTools(options.learnerSpace, options.content, loader, fileChanges);
     const created = await createAgentSession({
       cwd: options.learnerSpace,
       agentDir,
@@ -131,9 +204,9 @@ export class PiConversationHost implements ConversationRuntime {
       sessionManager: options.sessionManager,
       settingsManager: settings,
       noTools: "builtin",
-      customTools: [readTool],
+      customTools: tools,
     });
-    const host = new PiConversationHost(created.session, settings, options);
+    host = new PiConversationHost(created.session, settings, options, loader, agentDir, fileChanges);
     try {
       await created.session.bindExtensions({
         mode: "rpc",
@@ -234,8 +307,11 @@ export class PiConversationHost implements ConversationRuntime {
 
   async send(
     text: string,
+    settings: PromptSettings,
   ): Promise<{ status: "completed" | "cancelled" | "failed"; error?: string }> {
     if (this.#closed) throw new Error("会话运行实例已关闭。");
+    if (this.#sending || !this.#session.isIdle)
+      throw new RepaFault("busy", "会话已有正在处理的运行。");
     if (!this.#session.model)
       throw new RepaFault(
         "configuration",
@@ -243,13 +319,52 @@ export class PiConversationHost implements ConversationRuntime {
       );
     this.#lastResult = { status: "completed" };
     this.#cancelled = false;
-    await this.#session.prompt(text, { expandPromptTemplates: true });
-    await this.#session.waitForIdle();
-    return this.#cancelled ? { status: "cancelled" } : this.#lastResult;
+    this.#sending = true;
+    try {
+      const selected = structuredClone(settings);
+      const view = selected.learningContext ? await this.#options.content.contextView() : undefined;
+      if (this.#cancelled || this.#closed) return { status: "cancelled" };
+      const contextFiles = selected.projectInstructions && this.#options.trustExtensions
+        ? loadProjectContextFiles({ cwd: this.#options.learnerSpace, agentDir: this.#agentDir })
+        : [];
+      this.#runSettings = selected;
+      this.#runPrompt = assembleSystemPrompt({
+        cwd: this.#options.learnerSpace,
+        contextFiles,
+        skills: this.#loader.getSkills().skills,
+        selectedTools: this.#session.getActiveToolNames(),
+      }, selected);
+      this.#session.agent.state.systemPrompt = this.#runPrompt;
+      // 新运行从当前真实分支重建，恢复关闭输入源时仅在工作视图中移除的消息。
+      this.#projectWorkingState(this.#options.sessionManager.buildSessionContext().messages);
+      if (view) {
+        const latest = this.#session.messages.findLast((message) => contextSnapshot(message) !== undefined);
+        if (!latest || !isDeepStrictEqual(contextSnapshot(latest), view)) {
+          const message = makeContextMessage(view) as Extract<WorkingMessage, { role: "custom" }>;
+          await this.#session.sendCustomMessage(message, { triggerTurn: false });
+        }
+      }
+      await this.#session.prompt(text, { expandPromptTemplates: true });
+      await this.#session.waitForIdle();
+      return this.#cancelled ? { status: "cancelled" } : this.#lastResult;
+    } finally {
+      this.#sending = false;
+    }
+  }
+
+  #projectMessages(messages: WorkingMessage[]): WorkingMessage[] {
+    const projected = projectContext(messages, this.#options.sessionManager, this.#runSettings?.learningContext ?? false);
+    return this.#runSettings?.fileChanges === "on-demand" || !this.#runSettings
+      ? projected.filter((message) => message.role !== "custom" || message.customType !== "repa.file-changes")
+      : projected;
+  }
+
+  #projectWorkingState(messages: WorkingMessage[] = this.#session.messages): void {
+    this.#session.agent.state.messages = this.#projectMessages(messages);
   }
 
   async cancel(): Promise<void> {
-    if (!this.#session.isIdle) this.#cancelled = true;
+    if (this.#sending || !this.#session.isIdle) this.#cancelled = true;
     await this.#session.abort();
   }
   async close(): Promise<void> {

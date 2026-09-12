@@ -17,7 +17,9 @@ import {
 } from "@earendil-works/pi-ai";
 import { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { ConnectionError, RepaClient, RpcError } from "../src/client.js";
-import { REPA_BASE_PROMPT } from "../src/pi-host.js";
+import { PiConversationHost, REPA_BASE_PROMPT } from "../src/pi-host.js";
+import { ConfigStore } from "../src/configuration/store.js";
+import { RepaFault } from "../src/errors.js";
 import {
   isTerminal,
   type Change,
@@ -264,7 +266,7 @@ test("公开协议支持两个客户端共享流式对话、受信任 prompt、s
     (context) => {
       assert.match(
         latest(context, "toolResult"),
-        /只允许访问当前已启用 skill/u,
+        /尚未允许读取这个空间外文件/u,
       );
       return fauxAssistantMessage("读取范围正确");
     },
@@ -338,7 +340,7 @@ test("未授权扩展保持禁用；只读查看与新建会话不启动 Pi", as
       );
       assert.deepEqual(
         context.tools?.map((x) => x.name),
-        ["read"],
+        ["read", "edit", "write", "apply_patch"],
       );
       return fauxAssistantMessage("普通输入");
     },
@@ -1156,4 +1158,102 @@ test("从历史消息建立分支不会替换正在等待回答的原会话运�
     value: "原会话的回答",
   });
   assert.equal((await f.finish(original.id)).status, "completed");
+});
+
+test("Agent 与编辑器共用实际保存和旧基准保护", async (t) => {
+  const f = await fixture(t, { trustExtensions: false });
+  const target = { kind: "file" as const, spaceId: f.space.id, location: { kind: "relative" as const, path: "notes.md" } };
+  await f.client.call("content.write", { target, operationId: randomUUID(), base: { kind: "absent" }, value: { kind: "text", text: "问题\n答案待补\n后记\n" } });
+  const opened = await f.client.readText(target);
+  f.faux.setResponses([
+    fauxAssistantMessage(fauxToolCall("edit", { path: "notes.md", edits: [{ oldText: "答案待补", newText: "答案已补" }] }), { stopReason: "toolUse" }),
+    fauxAssistantMessage("笔记已保存"),
+  ]);
+  const run = await f.send("补充答案");
+  assert.equal(run.status, "completed", run.error?.message);
+  assert.equal((await f.client.readText(target)).text, "问题\n答案已补\n后记\n");
+  await assert.rejects(f.client.call("content.write", { target, operationId: randomUUID(), base: opened.content.bodyRevision!, value: { kind: "text", text: opened.text + "旧草稿修改" } }),
+    (error: unknown) => error instanceof RpcError && (error.data as { code: string }).code === "revision_conflict");
+  const tools = f.state().sessions[0]!.messages.filter((entry) => entry.role === "tool");
+  const details = tools.at(-1)!.details as { operationId: string };
+  assert.equal((await f.client.call("operation.get", { spaceId: f.space.id, operationId: details.operationId })).status, "committed");
+});
+
+test("提示配置在受理时固定，重传原请求不重新解析默认值", async (t) => {
+  const config = await files(t);
+  const provider = await model(config.agentDir);
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  t.after(release);
+  const f = await fixture(t, { trustExtensions: false, modelOverride: async () => { await gate; return provider.override; } });
+  const scope = { kind: "session" as const, ...f.key };
+  const before = await f.client.call("settings.get", { scope, namespace: "prompts" });
+  const original = before.entries.find((entry) => entry.key === "base")!;
+  const settings = await f.client.call("settings.set", { scope, namespace: "prompts", key: "base", base: original.revision, value: "受理时提示" });
+  provider.faux.setResponses([(context) => {
+    assert.match(context.systemPrompt ?? "", /受理时提示/);
+    assert.doesNotMatch(context.systemPrompt ?? "", /后续提示/);
+    return fauxAssistantMessage("完成");
+  }]);
+  const params = { ...f.key, requestId: randomUUID(), text: "开始" };
+  const accepted = await f.client.call("run.submit", params);
+  assert.equal(accepted.promptSettings?.base, "受理时提示");
+  await f.client.call("settings.set", { scope, namespace: "prompts", key: "base", base: settings.entries.find((entry) => entry.key === "base")!.revision, value: "后续提示" });
+  assert.equal((await f.client.call("run.submit", params)).promptSettings?.base, "受理时提示");
+  release();
+  const result = await f.finish(accepted.id);
+  assert.equal(result.status, "completed", result.error?.message);
+  const journal = await readFile(path.join(f.directory, ".repa/runtime/runs.jsonl"), "utf8");
+  assert(journal.split("\n").filter(Boolean).every((line) => JSON.parse(line).request.promptSettings.base === "受理时提示"));
+});
+
+test("受理准备期间开始退出，不会在配置读取后启动新运行", async (t) => {
+  const f = await fixture(t, { trustExtensions: false });
+  const original = ConfigStore.prototype.prompts;
+  let release!: () => void, entered!: () => void;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  const waiting = new Promise<void>((resolve) => { entered = resolve; });
+  t.mock.method(ConfigStore.prototype, "prompts", async function(this: ConfigStore, scope: Parameters<typeof original>[0]) {
+    entered(); await gate; return original.call(this, scope);
+  });
+  const pending = f.server.application.submit({ ...f.key, text: "尚未受理", requestId: randomUUID() });
+  const rejected = assert.rejects(pending, (error: unknown) => error instanceof RepaFault && error.code === "shutting_down");
+  await waiting;
+  const closed = f.server.close("cancel");
+  release();
+  await rejected; await closed;
+  assert.equal(f.faux.state.callCount, 0);
+  assert.equal(f.server.application.getSession(f.key).runs.length, 0);
+});
+
+test("配置读取期间关闭会话，不在正在关闭的 Host 上受理新运行", async (t) => {
+  const f = await fixture(t, { trustExtensions: false });
+  f.faux.setResponses([fauxAssistantMessage("初始化完成")]);
+  assert.equal((await f.send("初始化")).status, "completed");
+  const originalSettings = ConfigStore.prototype.prompts;
+  const originalClose = PiConversationHost.prototype.close;
+  let releaseSettings!: () => void, settingsEntered!: () => void, releaseClose!: () => void, closeEntered!: () => void;
+  const settingsGate = new Promise<void>((resolve) => { releaseSettings = resolve; });
+  const settingsWaiting = new Promise<void>((resolve) => { settingsEntered = resolve; });
+  const closeGate = new Promise<void>((resolve) => { releaseClose = resolve; });
+  const closeWaiting = new Promise<void>((resolve) => { closeEntered = resolve; });
+  t.mock.method(ConfigStore.prototype, "prompts", async function(this: ConfigStore, scope: Parameters<typeof originalSettings>[0]) {
+    settingsEntered(); await settingsGate; return originalSettings.call(this, scope);
+  });
+  t.mock.method(PiConversationHost.prototype, "close", async function(this: PiConversationHost) {
+    closeEntered(); await closeGate; return originalClose.call(this);
+  });
+  const pending = f.server.application.submit({ ...f.key, text: "等待中的输入", requestId: randomUUID() });
+  const rejected = assert.rejects(pending, (error: unknown) => error instanceof RepaFault && error.code === "busy");
+  await settingsWaiting;
+  const closing = f.server.application.closeSession(f.key);
+  try {
+    await closeWaiting;
+    releaseSettings();
+    await rejected;
+  } finally {
+    releaseSettings(); releaseClose(); await closing;
+  }
+  assert.equal(f.faux.state.callCount, 1);
+  assert.equal(f.server.application.getSession(f.key).runs.length, 1);
 });

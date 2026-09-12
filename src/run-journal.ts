@@ -7,6 +7,7 @@ import {
 import { Type, type Static } from "typebox";
 import { Check } from "typebox/value";
 import { RepaFault } from "./protocol.js";
+import { PromptSettingsSchema } from "./configuration/schema.js";
 
 export const RUN_RECORD_FORMAT = "repa.run";
 export const RUN_RECORD_VERSION = 1;
@@ -26,6 +27,7 @@ const request = Type.Object(
     sessionId: id,
     text: Type.String(),
     createdAt: Type.Number(),
+    promptSettings: Type.Optional(PromptSettingsSchema),
   },
   { additionalProperties: false },
 );

@@ -9,6 +9,10 @@ import {
   type Result,
   type Scope,
   type Snapshot,
+  type ContentTarget,
+  type ContentInfo,
+  type ResourceRef,
+  ResourceRefSchema,
 } from "./protocol.js";
 import { applyChange } from "./state.js";
 
@@ -312,16 +316,38 @@ export class RepaClient {
       },
     };
   }
-  async resource(id: string): Promise<Response> {
+  async resource(ref: string | ResourceRef, range?: string): Promise<Response> {
     const url = new URL(
-      `/resources/${encodeURIComponent(id)}`,
+      typeof ref === "string" ? `/resources/${encodeURIComponent(ref)}`
+        : `/spaces/${encodeURIComponent(ref.spaceId)}/resources/${encodeURIComponent(ref.id)}`,
       this.#connection.url.replace(/^ws/, "http"),
     );
     const response = await fetch(url, {
-      headers: { Authorization: `Bearer ${this.#connection.token}` },
+      headers: { Authorization: `Bearer ${this.#connection.token}`, ...(range ? { Range: range } : {}) },
     });
     if (!response.ok) throw new RpcError(response.status, "无法读取资源。");
     return response;
+  }
+  /** 编辑器取得同一不可变修订的完整正文，避免把截断预览当作保存基准。 */
+  async readText(target: ContentTarget): Promise<{ content: ContentInfo; text: string }> {
+    const read = await this.call("content.read", { target });
+    if (read.text !== undefined && !read.truncated) return { content: read.content, text: read.text };
+    if (read.text === undefined && !read.truncated)
+      throw new RpcError(-32000, "该内容需要相应的二进制处理器。", { code: "unsupported_format" });
+    if (!read.resource) throw new RpcError(-32603, "缺少完整内容资源。");
+    const bytes = await (await this.resource(read.resource)).arrayBuffer();
+    return { content: read.content, text: new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes) };
+  }
+  async uploadResource(spaceId: string, bytes: Uint8Array, mediaType: string): Promise<ResourceRef> {
+    const url = new URL(`/spaces/${encodeURIComponent(spaceId)}/resources`, this.#connection.url.replace(/^ws/, "http"));
+    const response = await fetch(url, {
+      method: "POST", body: bytes as Uint8Array<ArrayBuffer>,
+      headers: { Authorization: `Bearer ${this.#connection.token}`, "Content-Type": mediaType },
+    });
+    if (!response.ok) throw new RpcError(response.status, "资源上传失败。");
+    const value: unknown = await response.json();
+    if (!Check(ResourceRefSchema, value)) throw new RpcError(-32603, "后端返回的资源不符合协议。");
+    return value;
   }
   async reconnect(): Promise<void> {
     if (this.#closed) throw new ConnectionError("客户端已关闭。");

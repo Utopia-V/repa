@@ -14,6 +14,7 @@ import {
   type RecordedRun,
 } from "./run-journal.js";
 import { isTerminal, RepaFault, type Run, type Space } from "./protocol.js";
+import { managedDirectory } from "./storage/managed-directory.js";
 
 function currentRun(record: RecordedRun): Run {
   return {
@@ -35,6 +36,7 @@ function recordedRun(run: Run): RecordedRun {
       sessionId: run.sessionId,
       text: run.text,
       createdAt: run.createdAt,
+      ...(run.promptSettings ? { promptSettings: run.promptSettings } : {}),
     },
   };
   switch (run.status) {
@@ -69,8 +71,7 @@ export class RuntimeStore {
   constructor(directory: string, onCompromised: (error: Error) => void) {
     mkdirSync(directory, { recursive: true });
     directory = realpathSync(directory);
-    this.#directory = path.join(directory, ".repa", "runtime");
-    mkdirSync(this.#directory, { recursive: true });
+    this.#directory = managedDirectory(directory, "runtime");
     try {
       this.#unlock = lockfile.lockSync(this.#directory, {
         lockfilePath: path.join(this.#directory, "owner.lock"),

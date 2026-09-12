@@ -8,6 +8,12 @@ export function contains(scope: Scope, key: Partial<SessionKey>): boolean {
 }
 
 export function relevant(scope: Scope, change: Change): boolean {
+  if (change.type === "settings") {
+    if (change.scope.kind === "application") return true;
+    if (change.scope.kind === "space") return !("spaceId" in scope) || scope.spaceId === change.scope.spaceId;
+    return contains(scope, change.scope);
+  }
+  if (change.type === "content") return !("spaceId" in scope) || scope.spaceId === change.spaceId;
   if (change.type === "lifecycle") return true;
   if (change.type === "space")
     return !("spaceId" in scope) || scope.spaceId === change.space.id;
@@ -24,6 +30,12 @@ function upsert<T>(items: T[], item: T, matches: (item: T) => boolean): void {
 
 /** Applies the public changes in place; callers choose when to copy or render their state. */
 export function applyChange(state: Snapshot, change: Change): void {
+  if (change.type === "settings") return;
+  if (change.type === "content") {
+    const space = state.spaces.find((entry) => entry.id === change.spaceId);
+    if (space) space.contentRevision = change.revision;
+    return;
+  }
   if (change.type === "lifecycle") {
     state.lifecycle = change.lifecycle;
     return;

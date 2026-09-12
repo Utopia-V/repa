@@ -1,6 +1,15 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, realpath } from "node:fs/promises";
+import { watch, type FSWatcher } from "node:fs";
+import os from "node:os";
 import path from "node:path";
+import { ConfigStore } from "./configuration/store.js";
+import type { SettingScope } from "./configuration/schema.js";
+import { ContentStore } from "./content/store.js";
+import { ContentAccessStore } from "./content/access.js";
+import type { ContentMethod } from "./content/protocol.js";
+import type { ContentChangeResult, ContentTarget } from "./content/schema.js";
+import { SerialQueue } from "./storage/atomic.js";
 import { Resources } from "./messages.js";
 import { PiSessionStore, type StoredSession } from "./pi-sessions.js";
 import {
@@ -31,6 +40,7 @@ import { applyChange, contains, relevant } from "./state.js";
 
 export interface ApplicationOptions {
   agentDir?: string;
+  appDirectory?: string;
   trustExtensions?: boolean;
   eventBufferSize?: number;
   exitWhenDetached?: boolean;
@@ -46,6 +56,9 @@ interface ActiveRun {
 interface SpaceRecord {
   store: RuntimeStore;
   sessions: PiSessionStore;
+  content: ContentStore;
+  watcher?: FSWatcher;
+  watchTimer?: ReturnType<typeof setTimeout>;
 }
 interface SessionRecord {
   store: RuntimeStore;
@@ -67,6 +80,9 @@ export class RepaApplication {
   readonly resources = new Resources();
   readonly closed: Promise<void>;
   readonly #options: ApplicationOptions;
+  readonly #configuration: ConfigStore;
+  readonly #access: Promise<ContentAccessStore>;
+  readonly #admission = new SerialQueue();
   readonly #state: Snapshot = {
     lifecycle: "running",
     spaces: [],
@@ -83,6 +99,7 @@ export class RepaApplication {
   readonly #log: { sequence: number; change: Change }[] = [];
   readonly #clients = new Set<string>();
   #sequence = 0;
+  #activities = 0;
   #explicitShutdown = false;
   #finishing = false;
   #resolveClosed!: () => void;
@@ -96,6 +113,11 @@ export class RepaApplication {
     )
       throw new Error("事件缓存大小必须为正整数。");
     this.#options = options;
+    const appDirectory = path.resolve(options.appDirectory ?? options.agentDir ?? path.join(process.env.XDG_CONFIG_HOME ?? path.join(os.homedir(), ".config"), "repa"));
+    this.#configuration = new ConfigStore({ appDirectory, resolveSpace: (id) => this.#store(id).space.path });
+    this.#access = ContentAccessStore.open(appDirectory);
+    // 保留初始化错误供实际内容访问报告，避免尚未打开空间时产生未处理拒绝。
+    void this.#access.catch(() => {});
     this.closed = new Promise((resolve, reject) => {
       this.#resolveClosed = resolve;
       this.#rejectClosed = reject;
@@ -154,9 +176,18 @@ export class RepaApplication {
         );
       const sessions = new PiSessionStore(store.space.path, this.resources);
       const existing = await sessions.list();
+      const access = await this.#access;
+      const content = await ContentStore.open({
+        spaceId: store.space.id, root: store.space.path,
+        assertOwned: () => store.assertOwned(),
+        canReadExternal: (file) => access.canRead(store.space.id, file),
+        onChange: (result) => this.#contentChanged(store.space.id, result.changes.map((entry) => entry.path), result),
+      });
       this.#assertAccepting();
-      this.#spaces.set(store.space.id, { store, sessions });
+      const record: SpaceRecord = { store, sessions, content };
+      this.#spaces.set(store.space.id, record);
       this.#emit({ type: "space", space: store.space });
+      this.#watchContent(record);
       for (const session of existing) this.#register(store, session);
       return structuredClone(store.space);
     } catch (error) {
@@ -166,6 +197,116 @@ export class RepaApplication {
   }
   listSpaces(): Space[] {
     return structuredClone(this.#state.spaces);
+  }
+
+  #contentChanged(spaceId: string, paths: string[], result?: ContentChangeResult): void {
+    this.#emit({ type: "content", spaceId, revision: randomUUID(), paths, ...(result ? { result } : {}) });
+  }
+  #watchContent(record: SpaceRecord): void {
+    const changed = new Set<string>();
+    try {
+      record.watcher = watch(record.store.space.path, { recursive: true }, (_event, file) => {
+        const relative = file?.toString().split(path.sep).join("/") ?? ".";
+        if (relative.split("/")[0] === ".repa" || /(^|\/)\.repa-.*\.tmp$/.test(relative)) return;
+        changed.add(relative);
+        if (record.watchTimer) return;
+        record.watchTimer = setTimeout(() => {
+          record.watchTimer = undefined;
+          const paths = [...changed]; changed.clear();
+          // 文件系统通知只是失效提示；共同操作完成以后才交给前端查询。
+          void record.content.queue.run(async () => {
+            if (!this.#finishing) this.#contentChanged(record.store.space.id, paths);
+          }).catch(() => {});
+        }, 30);
+        record.watchTimer.unref();
+      });
+      record.watcher.on("error", () => {
+        // 无法确定遗漏范围时，让空间视图整体失效。
+        this.#contentChanged(record.store.space.id, ["."]);
+      });
+    } catch { this.#contentChanged(record.store.space.id, ["."]); }
+  }
+
+  async #activity<T>(action: () => Promise<T>, mutation = true): Promise<T> {
+    if (mutation) this.#assertAccepting();
+    else if (this.#finishing) throw new RepaFault("closed", "后端已经退出。");
+    this.#activities++;
+    try { return await action(); }
+    finally { this.#activities--; this.#finishIfReady(); }
+  }
+
+  /** 所有公开内容调用在应用生命周期内执行，存储规则仍由 ContentStore 持有。 */
+  contentCall(method: ContentMethod, params: Params<ContentMethod>): Promise<unknown> {
+    const input = structuredClone(params);
+    const p = <M extends ContentMethod>() => input as Params<M>;
+    const targetSpace = (target: ContentTarget) => target.kind === "content" ? target.ref.spaceId : target.spaceId;
+    const spaceId = "spaceId" in input ? input.spaceId : "ref" in input ? input.ref.spaceId : targetSpace(input.target);
+    const mutation = !["content.list", "content.get", "content.read", "operation.get", "context.get", "context.preview"].includes(method);
+    return this.#activity(async () => {
+      const record = this.#spaces.get(spaceId);
+      if (!record) throw new RepaFault("not_found", "学习空间尚未打开。");
+      const content = record.content;
+      switch (method) {
+        case "content.list": return content.list(p<"content.list">());
+        case "content.get": return content.get(p<"content.get">().target);
+        case "content.read": return content.read(p<"content.read">());
+        case "content.write": return content.write(p<"content.write">());
+        case "content.edit": return content.edit(p<"content.edit">());
+        case "content.applyPatch": return content.applyPatch(p<"content.applyPatch">());
+        case "content.associate": {
+          const value = p<"content.associate">();
+          return content.associate(value, async (file) => (await this.#access).grant(spaceId, file));
+        }
+        case "content.relink": {
+          const value = p<"content.relink">();
+          return content.relink(value, async (file) => (await this.#access).grant(spaceId, file));
+        }
+        case "content.remove": return content.remove(p<"content.remove">());
+        case "content.setComposition": return content.setComposition(p<"content.setComposition">());
+        case "operation.get": return content.operation(p<"operation.get">().operationId);
+        case "operation.undo": return content.undo(p<"operation.undo">());
+        case "operation.reconcile": {
+          const result = await content.reconcile(p<"operation.reconcile">().operationId);
+          this.#contentChanged(spaceId, ["."]);
+          return result;
+        }
+        case "context.get": return content.context();
+        case "context.set": return content.setContext(p<"context.set">());
+        case "context.preview": return content.contextView();
+      }
+    }, mutation);
+  }
+  #checkScope(scope: SettingScope): void {
+    if (scope.kind !== "application") this.#store(scope.spaceId).assertOwned();
+    if (scope.kind === "session") this.#record(scope);
+  }
+  settingsCall(method: "settings.get" | "settings.set" | "settings.reset", params: Params<"settings.get" | "settings.set" | "settings.reset">): Promise<unknown> {
+    const input = structuredClone(params);
+    return this.#activity(async () => {
+      this.#checkScope(input.scope);
+      if (method === "settings.get") return this.#configuration.get(input.scope, input.namespace);
+      const view = method === "settings.set"
+        ? await this.#configuration.set(input as Params<"settings.set">)
+        : await this.#configuration.reset(input as Params<"settings.reset">);
+      this.#emit({ type: "settings", scope: input.scope, namespace: input.namespace });
+      return view;
+    }, method !== "settings.get");
+  }
+  contentResource(spaceId: string, id: string): Promise<Buffer> {
+    return this.#activity(async () => {
+      const record = this.#spaces.get(spaceId);
+      if (!record) throw new RepaFault("not_found", "学习空间尚未打开。");
+      return record.content.blobs.get(id);
+    }, false);
+  }
+  uploadResource(spaceId: string, bytes: Uint8Array, mediaType: string): Promise<import("./content/schema.js").ResourceRef> {
+    return this.#activity(async () => {
+      const record = this.#spaces.get(spaceId);
+      if (!record) throw new RepaFault("not_found", "学习空间尚未打开。");
+      record.store.assertOwned();
+      const id = await record.content.blobs.put(bytes);
+      return { spaceId, id, mediaType };
+    });
   }
 
   #store(id: string): RuntimeStore {
@@ -274,7 +415,11 @@ export class RepaApplication {
     );
   }
 
-  submit(params: Params<"run.submit">): Run {
+  submit(params: Params<"run.submit">): Promise<Run> {
+    const input = structuredClone(params);
+    return this.#activity(() => this.#admission.run(() => this.#submit(input)), false);
+  }
+  async #submit(params: Params<"run.submit">): Promise<Run> {
     const store = this.#store(params.spaceId);
     const old = store.runs.get(params.requestId);
     if (old) {
@@ -291,6 +436,11 @@ export class RepaApplication {
     const record = this.#record(params);
     if (record.active || record.closing)
       throw new RepaFault("busy", "该会话仍有任务正在运行或关闭。");
+    const promptSettings = await this.#configuration.prompts({ kind: "session", spaceId: params.spaceId, sessionId: params.sessionId });
+    this.#assertAccepting();
+    store.assertOwned();
+    if (record.active || record.closing)
+      throw new RepaFault("busy", "该会话仍有任务正在运行或关闭。");
     const run: Run = {
       id: params.requestId,
       spaceId: params.spaceId,
@@ -299,6 +449,7 @@ export class RepaApplication {
       status: "accepted",
       phase: "preparing",
       createdAt: Date.now(),
+      promptSettings,
     };
     store.saveRun(run);
     record.view.updatedAt = run.createdAt;
@@ -363,7 +514,7 @@ export class RepaApplication {
           this.#emit({ type: "session", session: record.view });
         }
         if (!active.controller.signal.aborted) {
-          const outcome = await record.host.send(active.run.text);
+          const outcome = await record.host.send(active.run.text, active.run.promptSettings!);
           result = {
             status: outcome.status,
             ...(outcome.error
@@ -417,6 +568,7 @@ export class RepaApplication {
           )
         : this.#options.modelOverride;
     return record.session.openRuntime({
+      content: this.#spaces.get(record.store.space.id)!.content,
       agentDir: this.#options.agentDir,
       trustExtensions: this.#options.trustExtensions ?? false,
       modelOverride,
@@ -646,6 +798,7 @@ export class RepaApplication {
       this.#state.lifecycle === "running" ||
       this.#state.lifecycle === "stopped" ||
       this.#openingSpaces.size ||
+      this.#activities ||
       [...this.#sessions.values()].some((x) => x.active)
     )
       return;
@@ -660,8 +813,11 @@ export class RepaApplication {
           this.#notice(record, "shutdown", String(error));
         }
       }
-      for (const { store } of this.#spaces.values()) {
+      for (const { store, content, watcher, watchTimer } of this.#spaces.values()) {
         try {
+          clearTimeout(watchTimer);
+          watcher?.close();
+          await content.settled();
           store.release();
         } catch (error) {
           errors.push(error);

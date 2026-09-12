@@ -3,6 +3,7 @@ import { createServer } from "node:http";
 import { WebSocket, WebSocketServer } from "ws";
 import { Check } from "typebox/value";
 import { RepaApplication, type ApplicationOptions } from "./application.js";
+import { contentMethods, type ContentMethod } from "./content/protocol.js";
 import {
   methods,
   PROTOCOL_VERSION,
@@ -53,13 +54,14 @@ export async function startRepaServer(
     typeof candidate === "string" &&
     Buffer.byteLength(candidate) === Buffer.byteLength(token) &&
     timingSafeEqual(Buffer.from(candidate), Buffer.from(token));
-  const http = createServer((request, response) => {
+  const http = createServer((request, response) => { void (async () => {
     response.setHeader("Access-Control-Allow-Origin", "*");
     response.setHeader(
       "Access-Control-Allow-Headers",
-      "Authorization, Content-Type",
+      "Authorization, Content-Type, Range",
     );
-    response.setHeader("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
+    response.setHeader("Access-Control-Allow-Methods", "GET, HEAD, POST, OPTIONS");
+    response.setHeader("Access-Control-Expose-Headers", "Content-Length, Content-Range, Accept-Ranges");
     response.setHeader("Cache-Control", "no-store");
     response.setHeader("X-Content-Type-Options", "nosniff");
     if (request.method === "OPTIONS") {
@@ -73,6 +75,20 @@ export async function startRepaServer(
       response.writeHead(401).end();
       return;
     }
+    const uploadSpace = /^\/spaces\/([a-zA-Z0-9_-]+)\/resources$/.exec(request.url ?? "")?.[1];
+    if (request.method === "POST" && uploadSpace) {
+      const chunks: Buffer[] = [];
+      let size = 0;
+      for await (const chunk of request) {
+        size += chunk.length;
+        if (size > 64 * 1024 * 1024) { response.writeHead(413).end(); return; }
+        chunks.push(Buffer.from(chunk));
+      }
+      const resource = await application.uploadResource(uploadSpace, Buffer.concat(chunks), request.headers["content-type"] ?? "application/octet-stream");
+      response.setHeader("Content-Type", "application/json");
+      response.end(JSON.stringify(resource));
+      return;
+    }
     if (request.method !== "GET" && request.method !== "HEAD") {
       response.writeHead(405).end();
       return;
@@ -82,6 +98,30 @@ export async function startRepaServer(
       response.end(
         request.method === "HEAD" ? undefined : JSON.stringify(protocolSchema),
       );
+      return;
+    }
+    const contentResource = /^\/spaces\/([a-zA-Z0-9_-]+)\/resources\/([a-f0-9]{64})$/.exec(request.url ?? "");
+    if (contentResource) {
+      const bytes = await application.contentResource(contentResource[1]!, contentResource[2]!);
+      response.setHeader("Content-Type", "application/octet-stream");
+      response.setHeader("Content-Disposition", "attachment");
+      response.setHeader("Accept-Ranges", "bytes");
+      let start = 0, end = bytes.length - 1;
+      if (request.headers.range) {
+        const range = /^bytes=(\d*)-(\d*)$/.exec(request.headers.range);
+        if (!range || (!range[1] && !range[2])) { response.writeHead(416, { "Content-Range": `bytes */${bytes.length}` }).end(); return; }
+        if (range[1]) {
+          start = Number(range[1]);
+          if (range[2]) end = Math.min(end, Number(range[2]));
+        } else start = Math.max(0, bytes.length - Number(range[2]));
+        if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start > end || start >= bytes.length) {
+          response.writeHead(416, { "Content-Range": `bytes */${bytes.length}` }).end(); return;
+        }
+        response.statusCode = 206;
+        response.setHeader("Content-Range", `bytes ${start}-${end}/${bytes.length}`);
+      }
+      response.setHeader("Content-Length", Math.max(0, end - start + 1));
+      response.end(request.method === "HEAD" ? undefined : bytes.subarray(start, end + 1));
       return;
     }
     const resourceId = /^\/resources\/([a-f0-9]{64})$/.exec(
@@ -98,7 +138,11 @@ export async function startRepaServer(
     response.setHeader("Content-Disposition", "attachment");
     response.setHeader("Content-Length", resource.data.length);
     response.end(request.method === "HEAD" ? undefined : resource.data);
-  });
+  })().catch((error: unknown) => {
+    if (response.headersSent) { response.destroy(); return; }
+    response.writeHead(error instanceof RepaFault ? 400 : 500, { "Content-Type": "application/json" });
+    response.end(JSON.stringify({ code: error instanceof RepaFault ? error.code : "storage", message: error instanceof Error ? error.message : String(error) }));
+  }); });
   const websocket = new WebSocketServer({
     noServer: true,
     maxPayload: 8 * 1024 * 1024,
@@ -173,7 +217,11 @@ export async function startRepaServer(
       params: unknown,
     ): Promise<unknown> => {
       const p = <M extends Method>() => params as Params<M>;
+      if (Object.hasOwn(contentMethods, method)) return application.contentCall(method as ContentMethod, p<ContentMethod>());
       switch (method) {
+        case "settings.get":
+        case "settings.set":
+        case "settings.reset": return application.settingsCall(method, p<typeof method>());
         case "initialize": {
           const input = p<"initialize">();
           if (!authorized(input.token))
@@ -198,6 +246,9 @@ export async function startRepaServer(
               "resources",
               "interactions",
               "shutdown",
+              "content",
+              "learning-context",
+              "prompt-settings",
             ],
           };
         }
@@ -303,7 +354,7 @@ export async function startRepaServer(
           error instanceof RpcFault
             ? error
             : error instanceof RepaFault
-              ? new RpcFault(-32000, error.message, { code: error.code })
+              ? new RpcFault(-32000, error.message, { code: error.code, ...(error.details === undefined ? {} : { details: error.details }) })
               : new RpcFault(
                   -32603,
                   error instanceof Error ? error.message : "Internal error",
