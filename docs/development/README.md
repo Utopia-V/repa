@@ -4,6 +4,8 @@
 
 公开方法以当前提交的 [protocol.ts](../../src/protocol.ts) 及其导入的 schema 为准。协议仍为 v1，联调时固定双方使用的源码或构建提交。
 
+模块任务及其依赖关系见[实施入口 #5](https://github.com/Utopia-V/repa/issues/5)。能力的数据库接入尚待实现，领域与生命周期约定见[ADR 0003：能力数据与数据库](../adr/0003-share-file-based-content-operations.md#能力数据与数据库)；这类业务记录按其自身数据服务维护。
+
 ## 从哪里开始
 
 | 工作 | 入口与责任 |
