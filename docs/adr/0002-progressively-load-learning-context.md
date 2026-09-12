@@ -6,13 +6,15 @@
 
 每个学习空间关联一份可编辑学习语境。简单空间可以直接关联一份文档，需要组合多份内容时，以小的结构化清单保存成员引用、顺序和必要分组，正文继续属于各自的文档。学习语境拥有自身的表示、组织及视图生成语义，按需要复用[共同的内容操作](0003-share-file-based-content-operations.md)；用户和 Agent 能够编辑与重组实际持久内容。学习语境视图是按这些规则生成、供模型使用的内容表示；前端预览组件可以读取同一结果，生成规则继续由语境模块持有。内部适配层消费生成的视图，不依赖一个固定语境文件。
 
+自动注入默认启用，并可按[提示配置](0001-embed-pi-through-node-sdk.md#提示内容与自动注入)关闭。关闭保留文档、绑定和独立预览能力，普通工具仍可按需读取；下述入口快照和压缩后回填规则适用于启用该输入源的运行。关闭时，当前模型工作视图排除可识别的该来源自动注入项，不主动补回旧快照；原始会话记录以及已进入其他消息或摘要的信息不追溯改写。重新启用时取得空间当前视图。
+
 组成成员支持展开与引用两种方式。展开将所选文档的当前正文或明确选择的模型可读表示放入语境视图，引用提供标题、内容引用和可选说明，供 Agent 按当前任务继续读取。多文件及其他格式的内容按显式选择的成员或相应能力提供的确定表示展开，其来源与所用修订随视图保留。普通文档链接保留为引用，视图生成只展开明确选择的内容，不沿普通链接或资源依赖递归读取整个空间。改变成员的使用方式不复制正文，移除成员只改变组成关系。前端可以展示按当前内容生成的语境视图并标明来源。
 
 语境组装通过共同内容模块取得所需组成、正文与修订，对经 Repa 协调的变更，在完整提交边界观察需要共同读取的内容。发现外部变化且无法确认所用输入，或读取失败时，按准备错误处理，避免将部分更新拼接成一次完整语境。
 
 ## 请求与快照
 
-每次新运行开始处理请求时，Repa 从空间取得当前语境视图；排队时只保留请求，不提前固定学习语境。稳定的产品指令和工具定义保持稳定；语境更新通过 Pi 的自定义消息机制追加到会话后段，不回写此前的输入前缀。消息保存一次完整视图，带有足以解释来源与所用修订的信息。相比持续改写前部 system prompt，这种安排能保留更多已发送历史作为可复用前缀；实际缓存行为依 provider 和模型而异，参见 [OpenAI Prompt Caching](https://developers.openai.com/api/docs/guides/prompt-caching) 与 [Anthropic Prompt Caching](https://platform.claude.com/docs/en/build-with-claude/prompt-caching)。
+启用自动注入时，每次新运行开始处理请求，Repa 都从空间取得当前语境视图；排队时只保留请求，不提前固定学习语境。所选的基础指令和工具定义保持稳定；语境更新通过 Pi 的自定义消息机制追加到会话后段，不回写此前的输入前缀。消息保存一次完整视图，带有足以解释来源与所用修订的信息。相比持续改写前部 system prompt，这种安排能保留更多已发送历史作为可复用前缀；实际缓存行为依 provider 和模型而异，参见 [OpenAI Prompt Caching](https://developers.openai.com/api/docs/guides/prompt-caching) 与 [Anthropic Prompt Caching](https://platform.claude.com/docs/en/build-with-claude/prompt-caching)。
 
 同一运行的内部步骤和 steer 沿用入口背景，不在每轮工具执行或补充输入后重新组装或重复注入语境。运行中的工具仍可读取空间当前内容，后续请求再取得新的语境视图。
 
@@ -24,7 +26,7 @@
 
 提示或差异在下一次实际模型调用前合并提供，保存本身不启动 Agent，也不逐次追加编辑器输入。可用基准来自该会话实际得到的读取结果或表示，复用已有修订和差异记录；仅知道片段、缺少旧版本或差异不适合直接提供时，保留提示与按需读取。Agent 已在工具结果中得到的变化不重复追加，不为此全量扫描空间或另建全局阅读状态数据库。
 
-文件变化通知仍可独立用于界面刷新。Codex 的[公开文件系统接口](https://learn.chatgpt.com/docs/app-server#filesystem)将读写与客户端变化通知分开；固定提交的[读写处理](https://github.com/openai/codex/blob/3d2ee51ca2d5db578f328aa75e20aa22c0197c9a/codex-rs/app-server/src/request_processors/fs_processor.rs)与[变化通知](https://github.com/openai/codex/blob/3d2ee51ca2d5db578f328aa75e20aa22c0197c9a/codex-rs/app-server/src/fs_watch.rs)提供了相应参考。上述来源不作为桌面前端自动向模型注入文件差异的承诺。明确关联为学习语境的内容继续按本记录的入口快照规则处理。
+文件变化通知仍可独立用于界面刷新。Codex 的[公开文件系统接口](https://learn.chatgpt.com/docs/app-server#filesystem)将读写与客户端变化通知分开；固定提交的[读写处理](https://github.com/openai/codex/blob/3d2ee51ca2d5db578f328aa75e20aa22c0197c9a/codex-rs/app-server/src/request_processors/fs_processor.rs)与[变化通知](https://github.com/openai/codex/blob/3d2ee51ca2d5db578f328aa75e20aa22c0197c9a/codex-rs/app-server/src/fs_watch.rs)提供了相应参考。上述来源不作为桌面前端自动向模型注入文件差异的承诺。启用学习语境自动注入时，相关内容继续按本记录的入口快照规则处理。
 
 ## 压缩与恢复
 

@@ -1,6 +1,6 @@
 # Pi 生态对 Repa 的可复用性调查
 
-第 1–8 节的调查基准是 `earendil-works/pi` 的固定提交 [`8fa7eebd235355522c8104166b4f1f959b4e2f10`](https://github.com/earendil-works/pi/tree/8fa7eebd235355522c8104166b4f1f959b4e2f10)，相应 GitHub 链接均固定到该提交。第 9–10 节补充本仓库锁定依赖 `@earendil-works/pi-coding-agent@0.84.3` 的局部核验，第 10 节另以固定版本的 Codex 编辑实现作比较。本记录为 Pi 嵌入决策和后续 integration prototype 提供事实依据；升级相关依赖时，应重新核对其中受影响的结论。
+第 1–8 节的调查基准是 `earendil-works/pi` 的固定提交 [`8fa7eebd235355522c8104166b4f1f959b4e2f10`](https://github.com/earendil-works/pi/tree/8fa7eebd235355522c8104166b4f1f959b4e2f10)，相应 GitHub 链接均固定到该提交。第 9–11 节补充本仓库锁定依赖 `@earendil-works/pi-coding-agent@0.84.3` 的局部核验，第 10 节另以固定版本的 Codex 编辑实现作比较。本记录为 Pi 嵌入决策和后续 integration prototype 提供事实依据；升级相关依赖时，应重新核对其中受影响的结论。
 
 ## 结论摘要
 
@@ -123,3 +123,12 @@ Codex 对比基准为固定提交 [`3d2ee51ca2d5db578f328aa75e20aa22c0197c9a`](h
 - 该版本 [`ApplyPatchOptions` 的默认模式](https://github.com/openai/codex/blob/3d2ee51ca2d5db578f328aa75e20aa22c0197c9a/codex-rs/apply-patch/src/lib.rs#L62-L95) 是 `NormalizeToLf`；保留换行的路径仍沿用补齐末尾换行的约定。补丁按行替换，与 Repa 的局部文本替换粒度也有区别。
 
 可借鉴的机制是将定位时的宽松比较与实际修改分开，并从原内容保留未修改部分。采用范围仍以 Repa 的正文、冲突及恢复契约为准；有针对性地补足或替换不匹配的行为，其他适用工具和运行能力继续复用。
+
+## 11. Pi 0.84.3 的提示装配入口与边界
+
+本节核对锁定依赖的 `dist/core/resource-loader.d.ts`、`system-prompt.js`、`agent-session.js`、`extensions/types.d.ts`、`extensions/runner.js` 与 `compaction/compaction.js`，属于类型与源码核验，未调用模型。
+
+- `DefaultResourceLoader` 提供 `systemPrompt`、`appendSystemPrompt`、`noContextFiles`、`noSkills` 及相应资源覆盖入口。项目文件可以通过 `agentsFilesOverride` 选择，Skill、prompt 等资源沿用原有加载与过滤。
+- `buildSystemPrompt` 使用 `if (customPrompt)` 区分自定义与默认分支，所以空字符串不表示完全禁用。非空自定义提示后仍可能追加项目说明、Skill 清单和当前工作目录；只替换基础文本不能证明最终输入已经完全受控。
+- `before_agent_start` 接收已组装的系统提示和构造选项，并可返回替换后的 `systemPrompt`。runner 和 session 使用 `!== undefined` 判断该返回值，因此这个入口能表达显式空内容；多个扩展会链式处理，接入时仍需核对贡献顺序和最终结果。工具文字指导由 `promptSnippet`、`promptGuidelines` 等工具定义字段提供。
+- 默认压缩生成器将 `customInstructions` 追加到既有模板，内部另有摘要系统提示；它不等于完整模板替换。`session_before_compact` 可接管摘要结果，`session_before_tree` 提供摘要及指令替换入口。Repa 需要完全控制辅助调用的提示时，应在这些生命周期边界选择适配方式，继续复用准备数据、计量、记录与恢复机制。
