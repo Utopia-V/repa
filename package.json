@@ -7,12 +7,13 @@
   },
   "workspaces": [
     "packages/*",
-    "apps/web"
+    "apps/*"
   ],
   "scripts": {
     "build": "npm run build --workspaces --if-present",
     "check": "npm run check --workspaces --if-present",
     "dev:backend": "npm --workspace=repa run start --",
+    "dev:desktop": "npm run dev --workspace=@repa/desktop",
     "dev:web": "npm run dev --workspace=@repa/web",
     "precheck": "npm run build --workspace=repa",
     "pretest": "npm run build --workspace=repa",
