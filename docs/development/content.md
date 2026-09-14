@@ -40,7 +40,7 @@ const result = await client.call("content.write", {
 
 断线或超时后保留 `operationId`，通过 `operation.get` 核对。相同操作的重传返回原结果，修改参数须使用新标识。保存回执只确认本次实际提交的草稿版本；后续本地输入和外部修改由草稿服务继续处理。文件保存不会启动模型。
 
-当前内容方法还包括 `content.list/get/read/edit/applyPatch/associate/relink/remove/setComposition`，以及 `operation.get/undo/reconcile`、`context.get/set/preview`。参数、返回值和运行时校验来自 [内容协议](../../src/content/protocol.ts)。移动可以通过补丁表达；独立复制、材料收集、检索与格式转换接口尚未接入。
+当前内容方法还包括 `content.list/get/read/edit/applyPatch/associate/relink/remove/setComposition`，以及 `operation.get/undo/reconcile`、`context.get/set/preview`。参数、返回值和运行时校验来自 [内容协议](../../packages/repa/src/content/protocol.ts)。移动可以通过补丁表达；独立复制、材料收集、检索与格式转换接口尚未接入。
 
 ## 持久数据与可见结果
 

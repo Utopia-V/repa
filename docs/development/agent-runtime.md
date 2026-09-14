@@ -19,7 +19,7 @@
 
 应用配置目录优先使用 `ApplicationOptions.appDirectory`，其次使用显式 `agentDir`，否则使用 `$XDG_CONFIG_HOME/repa` 或 `~/.config/repa`。Repa 的应用提示覆盖保存在其中的 `repa-settings.json`，外部材料授权保存在 `repa-content-access.json`；Pi 的模型、认证及自身设置继续使用 Pi 配置入口。空间和会话覆盖保存在空间内的 `.repa/settings.json`。
 
-提示由 [assembleSystemPrompt](../../src/agent/context.ts) 装配。Host 使用最后的 Pi inline extension 确定运行入口提示，并在公开 `prepareNextTurnWithContext` 接口中保持后续轮的提示。该接口实际在一轮结束后执行；需要紧邻每一次模型调用的文件变化检查放在公开 `transformContext` 中，并保留 Pi 自身的扩展处理。这样显式空提示不会重新落回 Pi 的默认 coding prompt，工具后续轮也不会重新开启已关闭来源。
+提示由 [assembleSystemPrompt](../../packages/repa/src/agent/context.ts) 装配。Host 使用最后的 Pi inline extension 确定运行入口提示，并在公开 `prepareNextTurnWithContext` 接口中保持后续轮的提示。该接口实际在一轮结束后执行；需要紧邻每一次模型调用的文件变化检查放在公开 `transformContext` 中，并保留 Pi 自身的扩展处理。这样显式空提示不会重新落回 Pi 的默认 coding prompt，工具后续轮也不会重新开启已关闭来源。
 
 工具说明仍来自实际启用的工具定义，可信扩展可以执行自己的代码和模型请求。辅助摘要提示、工具启用配置及扩展贡献的统一编辑界面尚未接入；当前设置不能被解释为已控制所有第三方代码的行为。
 
@@ -48,4 +48,4 @@ Pi 某些即时压缩诊断值在回填 hook 之前计算，例如压缩结果�
 
 取消在交给内容操作前检查。已经进入保存过程的操作先按内容模块规则收尾；成功落盘的结果不会因为稍后到达取消而改报为未保存。当前没有命令工具，也没有把 Pi 默认 `edit.renderCall` 的直接磁盘预览路径接入受管理内容。
 
-上游依据为 `package-lock.json` 锁定的 Pi 0.84.3。补丁定位参考 ADR 0003 所列固定 Codex 源码；具体与上游的差异在 [补丁实现](../../src/content/patch.ts) 和对应测试中保持可追溯。升级 SDK 时重点核对公开工具 I/O、每轮准备 hook、context 事件、压缩准备与历史树接口的行为。
+上游依据为 `package-lock.json` 锁定的 Pi 0.84.3。补丁定位参考 ADR 0003 所列固定 Codex 源码；具体与上游的差异在 [补丁实现](../../packages/repa/src/content/patch.ts) 和对应测试中保持可追溯。升级 SDK 时重点核对公开工具 I/O、每轮准备 hook、context 事件、压缩准备与历史树接口的行为。
