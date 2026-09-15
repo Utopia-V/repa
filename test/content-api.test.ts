@@ -67,7 +67,7 @@ test("截断预览与完整编辑正文共享不可变版本，二进制资源�
   assert.equal(read.text, undefined);
   assert.deepEqual(await f.client.readText(f.target("large.md")), { content: read.content, text });
   assert.equal(read.content.bodyRevision, saved.changes[0]?.after);
-  const resource = await f.client.uploadResource(f.space.id, new Uint8Array([0, 255, 1, 2, 3]), "application/octet-stream");
+  const { resource } = await f.client.uploadResource(f.space.id, new Uint8Array([0, 255, 1, 2, 3]), "application/octet-stream");
   await f.client.call("content.write", { target: f.target("data.bin"), operationId: randomUUID(), base: { kind: "absent" }, value: { kind: "resource", resource } });
   assert.deepEqual([...await readFile(path.join(f.space.path, "data.bin"))], [0, 255, 1, 2, 3]);
   const range = await f.client.resource(resource, "bytes=1-2");
@@ -92,8 +92,9 @@ test("外部材料明确关联后可读取，默认引用原件，移除关联�
   const associated = await f.client.call("content.associate", { spaceId: f.space.id, location: target.location, role: "material", operationId: randomUUID() });
   const content = associated.contents[0]!;
   assert.equal(content.location.kind, "external");
-  assert.equal((await f.client.readText(content.target)).text, "教材原文");
-  await assert.rejects(f.client.call("content.write", { target: content.target, base: content.bodyRevision!, operationId: randomUUID(), value: { kind: "text", text: "改写" } }), code("permission_required"));
+  const opened = await f.client.readText(content.target);
+  assert.equal(opened.text, "教材原文");
+  await assert.rejects(f.client.call("content.write", { target: content.target, base: opened.content.bodyRevision!, operationId: randomUUID(), value: { kind: "text", text: "改写" } }), code("permission_required"));
   await f.client.call("content.remove", { target: content.target, base: content.revision!, detach: true, operationId: randomUUID() });
   assert.equal(await readFile(original, "utf8"), "教材原文");
   await assert.rejects(f.client.call("content.read", { target: content.target }), code("not_found"));
@@ -152,7 +153,7 @@ test("资源受理复制输入字节，调用方后续修改不破坏不可变�
   const input = new Uint8Array([1, 2, 3]);
   const pending = f.server.application.uploadResource(f.space.id, input, "application/octet-stream");
   input[0] = 99;
-  const resource = await pending;
+  const { resource } = await pending;
   assert.deepEqual([...await f.server.application.contentResource(resource.spaceId, resource.id)], [1, 2, 3]);
 });
 

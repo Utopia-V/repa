@@ -33,18 +33,27 @@ export const ContentInfoSchema = object({
   size: Type.Optional(Type.Number()),
   members: Type.Array(ContentMemberSchema),
   resources: Type.Array(ResourceRefSchema),
+  origin: Type.Optional(FileLocationSchema),
 });
 export type ContentInfo = Static<typeof ContentInfoSchema>;
 export const ContentReadSchema = object({
   content: ContentInfoSchema,
   text: Type.Optional(Type.String()),
   resource: Type.Optional(ResourceRefSchema),
+  preparation: Type.Optional(object({ id, expiresAt: Type.Number() })),
   offset: Type.Optional(Type.Integer({ minimum: 1 })),
   nextOffset: Type.Optional(Type.Integer({ minimum: 1 })),
   totalLines: Type.Optional(Type.Integer({ minimum: 0 })),
   truncated: Type.Boolean(),
 });
 export type ContentRead = Static<typeof ContentReadSchema>;
+export const ContentSnapshotSchema = object({ target: ContentTargetSchema, content: ContentInfoSchema, resource: Type.Optional(ResourceRefSchema) });
+export type ContentSnapshot = Static<typeof ContentSnapshotSchema>;
+export const ResourcePreparationSchema = object({ id, resource: ResourceRefSchema, expiresAt: Type.Number() });
+export type ResourcePreparation = Static<typeof ResourcePreparationSchema>;
+export const ResourceHoldSchema = object({ id, spaceId: id, expiresAt: Type.Number(),
+  contents: Type.Array(ContentSnapshotSchema), resources: Type.Array(ResourceRefSchema) });
+export type ResourceHold = Static<typeof ResourceHoldSchema>;
 export const ContentValueSchema = Type.Union([
   object({ kind: Type.Literal("text"), text: Type.String() }),
   object({ kind: Type.Literal("resource"), resource: ResourceRefSchema }),

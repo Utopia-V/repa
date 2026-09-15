@@ -12,7 +12,8 @@ import {
   type ContentTarget,
   type ContentInfo,
   type ResourceRef,
-  ResourceRefSchema,
+  ResourcePreparationSchema,
+  type ResourcePreparation,
 } from "./protocol.js";
 import { applyChange } from "./state.js";
 
@@ -23,6 +24,7 @@ export interface ClientConnection {
 export interface ClientOptions {
   reconnectDelayMs?: number;
   requestTimeoutMs?: number;
+  hostKey?: string;
 }
 export class RpcError extends Error {
   constructor(
@@ -70,10 +72,12 @@ export class RepaClient {
   #closed = false;
   #reconnectTimer: ReturnType<typeof setTimeout> | undefined;
   #connecting: Promise<void> | undefined;
+  #hostKey: string | undefined;
 
   private constructor(connection: ClientConnection, options: ClientOptions) {
     this.#connection = connection;
     this.#options = options;
+    this.#hostKey = options.hostKey;
   }
   static async connect(
     connection: ClientConnection,
@@ -96,6 +100,8 @@ export class RepaClient {
   get closed(): boolean {
     return this.#closed;
   }
+  /** 宿主恢复凭据由可信前端保存，不交给生成内容。 */
+  get hostKey(): string | undefined { return this.#hostKey; }
   onConnectionChange(listener: (connected: boolean) => void): () => void {
     this.#connectionListeners.add(listener);
     return () => {
@@ -177,10 +183,12 @@ export class RepaClient {
         { once: true },
       );
     });
-    await this.#send("initialize", {
+    const initialized = await this.#send("initialize", {
       versions: [PROTOCOL_VERSION],
       token: this.#connection.token,
+      ...(this.#hostKey ? { hostKey: this.#hostKey } : {}),
     });
+    this.#hostKey = initialized.hostKey;
     for (const watch of this.#subscriptions.values()) {
       await this.#send("subscription.start", {
         id: watch.id,
@@ -316,16 +324,15 @@ export class RepaClient {
       },
     };
   }
-  async resource(ref: string | ResourceRef, range?: string): Promise<Response> {
+  async resource(ref: ResourceRef, range?: string): Promise<Response> {
     const url = new URL(
-      typeof ref === "string" ? `/resources/${encodeURIComponent(ref)}`
-        : `/spaces/${encodeURIComponent(ref.spaceId)}/resources/${encodeURIComponent(ref.id)}`,
+      `/spaces/${encodeURIComponent(ref.spaceId)}/resources/${encodeURIComponent(ref.id)}`,
       this.#connection.url.replace(/^ws/, "http"),
     );
     const response = await fetch(url, {
       headers: { Authorization: `Bearer ${this.#connection.token}`, ...(range ? { Range: range } : {}) },
     });
-    if (!response.ok) throw new RpcError(response.status, "无法读取资源。");
+    if (!response.ok) throw await this.#httpError(response, "无法读取资源。");
     return response;
   }
   /** 编辑器取得同一不可变修订的完整正文，避免把截断预览当作保存基准。 */
@@ -338,16 +345,23 @@ export class RepaClient {
     const bytes = await (await this.resource(read.resource)).arrayBuffer();
     return { content: read.content, text: new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes) };
   }
-  async uploadResource(spaceId: string, bytes: Uint8Array, mediaType: string): Promise<ResourceRef> {
+  async uploadResource(spaceId: string, bytes: Uint8Array, mediaType: string): Promise<ResourcePreparation> {
+    if (!this.#ready || !this.#hostKey || this.#closed) throw new ConnectionError();
     const url = new URL(`/spaces/${encodeURIComponent(spaceId)}/resources`, this.#connection.url.replace(/^ws/, "http"));
     const response = await fetch(url, {
       method: "POST", body: bytes as Uint8Array<ArrayBuffer>,
-      headers: { Authorization: `Bearer ${this.#connection.token}`, "Content-Type": mediaType },
+      headers: { Authorization: `Bearer ${this.#connection.token}`, "Content-Type": mediaType, "X-Repa-Host-Key": this.#hostKey },
     });
-    if (!response.ok) throw new RpcError(response.status, "资源上传失败。");
+    if (!response.ok) throw await this.#httpError(response, "资源上传失败。");
     const value: unknown = await response.json();
-    if (!Check(ResourceRefSchema, value)) throw new RpcError(-32603, "后端返回的资源不符合协议。");
+    if (!Check(ResourcePreparationSchema, value)) throw new RpcError(-32603, "后端返回的资源准备结果不符合协议。");
     return value;
+  }
+  async #httpError(response: Response, fallback: string): Promise<RpcError> {
+    let data: unknown;
+    try { data = await response.json(); } catch { /* 无 JSON 的 HTTP 拒绝仍保留状态码。 */ }
+    const message = data && typeof data === "object" && "message" in data && typeof data.message === "string" ? data.message : fallback;
+    return new RpcError(response.status, message, data);
   }
   async reconnect(): Promise<void> {
     if (this.#closed) throw new ConnectionError("客户端已关闭。");

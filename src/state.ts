@@ -30,6 +30,10 @@ function upsert<T>(items: T[], item: T, matches: (item: T) => boolean): void {
 
 /** Applies the public changes in place; callers choose when to copy or render their state. */
 export function applyChange(state: Snapshot, change: Change): void {
+  if (change.type === "session_removed") {
+    state.sessions = state.sessions.filter(session => session.spaceId !== change.spaceId || session.sessionId !== change.sessionId);
+    return;
+  }
   if (change.type === "settings") return;
   if (change.type === "content") {
     const space = state.spaces.find((entry) => entry.id === change.spaceId);

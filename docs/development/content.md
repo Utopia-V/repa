@@ -9,7 +9,7 @@
 | 字段 | 所属对象与用途 |
 | --- | --- |
 | `ContentInfo.bodyRevision` | 实际文件字节的版本；`content.write.base`、删除正文的 `content.remove.base` 和分页读取的 `revision` 使用它 |
-| `ContentInfo.revision` | 已登记内容的身份、位置、状态与组成版本；`content.relink`、`content.setComposition` 和解除材料关联的 `content.remove.base` 使用它。普通文件的该字段同时反映字节与位置 |
+| `ContentInfo.revision` | 已登记内容的身份、位置、状态与组成版本；`content.relink`、`content.setComposition`、`content.move/copy`、`material.collect` 和解除材料关联的 `content.remove.base` 使用它。普通文件的该字段同时反映字节与位置 |
 | `ContextState.revision` | 学习语境绑定自身的版本；`context.set.base` 使用它 |
 | 内容订阅事件的 `revision` | 当前后端的查询失效标识；不能作为文件保存基准或持久历史版本 |
 
@@ -40,7 +40,19 @@ const result = await client.call("content.write", {
 
 断线或超时后保留 `operationId`，通过 `operation.get` 核对。相同操作的重传返回原结果，修改参数须使用新标识。保存回执只确认本次实际提交的草稿版本；后续本地输入和外部修改由草稿服务继续处理。文件保存不会启动模型。
 
-当前内容方法还包括 `content.list/get/read/edit/applyPatch/associate/relink/remove/setComposition`，以及 `operation.get/undo/reconcile`、`context.get/set/preview`。参数、返回值和运行时校验来自 [内容协议](../../src/content/protocol.ts)。移动可以通过补丁表达；独立复制、材料收集、检索与格式转换接口尚未接入。
+当前内容方法还包括 `content.list/get/read/edit/applyPatch/associate/relink/remove/setComposition/move/copy`、`material.collect`，以及 `operation.get/undo/reconcile/prune`、`context.get/set/preview`。参数、返回值和运行时校验来自 [内容协议](../../src/content/protocol.ts)。检索与格式转换由对应能力后续接入。
+
+## 移动、复制与收集
+
+`content.move` 保持已有内容身份，`content.copy` 为实际复制的已登记内容分配新身份。操作接受 `target`、结构版本 `base`、相对 `destination` 和 `operationId`。它们递归处理目录和明确的组成成员，并在同一次内容提交中保存文件与引用关系；普通链接不增加复制范围。未登记的普通文件仍可保持为普通文件。
+
+默认从源目录或源文件父目录保留成员的相对布局，源对象放到指定目标。组成成员跨越这些目录时使用 `container: true`，以共同父目录保留完整布局。例如 `notes/a.md` 与 `code/b.py` 组成的产物，复制到 `copies/run1` 后分别位于 `copies/run1/notes/a.md` 和 `copies/run1/code/b.py`。目标已存在、布局重叠或结构版本改变时返回冲突。
+
+独立内容复制使用 micromark 4.0.2 的 CommonMark 位置 token，仅重写实际链接目标中的规范 `repa:document/<id>`、`repa:material/<id>`，保留定位后缀、代码示例、其他文字和原换行。明确的组成成员引用与已知学习语境 JSON 引用同时映射；其他格式按原字节保存，格式专用引用交给对应能力。移动保持身份引用，普通路径链接继续按原路径语义解释。
+
+外部成员继续作为依赖。`material.collect` 将已关联外部材料的实际字节保存到空间内，保持身份，并在 `ContentInfo.origin` 中保留原位置；原件继续保留。关联和重关联本身只读取元信息，返回值不一定包含 `bodyRevision`，需要正文版本时再调用 `content.read`。
+
+当前内容树移动与复制遇到符号链接会明确拒绝；整个空间的备份和复制可以原样保留符号链接，见[空间快照](spaces.md)。
 
 ## 持久数据与可见结果
 
@@ -51,6 +63,8 @@ const result = await client.call("content.write", {
     content/
       catalog.json          # 身份、位置、组成与语境绑定
       operations/<id>.json  # 内容操作的准备、结果与恢复状态
+      retired-operations.json # 已清理操作的紧凑回执
+      resources.json        # 消费者保留关系与临时持有
       blobs/<sha256>        # 不可变字节，含操作前后版本及上传资源
     runtime/                # 空间身份、锁和运行记录
     sessions/               # Pi 会话 JSONL
@@ -61,9 +75,9 @@ const result = await client.call("content.write", {
 
 操作记录区分 `prepared`、`committed`、`rolled_back`、`needs_recovery` 和 `reconciled`。重开空间时检查未完成操作的真实文件，只在当前内容仍能确认为本操作效果时恢复；不能确认的后续修改保留为冲突。相关结构访问返回 `recovery_required`，按实际文件路径读取和修复仍可进行。
 
-`operation.reconcile` 检查修复后的结果。中断移动涉及身份位置时，需要先通过 `content.relink` 等实际操作修复，再解除状态；原中断记录保留。撤回通过新的 `undoOperationId` 执行，能够分离的后续文本和关系变化继续保留。重复文本、重叠改动或位置重新被占用时返回冲突；当前文本合并依据唯一未变行保守定位，不能保证自动合并所有字符级编辑。撤回文件创建可能保留已建立的空父目录。
+`operation.reconcile` 检查修复后的结果。中断移动涉及身份位置时，需要先通过 `content.relink` 等实际操作修复，再解除状态；原中断记录保留。撤回通过新的 `undoOperationId` 执行，能够分离的后续文本和关系变化继续保留。重复文本、重叠改动或位置重新被占用时返回冲突；当前文本合并依据唯一未变行保守定位，不能保证自动合并所有字符级编辑。撤回会移除本操作创建且仍为空的目录，保留后来加入的文件与独立目录变化。
 
-文件观察到的前后字节和上传资源目前持续保存在空间中。尚未实现历史清理、资源引用计数与展示实例的临时持有；引入清理前必须一起接通这些保留关系，不能仅按文件年龄删除 blob。
+操作前后字节随完整历史保留；历史清理、会话删除与临时实例释放后，由 `resource.collect` 按实际保留关系回收资源。当前文件、其他消费者以及有效的旧版本持有继续成立，详见[资源持有与清理](resources.md)。
 
 ## 外部材料与资源
 
@@ -71,6 +85,6 @@ const result = await client.call("content.write", {
 
 默认关联原件，内容中保存外部位置。`content.remove` 配合 `detach: true` 解除材料身份关联并保留原件；这一步不等于收回应用已有的文件读取授权。空间外写入当前返回 `permission_required`。
 
-`client.uploadResource(spaceId, bytes, mediaType)` 上传不可变字节，当前单次上限为 64 MiB。内容读取得到的 `ResourceRef` 可通过 `client.resource(ref)` 获取，并支持单个 HTTP 字节范围。资源按已打开空间读取；标识本身不构成授权。当前接口供已认证的前端使用，可执行展示实例的受限资源桥接仍待实现。
+`client.uploadResource(spaceId, bytes, mediaType)` 上传不可变字节，返回 `{ id, resource, expiresAt }`，当前单次上限为 64 MiB。内容读取得到的 `ResourceRef` 可通过 `client.resource(ref)` 获取，并支持单个 HTTP 字节范围。资源按已打开空间读取；标识本身不构成授权。当前接口供已认证的前端使用，可执行展示实例的受限资源桥接仍待实现。
 
 `ContentStore` 也解释学习语境：直接关联文档，或读取有序 JSON 组成清单。成员选择展开或引用，普通链接不递归展开；读取失败返回具体问题，不能当作清空。当前实际文本及来源由 `context.preview` 返回，快照何时进入模型由 [Agent 适配层](agent-runtime.md) 决定。

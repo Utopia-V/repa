@@ -1,7 +1,9 @@
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync, unlinkSync } from "node:fs";
+import { readdir } from "node:fs/promises";
 import path from "node:path";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
-import { historyView, type Resources } from "./messages.js";
+import { historyView, Resources } from "./messages.js";
+import type { ResourceRetention } from "./content/resources.js";
 import {
   PiConversationHost,
   type ConversationRuntime,
@@ -20,6 +22,8 @@ type RuntimeOptions = Omit<
 >;
 export interface StoredSession {
   readonly id: string;
+  readonly exists: boolean;
+  remove(): void;
   snapshot(): StoredSessionSnapshot;
   branch(messageId: string): StoredSession;
   openRuntime(options: RuntimeOptions): Promise<ConversationRuntime>;
@@ -45,14 +49,24 @@ function persistSession(manager: SessionManager): SessionManager {
 class PiStoredSession implements StoredSession {
   readonly #manager: SessionManager;
   readonly #resources: Resources;
+  readonly #retention: ResourceRetention;
 
-  constructor(manager: SessionManager, resources: Resources) {
+  constructor(manager: SessionManager, retention: ResourceRetention) {
     this.#manager = manager;
-    this.#resources = resources;
+    this.#retention = retention;
+    this.#resources = new Resources(retention, `session:${manager.getSessionId()}`);
+    // 整个会话树的资源属于该会话，当前叶节点以外的历史也继续保留。
+    historyView(manager.getEntries(), this.#resources);
   }
 
   get id(): string {
     return this.#manager.getSessionId();
+  }
+  get exists(): boolean { return existsSync(this.#manager.getSessionFile()!); }
+  remove(): void {
+    const file = this.#manager.getSessionFile()!;
+    if (existsSync(file)) unlinkSync(file);
+    this.#retention.releaseOwner(`session:${this.id}`);
   }
 
   snapshot(): StoredSessionSnapshot {
@@ -96,7 +110,7 @@ class PiStoredSession implements StoredSession {
         "该位置仍有未配对的工具调用，请选择工具结果之后的消息。",
       );
     manager.createBranchedSession(entry.id);
-    return new PiStoredSession(persistSession(manager), this.#resources);
+    return new PiStoredSession(persistSession(manager), this.#retention);
   }
 
   openRuntime(options: RuntimeOptions): Promise<ConversationRuntime> {
@@ -112,22 +126,27 @@ class PiStoredSession implements StoredSession {
 export class PiSessionStore {
   readonly #cwd: string;
   readonly #directory: string;
-  readonly #resources: Resources;
+  readonly #retention: ResourceRetention;
 
-  constructor(cwd: string, resources: Resources) {
+  constructor(cwd: string, retention: ResourceRetention) {
     this.#cwd = cwd;
     this.#directory = path.join(cwd, ".repa", "sessions");
-    this.#resources = resources;
+    this.#retention = retention;
     mkdirSync(this.#directory, { recursive: true });
   }
 
   async list(): Promise<StoredSession[]> {
-    const sessions = await SessionManager.list(this.#cwd, this.#directory);
+    // 空间目录拥有这些会话；历史 cwd 是来源信息，搬移后不能用它过滤当前会话。
+    const sessions = await SessionManager.listAll(this.#directory);
+    const files = (await readdir(this.#directory)).filter(file => file.endsWith(".jsonl"));
+    // 有不可解释的会话文件时保守保留资源，避免将恢复所需字节当作孤儿删除。
+    if (files.length === sessions.length)
+      this.#retention.reconcileOwners("session:", new Set(sessions.map(session => session.id)));
     return sessions.map(
       (session) =>
         new PiStoredSession(
           SessionManager.open(session.path, this.#directory, this.#cwd),
-          this.#resources,
+          this.#retention,
         ),
     );
   }
@@ -135,7 +154,7 @@ export class PiSessionStore {
   create(): StoredSession {
     return new PiStoredSession(
       persistSession(SessionManager.create(this.#cwd, this.#directory)),
-      this.#resources,
+      this.#retention,
     );
   }
 }

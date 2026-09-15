@@ -1,7 +1,9 @@
 import { Type, type Static, type TSchema } from "typebox";
 import { object, IdSchema as id, literals } from "./schema.js";
 import { contentMethods } from "./content/protocol.js";
-import { ContentChangeResultSchema } from "./content/schema.js";
+import { spaceMethods } from "./spaces/schema.js";
+export * from "./spaces/schema.js";
+import { ContentChangeResultSchema, ResourceRefSchema } from "./content/schema.js";
 import { PromptSettingsSchema, SettingsGetParamsSchema, SettingsSetParamsSchema, SettingsResetParamsSchema, SettingsViewSchema, SettingScopeSchema } from "./configuration/schema.js";
 export * from "./content/schema.js";
 export * from "./configuration/schema.js";
@@ -13,7 +15,7 @@ const key = { spaceId: id, sessionId: id };
 export const SessionKeySchema = object(key);
 export type SessionKey = Static<typeof SessionKeySchema>;
 
-export const ResourceSchema = object({ id, mimeType: text });
+export const ResourceSchema = ResourceRefSchema;
 export const BlockSchema = Type.Union([
   object({ type: Type.Literal("text"), text }),
   object({ type: Type.Literal("thinking"), text }),
@@ -147,6 +149,7 @@ export const ScopeSchema = Type.Union([
 ]);
 export type Scope = Static<typeof ScopeSchema>;
 export const ChangeSchema = Type.Union([
+  object({ type: Type.Literal("session_removed"), ...key }),
   object({ type: Type.Literal("content"), spaceId: id, revision: text,
     paths: Type.Array(text), result: Type.Optional(ContentChangeResultSchema) }),
   object({ type: Type.Literal("settings"), scope: SettingScopeSchema, namespace: text }),
@@ -205,15 +208,17 @@ const method = <P extends TSchema, R extends TSchema>(
 ) => ({ params, result });
 export const methods = {
   ...contentMethods,
+  ...spaceMethods,
   "settings.get": method(SettingsGetParamsSchema, SettingsViewSchema),
   "settings.set": method(SettingsSetParamsSchema, SettingsViewSchema),
   "settings.reset": method(SettingsResetParamsSchema, SettingsViewSchema),
   initialize: method(
-    object({ versions: Type.Array(Type.Integer()), token: text }),
+    object({ versions: Type.Array(Type.Integer()), token: text, hostKey: Type.Optional(Type.String({ pattern: "^[a-f0-9]{64}$" })) }),
     object({
       version: Type.Integer(),
       serverId: id,
       capabilities: Type.Array(text),
+      hostKey: Type.String(),
     }),
   ),
   "space.open": method(
@@ -229,6 +234,7 @@ export const methods = {
   "session.get": method(SessionKeySchema, SessionSchema),
   "session.branch": method(object({ ...key, messageId: text }), SessionSchema),
   "session.close": method(SessionKeySchema, Type.Null()),
+  "session.remove": method(SessionKeySchema, Type.Null()),
   "run.submit": method(
     object({ ...key, requestId: id, text: Type.String({ minLength: 1 }) }),
     RunSchema,

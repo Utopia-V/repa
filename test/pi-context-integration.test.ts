@@ -118,7 +118,7 @@ export default function (pi) {
   const openHost = async () => {
     const host = await PiConversationHost.open({
       learnerSpace: directory, agentDir, sessionManager: manager,
-      content, resources: new Resources(), trustExtensions: options.trusted ?? true,
+      content, resources: new Resources(content.retention, `session:${manager.getSessionId()}`), trustExtensions: options.trusted ?? true,
       modelOverride: { modelRuntime, model: faux.getModel() },
       onEvent() {}, ask: async () => null,
     });

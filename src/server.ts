@@ -1,9 +1,10 @@
-import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { createServer } from "node:http";
 import { WebSocket, WebSocketServer } from "ws";
 import { Check } from "typebox/value";
 import { RepaApplication, type ApplicationOptions } from "./application.js";
 import { contentMethods, type ContentMethod } from "./content/protocol.js";
+import { spaceMethods, type SpaceMethod } from "./spaces/schema.js";
 import {
   methods,
   PROTOCOL_VERSION,
@@ -33,6 +34,14 @@ interface Peer {
   authenticated: boolean;
   attached: boolean;
   subscriptions: Map<string, () => void>;
+  host?: FrontendHost;
+}
+interface FrontendHost {
+  id: string;
+  key: string;
+  peers: Map<string, { peer: Peer; socket: WebSocket }>;
+  timer?: ReturnType<typeof setTimeout>;
+  closed: boolean;
 }
 class RpcFault extends Error {
   constructor(
@@ -49,6 +58,8 @@ export async function startRepaServer(
 ): Promise<RepaServer> {
   const application = new RepaApplication(options);
   const token = options.token ?? randomBytes(32).toString("hex");
+  const hosts = new Map<string, FrontendHost>();
+  const hostId = (key: string) => createHash("sha256").update(key).digest("hex");
   if (token.length < 32) throw new Error("连接令牌至少需要 32 个字符。");
   const authorized = (candidate: unknown): boolean =>
     typeof candidate === "string" &&
@@ -58,7 +69,7 @@ export async function startRepaServer(
     response.setHeader("Access-Control-Allow-Origin", "*");
     response.setHeader(
       "Access-Control-Allow-Headers",
-      "Authorization, Content-Type, Range",
+      "Authorization, Content-Type, Range, X-Repa-Host-Key",
     );
     response.setHeader("Access-Control-Allow-Methods", "GET, HEAD, POST, OPTIONS");
     response.setHeader("Access-Control-Expose-Headers", "Content-Length, Content-Range, Accept-Ranges");
@@ -77,6 +88,9 @@ export async function startRepaServer(
     }
     const uploadSpace = /^\/spaces\/([a-zA-Z0-9_-]+)\/resources$/.exec(request.url ?? "")?.[1];
     if (request.method === "POST" && uploadSpace) {
+      const key = request.headers["x-repa-host-key"];
+      const host = typeof key === "string" ? hosts.get(hostId(key)) : undefined;
+      if (!host || host.closed || host.key !== key) { response.writeHead(401).end(); return; }
       const chunks: Buffer[] = [];
       let size = 0;
       for await (const chunk of request) {
@@ -84,7 +98,8 @@ export async function startRepaServer(
         if (size > 64 * 1024 * 1024) { response.writeHead(413).end(); return; }
         chunks.push(Buffer.from(chunk));
       }
-      const resource = await application.uploadResource(uploadSpace, Buffer.concat(chunks), request.headers["content-type"] ?? "application/octet-stream");
+      if (host.closed) { response.writeHead(409).end(); return; }
+      const resource = await application.uploadResource(uploadSpace, Buffer.concat(chunks), request.headers["content-type"] ?? "application/octet-stream", host.id);
       response.setHeader("Content-Type", "application/json");
       response.end(JSON.stringify(resource));
       return;
@@ -124,20 +139,7 @@ export async function startRepaServer(
       response.end(request.method === "HEAD" ? undefined : bytes.subarray(start, end + 1));
       return;
     }
-    const resourceId = /^\/resources\/([a-f0-9]{64})$/.exec(
-      request.url ?? "",
-    )?.[1];
-    const resource = resourceId
-      ? application.resources.get(resourceId)
-      : undefined;
-    if (!resource) {
-      response.writeHead(404).end();
-      return;
-    }
-    response.setHeader("Content-Type", resource.mimeType);
-    response.setHeader("Content-Disposition", "attachment");
-    response.setHeader("Content-Length", resource.data.length);
-    response.end(request.method === "HEAD" ? undefined : resource.data);
+    response.writeHead(404).end();
   })().catch((error: unknown) => {
     if (response.headersSent) { response.destroy(); return; }
     response.writeHead(error instanceof RepaFault ? 400 : 500, { "Content-Type": "application/json" });
@@ -160,6 +162,7 @@ export async function startRepaServer(
   const detachTimers = new Set<ReturnType<typeof setTimeout>>();
   const responsive = new WeakSet<WebSocket>();
   const heartbeat = setInterval(() => {
+    application.checkpointResources();
     for (const peer of websocket.clients) {
       if (!responsive.has(peer)) {
         peer.terminate();
@@ -192,10 +195,24 @@ export async function startRepaServer(
       }
       socket.send(JSON.stringify(value));
     };
-    const detach = () => {
-      if (peer.attached) {
-        peer.attached = false;
-        application.detach(peer.id);
+    const detach = (confirmed = false) => {
+      const host = peer.host;
+      if (!peer.attached || !host) return;
+      peer.attached = false;
+      host.peers.delete(peer.id);
+      if (confirmed) {
+        host.closed = true;
+        clearTimeout(host.timer);
+        if (host.timer) detachTimers.delete(host.timer);
+        for (const item of host.peers.values()) { item.peer.attached = false; item.socket.close(1000, "detached"); }
+        host.peers.clear(); hosts.delete(host.id);
+        application.detach(host.id, true);
+      } else if (!host.peers.size) {
+        const timer = setTimeout(() => {
+          detachTimers.delete(timer);
+          if (!host.peers.size) { hosts.delete(host.id); application.detach(host.id); }
+        }, options.disconnectGraceMs ?? 3000);
+        timer.unref(); host.timer = timer; detachTimers.add(timer);
       }
     };
     socket.on("error", () => socket.terminate());
@@ -203,21 +220,15 @@ export async function startRepaServer(
       clearTimeout(timeout);
       for (const unsubscribe of peer.subscriptions.values()) unsubscribe();
       peer.subscriptions.clear();
-      if (peer.attached) {
-        const timer = setTimeout(() => {
-          detachTimers.delete(timer);
-          detach();
-        }, options.disconnectGraceMs ?? 3000);
-        timer.unref();
-        detachTimers.add(timer);
-      }
+      detach();
     });
     const dispatch = async (
       method: Method,
       params: unknown,
     ): Promise<unknown> => {
       const p = <M extends Method>() => params as Params<M>;
-      if (Object.hasOwn(contentMethods, method)) return application.contentCall(method as ContentMethod, p<ContentMethod>());
+      if (Object.hasOwn(spaceMethods, method)) return application.spaceCall(method as SpaceMethod, p<SpaceMethod>());
+      if (Object.hasOwn(contentMethods, method)) return application.contentCall(method as ContentMethod, p<ContentMethod>(), peer.host!.id);
       switch (method) {
         case "settings.get":
         case "settings.set":
@@ -231,14 +242,23 @@ export async function startRepaServer(
               supported: [PROTOCOL_VERSION],
             });
           if (!peer.authenticated) {
-            application.attach(peer.id);
+            // 恢复凭据证明宿主身份；客户端不能仅声明另一个宿主的 ID。
+            const key = input.hostKey ?? randomBytes(32).toString("hex"), id = hostId(key);
+            const host: FrontendHost = hosts.get(id) ?? { id, key, peers: new Map(), closed: false };
+            clearTimeout(host.timer);
+            if (host.timer) detachTimers.delete(host.timer);
+            application.attach(id);
+            host.peers.set(peer.id, { peer, socket });
+            hosts.set(id, host); peer.host = host;
             peer.authenticated = true;
             peer.attached = true;
             clearTimeout(timeout);
           }
+          if (input.hostKey && input.hostKey !== peer.host!.key) throw new RepaFault("permission_required", "连接不能切换成另一个前端宿主。");
           return {
             version: PROTOCOL_VERSION,
             serverId: application.id,
+            hostKey: peer.host!.key,
             capabilities: [
               "sessions",
               "runs",
@@ -249,6 +269,8 @@ export async function startRepaServer(
               "content",
               "learning-context",
               "prompt-settings",
+              "resource-holds",
+              "space-snapshots",
             ],
           };
         }
@@ -266,6 +288,9 @@ export async function startRepaServer(
           return application.branchSession(p<"session.branch">());
         case "session.close":
           await application.closeSession(p<"session.close">());
+          return null;
+        case "session.remove":
+          await application.removeSession(p<"session.remove">());
           return null;
         case "run.submit":
           return application.submit(p<"run.submit">());
@@ -305,7 +330,7 @@ export async function startRepaServer(
         }
         case "client.detach":
           setImmediate(() => {
-            detach();
+            detach(true);
             socket.close(1000, "detached");
           });
           return null;
@@ -338,6 +363,8 @@ export async function startRepaServer(
         if (notification) return undefined;
         if (!peer.authenticated && request.method !== "initialize")
           throw new RpcFault(-32001, "请先完成连接授权与版本协商。");
+        if (peer.authenticated && !peer.attached)
+          throw new RepaFault("closed", "该前端连接的使用已经结束。");
         if (!Object.hasOwn(methods, request.method))
           throw new RpcFault(-32601, "Method not found");
         const name = request.method as Method;

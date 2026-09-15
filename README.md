@@ -240,7 +240,7 @@ Repa 提供内容读写、引用与组成、数据和资源传递、动作调用
 | 范围 | 当前代码与后续接入 |
 | --- | --- |
 | 应用协议、客户端与 TUI | 已有本机后端、协议 v1、无 UI 客户端、多空间多会话、订阅重连和运行记录；请求输入当前仅支持文本，steer、排队及指定旧任务接续尚未接入 |
-| 内容与学习语境 | 已接通文件读写、精确修改、多文件补丁、内容身份与组成、操作查询、撤回与恢复、外部材料只读关联、不可变资源和学习语境注入；检索、独立复制与材料收集、资源清理及活跃使用管理待接入 |
+| 内容与学习语境 | 已接通文件读写、精确修改、多文件补丁、内容身份与组成、操作查询、撤回与恢复、外部材料只读关联、不可变资源和学习语境注入；已有内容移动与独立复制、材料收集、会话/文档/实例资源保留与清理，以及空间备份、恢复和独立复制；检索待接入 |
 | 扩展与配置 | 已有明确信任后的 Pi 扩展加载、应用／空间／会话提示继承和实际提示装配；共享能力宿主及现有学习语境/默认提示的能力迁接、独立模型连接管理、辅助调用提示配置与官方默认能力组合待接入 |
 | 前端与执行环境 | 图形组件宿主、多种请求输入、生成内容展示隔离及命令沙箱待实现 |
 
@@ -297,7 +297,7 @@ TUI 自动连接或启动独立的本机后端，打印连接文件的位置。�
 
 生成期间按 `Ctrl+C` 请求取消，空闲时按 `Ctrl+C` 关闭当前前端。扩展需要回答时，TUI 显示问题并接收回答；确认题使用 `yes` 或 `no`，选择题可以输入选项编号，`/dismiss` 取消该交互。所有前端离开后，待回答的交互仍由后端保留；重新连接可以继续。
 
-会话 JSONL 保存在 `<space>/.repa/sessions/`。空间身份与任务记录位于 `.repa/runtime/`，内容身份、操作恢复记录与不可变资源位于 `.repa/content/`，空间和会话提示覆盖位于 `.repa/settings.json`。备份时应连同正文保留这些持久数据，具体责任见[内容、保存与恢复](docs/development/content.md)。
+会话 JSONL 保存在 `<space>/.repa/sessions/`。空间身份与任务记录位于 `.repa/runtime/`，内容身份、操作恢复记录与不可变资源位于 `.repa/content/`，空间和会话提示覆盖位于 `.repa/settings.json`。公开的 `space.backup/restore/copy` 协调这些数据与已声明插件数据，具体接入见[空间快照](docs/development/spaces.md)。内容和资源责任分别见[内容、保存与恢复](docs/development/content.md)与[资源持有与清理](docs/development/resources.md)。
 
 运行日志采用独立的 `repa.run` 格式，当前磁盘格式版本为 `1`，记录请求事实与可选终态；运行进度由后端状态持有。旧版无版本记录继续按原格式读取，新记录使用当前格式追加，已有有效记录保持原样。遇到不支持的格式版本或完整的损坏记录时，停止恢复并保留原文件；只有尚未完成的末尾追加可以在完整记录校验后清除。
 
@@ -381,6 +381,6 @@ await watch.stop();
 await client.close();
 ```
 
-消息保留文本、思考、工具调用、资源与扩展数据结构。流式消息通过 `replaces` 与保存后的历史消息身份衔接。会话消息资源从 HTTP `/resources/<id>` 获取，空间不可变资源从 `/spaces/<spaceId>/resources/<id>` 获取，schema 从 `/protocol.json` 获取，均使用 `Authorization: Bearer <token>`。客户端的 `resource(id 或 ResourceRef)`、`uploadResource` 和 `readText` 处理认证与完整内容读取。具体的交互页面渲染与执行权限按 ADR 0005 后续接入。
+消息保留文本、思考、工具调用、资源与扩展数据结构。流式消息通过 `replaces` 与保存后的历史消息身份衔接。消息媒体与内容资源统一使用 `{ spaceId, id, mediaType }`，从 HTTP `/spaces/<spaceId>/resources/<id>` 获取，schema 从 `/protocol.json` 获取，均使用 `Authorization: Bearer <token>`。客户端的 `resource(ResourceRef)`、`uploadResource` 和 `readText` 处理认证与完整内容读取；上传返回带有效期的准备结果，长期使用通过文档关系或 `resource.hold` 保留。重连自动复用 `initialize` 返回的宿主键，显式关闭宿主会释放其临时持有。具体的交互页面渲染与执行权限按 ADR 0005 后续接入。
 
 GitHub Issue [#5](https://github.com/Utopia-V/repa/issues/5) 是产品主议题，当前设计语义与工程取舍见上面的项目文档。[#6](https://github.com/Utopia-V/repa/issues/6) 记录学习语境与通用工具接入，[#7](https://github.com/Utopia-V/repa/issues/7)、[#8](https://github.com/Utopia-V/repa/issues/8)、[#9](https://github.com/Utopia-V/repa/issues/9) 分别保留可视化、规划与知识整理的扩展想法；[#4](https://github.com/Utopia-V/repa/issues/4) 描述已有对话实现，早期规格 [#3](https://github.com/Utopia-V/repa/issues/3) 已退役。

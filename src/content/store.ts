@@ -1,41 +1,28 @@
 import { randomUUID } from "node:crypto";
 import { lstat, readFile, readdir, realpath } from "node:fs/promises";
 import path from "node:path";
-import { Type, type Static } from "typebox";
 import { Check } from "typebox/value";
 import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES } from "@earendil-works/pi-coding-agent";
 import { RepaFault } from "../errors.js";
-import { IdSchema, object, literals } from "../schema.js";
+import { IdSchema } from "../schema.js";
 import { SerialQueue } from "../storage/atomic.js";
 import { BlobStore, digest } from "../storage/blobs.js";
 import { managedDirectory } from "../storage/managed-directory.js";
 import { FileJournal, sameImage, type FileImage, type FileMutation } from "./journal.js";
 import { parsePatch, applyTextPatch } from "./patch.js";
 import { editText, revertText, type TextEdit } from "./text-edits.js";
+import { CatalogSchema, catalogPath, emptyCatalog, type Catalog, type ContentRecord } from "./catalog.js";
+import { captureContent } from "./snapshot.js";
+import { ResourceRetention, type ResourceRetentionOptions } from "./resources.js";
+import { mapReference, remapContextComposition, remapMarkdown } from "./references.js";
 import {
-  ContentMemberSchema, ContentRoleSchema, FileLocationSchema, ResourceRefSchema,
-  ContextBindingSchema, ContextCompositionSchema,
+  ContextCompositionSchema,
   type ContentInfo, type ContentRead, type ContentRef, type ContentTarget,
   type ContentValue, type ContentChangeResult, type ContentOperation,
   type ContextBinding, type ContextState, type ContextView, type FileLocation,
-  type ResourceRef, type WriteBase,
+  type ResourceRef, type WriteBase, type ContentSnapshot, type ResourceHold,
 } from "./schema.js";
 
-const RecordSchema = object({
-  id: IdSchema, location: FileLocationSchema, role: ContentRoleSchema,
-  mediaType: Type.String(), state: literals(["active", "deleted", "detached"]),
-  members: Type.Array(ContentMemberSchema), resources: Type.Array(ResourceRefSchema),
-  origin: Type.Optional(FileLocationSchema),
-});
-type ContentRecord = Static<typeof RecordSchema>;
-const CatalogSchema = object({
-  version: Type.Literal(1),
-  items: Type.Record(Type.String(), RecordSchema),
-  context: ContextBindingSchema,
-});
-type Catalog = Static<typeof CatalogSchema>;
-const catalogPath = path.join(".repa", "content", "catalog.json");
-const emptyCatalog = (): Catalog => ({ version: 1, items: {}, context: null });
 const absent: FileImage = { kind: "absent" };
 const clone = <T>(value: T): T => structuredClone(value);
 const message = (error: unknown): string => error instanceof Error ? error.message : String(error);
@@ -74,7 +61,14 @@ interface Plan {
   seen: Map<string, FileImage>;
   affected: Set<string>;
 }
-export interface ContentStoreOptions {
+export interface TransferInput {
+  target: ContentTarget;
+  destination: FileLocation;
+  base: string;
+  operationId: string;
+  container?: boolean;
+}
+export interface ContentStoreOptions extends ResourceRetentionOptions {
   spaceId: string;
   root: string;
   assertOwned(): void;
@@ -86,12 +80,14 @@ export interface ContentStoreOptions {
 export class ContentStore {
   readonly blobs: BlobStore;
   readonly journal: FileJournal;
+  readonly retention: ResourceRetention;
   readonly queue = new SerialQueue();
   #catalog = emptyCatalog();
   #catalogHash: string | null = null;
   private constructor(readonly options: ContentStoreOptions, directory: string) {
     this.blobs = new BlobStore(path.join(directory, "blobs"));
     this.journal = new FileJournal(options.root, path.join(directory, "operations"), this.blobs);
+    this.retention = new ResourceRetention(options.spaceId, this.blobs, path.join(directory, "resources.json"), options);
   }
   static async open(options: ContentStoreOptions): Promise<ContentStore> {
     const directory = managedDirectory(options.root, "content");
@@ -225,7 +221,24 @@ export class ContentStore {
         : record?.state === "detached" ? "detached" : image.kind === "absent" ? "missing" : "available",
       ...(image.kind === "file" ? { size: (await this.blobs.get(image.hash)).length } : {}),
       members: clone(record?.members ?? []), resources: clone(record?.resources ?? []),
+      ...(record?.origin ? { origin: clone(record.origin) } : {}),
     };
+  }
+  async #metadata(record: ContentRecord): Promise<ContentInfo> {
+    const absolute = this.#absolute(record.location);
+    const info = await this.#info({ path: absolute, image: absent, record });
+    delete info.bodyRevision;
+    if (record.state !== "active") return info;
+    try {
+      const actual = await this.#checkPath(absolute, false), stat = await lstat(actual);
+      info.status = this.#blocked(actual, record.id) ? "needs_recovery" : "available";
+      if (stat.isFile()) { info.size = stat.size; info.fileType = "file"; }
+      else if (stat.isDirectory()) info.fileType = "directory";
+    } catch (error) {
+      if (error instanceof RepaFault && error.code === "permission_required") info.status = "permission_required";
+      else if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
+    return info;
   }
   #assertStructure(observed: Observed): void {
     if (this.#blocked(observed.path, observed.record?.id))
@@ -261,8 +274,9 @@ export class ContentStore {
       }
     });
   }
-  read(params: { target: ContentTarget; offset?: number; limit?: number; revision?: string }): Promise<ContentRead> {
+  read(params: { target: ContentTarget; offset?: number; limit?: number; revision?: string }, host?: string): Promise<ContentRead> {
     const input = clone(params);
+    const epoch = host ? this.retention.epoch(host) : undefined;
     return this.queue.run(async () => {
       const observed = await this.#observe(input.target);
       if (input.target.kind === "content") this.#assertStructure(observed);
@@ -272,12 +286,14 @@ export class ContentStore {
       if (observed.image.kind !== "file") throw new RepaFault("not_found", "没有可读取的文件正文。");
       const bytes = await this.blobs.get(observed.image.hash);
       const resource: ResourceRef = { spaceId: this.options.spaceId, id: observed.image.hash, mediaType: content.mediaType };
+      const prepared = host ? this.retention.prepare(host, resource, epoch) : undefined;
+      const shared = { content, resource, ...(prepared ? { preparation: { id: prepared.id, expiresAt: prepared.expiresAt } } : {}) };
       let text: string;
       try {
         text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes);
-        if (text.includes("\0")) return { content, resource, truncated: false };
-      } catch { return { content, resource, truncated: false }; }
-      if (content.mediaType === "application/pdf" || /^image\/(?!svg\+xml)/.test(content.mediaType)) return { content, resource, truncated: false };
+        if (text.includes("\0")) return { ...shared, truncated: false };
+      } catch { return { ...shared, truncated: false }; }
+      if (content.mediaType === "application/pdf" || /^image\/(?!svg\+xml)/.test(content.mediaType)) return { ...shared, truncated: false };
       const lines = text.match(/[^\r\n]*(?:\r\n|\r|\n)|[^\r\n]+$/g) ?? [];
       const offset = input.offset ?? 1;
       const limit = input.limit ?? DEFAULT_MAX_LINES;
@@ -290,8 +306,8 @@ export class ContentStore {
         size += bytes; end++;
       }
       if (end === offset - 1 && end < lines.length)
-        return { content, resource, offset, totalLines: lines.length, truncated: true };
-      return { content, resource, text: lines.slice(offset - 1, end).join(""), offset,
+        return { ...shared, offset, totalLines: lines.length, truncated: true };
+      return { ...shared, text: lines.slice(offset - 1, end).join(""), offset,
         totalLines: lines.length, truncated: end < lines.length,
         ...(end < lines.length ? { nextOffset: end + 1 } : {}) };
     });
@@ -394,6 +410,11 @@ export class ContentStore {
         if (!record) continue;
         const absolute = this.#absolute(record.location);
         const relative = path.relative(this.options.root, absolute);
+        if (record.state === "active" && !plan.files.has(relative)) {
+          contents.push(await this.#metadata(record));
+          observed.add(absolute);
+          continue;
+        }
         const image = record.state !== "active" ? absent : plan.files.get(relative)?.after ?? (await this.#observe({ kind: "content", ref: { spaceId: this.options.spaceId, id } }, plan.catalog)).image;
         contents.push(await this.#info({ path: absolute, image, record }));
         if (record.state === "active") observed.add(absolute);
@@ -498,6 +519,101 @@ export class ContentStore {
       plan.affected.add(id);
     });
   }
+  transfer(kind: "move" | "copy" | "collect", params: TransferInput): Promise<ContentChangeResult> {
+    const input = clone(params);
+    return this.#mutate(input.operationId, { method: kind, ...input }, async plan => {
+      const source = await this.#observe(input.target, plan.catalog);
+      this.#assertStructure(source); this.#checkBase(source, input.base);
+      if (source.image.kind === "absent") throw new RepaFault("not_found", "源内容不存在。");
+      if (source.path === this.options.root) throw new RepaFault("invalid_input", "整个空间请使用空间复制入口。");
+      if (input.destination.kind !== "relative") throw new RepaFault("permission_required", "目标必须位于当前空间。");
+      const destination = await this.#checkPath(this.#absolute(input.destination), true);
+      if (destination === source.path || inside(source.path, destination)) throw new RepaFault("invalid_input", "目标不能是源位置或其内部位置。");
+      if (kind === "collect" && (source.record?.role !== "material" || source.record.location.kind !== "external" || source.image.kind !== "file"))
+        throw new RepaFault("invalid_input", "收集操作需要一份已关联的外部材料。");
+      if (kind === "move" && !inside(this.options.root, source.path)) throw new RepaFault("permission_required", "外部原件通过材料收集操作保留并接入空间。");
+      const nodes = new Map<string, Observed>();
+      const visit = async (target: ContentTarget, first = false): Promise<void> => {
+        const record = this.#record(target, plan.catalog);
+        // 外部材料作为引用依赖继续保留，独立收集由明确的根操作表达。
+        if (!first && (record?.location.kind === "external" || (target.kind === "file" && target.location.kind === "external"))) return;
+        const node = first ? source : await this.#observe(target, plan.catalog);
+        if (nodes.has(node.path)) return;
+        this.#assertStructure(node);
+        if (node.image.kind === "absent") throw new RepaFault("not_found", "组成内容中有缺失文件。", { target });
+        nodes.set(node.path, node);
+        if (node.image.kind === "directory") {
+          for (const entry of await readdir(node.path, { withFileTypes: true })) {
+            if (entry.name === ".repa" || /^\.repa-.*\.tmp$/.test(entry.name)) continue;
+            if (entry.isSymbolicLink()) throw new RepaFault("unsupported_content", "内容树中的符号链接需由相应文件能力处理。", { path: entry.name });
+            await visit(this.target(path.join(node.path, entry.name)));
+          }
+        }
+        if (kind !== "collect") for (const member of node.record?.members ?? []) await visit(member.target);
+      };
+      await visit(input.target, true);
+      let anchor = source.image.kind === "directory" ? source.path : path.dirname(source.path);
+      if (input.container) {
+        for (const node of nodes.values()) while (!inside(anchor, node.path)) anchor = path.dirname(anchor);
+      } else if ([...nodes.keys()].some(file => !inside(anchor, file)))
+        throw new RepaFault("invalid_input", "组成成员分布在其他目录，请选择 container 复制或移动整个组合。");
+      const locations = new Map<string, string>();
+      for (const node of nodes.values()) {
+        const target = node.path === source.path && !input.container ? destination
+          : path.resolve(input.container || source.image.kind === "directory" ? destination : path.dirname(destination), path.relative(anchor, node.path));
+        if (!inside(this.options.root, target) || nodes.has(target)) throw new RepaFault("invalid_input", "目标布局与源内容重叠。");
+        if ((await this.journal.image(path.relative(this.options.root, target))).kind !== "absent")
+          throw new RepaFault("revision_conflict", "目标位置已经存在。", { path: this.#location(target) });
+        locations.set(node.path, target);
+      }
+      if (new Set(locations.values()).size !== locations.size) throw new RepaFault("invalid_input", "多个成员映射到同一目标位置。");
+      const ids = new Map<string, string>();
+      for (const node of nodes.values()) if (node.record) ids.set(node.record.id, kind === "copy" ? randomUUID() : node.record.id);
+      const mapping = { fromSpace: this.options.spaceId, toSpace: this.options.spaceId, ids };
+      const mapTarget = (target: ContentTarget): ContentTarget => {
+        if (target.kind === "content") return { kind: "content", ref: mapReference(target.ref, mapping) };
+        const to = locations.get(this.#absolute(target.location));
+        return to ? { ...target, location: this.#location(to) } : target;
+      };
+      for (const node of nodes.values()) {
+        const record = node.record;
+        if (!record) continue;
+        const origin = clone(record.location);
+        const next = kind === "copy" ? clone(record) : plan.catalog.items[record.id]!;
+        next.id = ids.get(record.id)!;
+        next.location = this.#location(locations.get(node.path)!);
+        if (kind === "copy" || kind === "collect") next.origin = origin;
+        next.members = next.members.map(member => ({ ...member, target: mapTarget(member.target) }));
+        this.retention.validate(next.resources);
+        plan.catalog.items[next.id] = next; plan.affected.add(next.id);
+      }
+      if (kind !== "copy") {
+        for (const record of Object.values(plan.catalog.items)) {
+          const members = record.members.map(member => ({ ...member, target: mapTarget(member.target) }));
+          if (!equal(members, record.members)) { record.members = members; plan.affected.add(record.id); }
+        }
+      }
+      for (const node of [...nodes.values()].sort((a,b) => a.path.split(path.sep).length-b.path.split(path.sep).length)) {
+        let after = node.image;
+        if (kind === "copy" && after.kind === "file") {
+          let bytes = await this.blobs.get(after.hash);
+          if (node.record?.id === plan.before.context?.ref.id && plan.before.context?.kind === "composition") bytes = remapContextComposition(bytes, mapping);
+          else if (mediaType(node.path) === "text/markdown" && ids.size) {
+            let text: string;
+            try { text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes); }
+            catch { throw new RepaFault("unsupported_format", "该 Markdown 的编码需要相应的引用处理器。"); }
+            bytes = Buffer.from(remapMarkdown(text, ids));
+          }
+          after = { ...after, hash: await this.blobs.put(bytes) };
+        }
+        await this.#put(plan, locations.get(node.path)!, after, absent);
+      }
+      if (kind === "move") {
+        for (const node of [...nodes.values()].sort((a,b) => b.path.split(path.sep).length-a.path.split(path.sep).length))
+          await this.#put(plan, node.path, absent, node.image);
+      }
+    });
+  }
   relink(params: { ref: ContentRef; location: FileLocation; base: string; operationId: string }, authorizeExternal?: (file: string) => Promise<void>): Promise<ContentChangeResult> {
     const input = clone(params);
     return this.#mutate(input.operationId, { method: "relink", ...input }, async (plan) => {
@@ -548,6 +664,104 @@ export class ContentStore {
   context(): Promise<ContextState> {
     return this.queue.run(async () => ({ binding: clone(this.#catalog.context), revision: digest(canonicalJson(this.#catalog.context)) }));
   }
+  hold(params: { id: string; targets?: ContentTarget[]; resources?: ResourceRef[] }, host: string): Promise<ResourceHold> {
+    const input = clone(params), requestHash = digest(canonicalJson(params));
+    const epoch = this.retention.epoch(host);
+    return this.queue.run(async () => {
+      this.options.assertOwned();
+      const previous = this.retention.previous(host, input.id, requestHash);
+      if (previous) return previous;
+      await this.#reload();
+      if (!(input.targets?.length || input.resources?.length)) throw new RepaFault("invalid_input", "请选择实际内容或资源。");
+      const snapshots: ContentSnapshot[] = [], refs = [...input.resources ?? []], seen = new Set<string>();
+      const visit = async (target: ContentTarget): Promise<void> => {
+        const record = this.#record(target, this.#catalog);
+        if (record?.location.kind === "external") {
+          if (seen.has(`external:${record.id}`)) return;
+          seen.add(`external:${record.id}`);
+          const content = await this.#metadata(record);
+          if (content.status === "needs_recovery") this.#assertStructure({ path: this.#absolute(record.location), image: absent, record });
+          snapshots.push({ target, content });
+          return;
+        }
+        if (target.kind === "file" && target.location.kind === "external")
+          throw new RepaFault("external_reference", "外部原件先读取所需表示，再持有返回的资源。");
+        const observed = await this.#observe(target);
+        if (seen.has(observed.path)) return;
+        seen.add(observed.path);
+        if (target.kind === "content") this.#assertStructure(observed);
+        if (observed.image.kind === "absent") throw new RepaFault("not_found", "所需内容不存在。", { target });
+        const content = await this.#info(observed);
+        const resource = observed.image.kind === "file"
+          ? { spaceId: this.options.spaceId, id: observed.image.hash, mediaType: content.mediaType } : undefined;
+        snapshots.push({ target, content, ...(resource ? { resource } : {}) });
+        if (resource) refs.push(resource);
+        if (content.status !== "needs_recovery") {
+          refs.push(...content.resources);
+          for (const member of content.members) await visit(member.target);
+        }
+        if (observed.image.kind === "directory") {
+          for (const name of await readdir(observed.path)) {
+            if (name === ".repa" || /^\.repa-.*\.tmp$/.test(name)) continue;
+            await visit(this.target(path.join(observed.path, name)));
+          }
+        }
+      };
+      for (const target of input.targets ?? []) await visit(target);
+      return this.retention.hold(host, input.id, requestHash, snapshots, refs, epoch);
+    });
+  }
+  async #resourceRoots(): Promise<Set<string>> {
+    const roots = new Set<string>();
+    const addCatalog = (catalog: Catalog) => {
+      for (const record of Object.values(catalog.items)) if (record.state === "active")
+        for (const ref of record.resources) roots.add(ref.id);
+    };
+    addCatalog(this.#catalog);
+    for (const entry of this.journal.entries.values()) {
+      for (const file of entry.files) {
+        for (const image of [file.before, file.after]) {
+          if (image.kind !== "file") continue;
+          roots.add(image.hash);
+          if (file.path === catalogPath) {
+            const value: unknown = JSON.parse((await this.blobs.get(image.hash)).toString("utf8"));
+            if (!Check(CatalogSchema, value)) throw new RepaFault("invalid_storage", "历史内容清单无法解析，停止资源回收。");
+            addCatalog(value);
+          }
+        }
+      }
+    }
+    return roots;
+  }
+  collectResources(): Promise<{ removed: number; bytes: number }> {
+    return this.queue.run(async () => {
+      this.options.assertOwned(); await this.#reload();
+      return this.retention.collect(await this.#resourceRoots());
+    });
+  }
+  pruneHistory(ids: string[]): Promise<string[]> {
+    const input = [...ids];
+    return this.queue.run(async () => { this.options.assertOwned(); return this.journal.prune(input); });
+  }
+  upload(bytes: Uint8Array, mediaType: string, host: string) {
+    const snapshot = Buffer.from(bytes);
+    const epoch = this.retention.epoch(host);
+    return this.queue.run(async () => {
+      this.options.assertOwned();
+      const resource = { spaceId: this.options.spaceId, id: await this.blobs.put(snapshot), mediaType };
+      return this.retention.prepare(host, resource, epoch);
+    });
+  }
+
+  capture(destinationRoot: string, targetSpaceId: string): Promise<FileLocation[]> {
+    return this.queue.run(async () => {
+      this.options.assertOwned(); await this.#reload();
+      return captureContent({ destinationRoot, targetSpaceId, sourceSpaceId: this.options.spaceId,
+        currentCatalog: this.#catalog, journal: this.journal, sourceBlobs: this.blobs,
+        retained: this.retention, roots: await this.#resourceRoots() });
+    });
+  }
+
   setContext(params: { binding: ContextBinding; base: string; operationId: string }): Promise<ContentChangeResult> {
     const input = clone(params);
     return this.#mutate(input.operationId, { method: "context", ...input }, async (plan) => {
@@ -600,8 +814,9 @@ export class ContentStore {
       return { text, sources, revision: digest(canonicalJson({ text, sources })) };
     });
   }
-  operation(id: string): Promise<ContentOperation | { operationId: string; status: "unknown" }> {
+  operation(id: string): Promise<ContentOperation | { operationId: string; status: "unknown" | "pruned" }> {
     return this.queue.run(async () => {
+      if (this.journal.retired.has(id)) return { operationId: id, status: "pruned" };
       const entry = this.journal.entries.get(id);
       return entry ? this.journal.view(entry) : { operationId: id, status: "unknown" };
     });
@@ -668,6 +883,14 @@ export class ContentStore {
           after = { ...current, hash: await this.blobs.put(merged) };
         }
         await this.#put(plan, path.join(this.options.root, file.path), after, current);
+      }
+      for (const file of entry.files.filter(file => file.before.kind === "absent" && file.after.kind === "directory")
+        .sort((a,b) => b.path.split(path.sep).length-a.path.split(path.sep).length)) {
+        const current = await this.journal.image(file.path);
+        if (!sameImage(current, file.after)) continue;
+        const names = await readdir(path.join(this.options.root, file.path));
+        if (names.every(name => plan.files.get(path.join(file.path, name))?.after.kind === "absent"))
+          await this.#put(plan, path.join(this.options.root, file.path), absent, current);
       }
     });
   }

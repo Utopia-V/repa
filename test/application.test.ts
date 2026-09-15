@@ -306,11 +306,12 @@ test("公开协议支持两个客户端共享流式对话、受信任 prompt、s
   assert.deepEqual(media.details, { answer: 42, sequence: [1, 2] });
   const resource = media.content.find((x) => x.type === "resource");
   assert.equal(resource?.type, "resource");
-  const response = await other.resource(resource.resource.id);
-  assert.equal(response.headers.get("content-type"), "image/png");
+  const response = await other.resource(resource.resource);
+  assert.equal(resource.resource.mediaType, "image/png");
+  assert.equal(response.headers.get("content-type"), "application/octet-stream");
   assert.equal(new Uint8Array(await response.arrayBuffer())[0], 137);
   const url = new URL(
-    `/resources/${resource.resource.id}`,
+    `/spaces/${resource.resource.spaceId}/resources/${resource.resource.id}`,
     f.server.connection.url.replace(/^ws/, "http"),
   );
   assert.equal((await fetch(url)).status, 401);
@@ -1256,4 +1257,52 @@ test("配置读取期间关闭会话，不在正在关闭的 Host 上受理新�
   }
   assert.equal(f.faux.state.callCount, 1);
   assert.equal(f.server.application.getSession(f.key).runs.length, 1);
+});
+
+test("媒体经过会话分支、文档和展示持有后，删除任一消费者不会提前回收", async t => {
+  const f = await fixture(t, { resources: { preparationTtlMs: 1 } });
+  f.faux.setResponses([
+    fauxAssistantMessage(fauxToolCall("fixture_media", {}), { stopReason: "toolUse" }),
+    fauxAssistantMessage("媒体已保存"),
+  ]);
+  assert.equal((await f.send("生成媒体")).status, "completed");
+  const session = await f.client.call("session.get", f.key);
+  const media = session.messages.flatMap(message => message.content).find(part => part.type === "resource")!;
+  assert.equal(media.type, "resource");
+  const ref = media.resource;
+  const copied = await f.client.call("space.copy", { spaceId: f.space.id, operationId: randomUUID(), destination: path.join(f.root, "media-copy") });
+  assert.equal(copied.status, "completed", copied.error?.message);
+  await f.client.call("space.open", { path: copied.destination });
+  const copiedSession = await f.client.call("session.get", { spaceId: copied.spaceId, sessionId: f.key.sessionId });
+  const copiedMedia = copiedSession.messages.flatMap(message => message.content).find(part => part.type === "resource")!;
+  assert.equal(copiedMedia.type, "resource");
+  assert.equal(copiedMedia.resource.spaceId, copied.spaceId);
+  assert.equal(copiedSession.runs[0]!.spaceId, copied.spaceId);
+  const branch = await f.client.call("session.branch", { ...f.key, messageId: session.messages.at(-1)!.id });
+  const target = { kind: "file" as const, spaceId: f.space.id, location: { kind: "relative" as const, path: "saved.md" } };
+  const created = await f.client.call("content.write", { target, base: { kind: "absent" }, operationId: randomUUID(), value: { kind: "text", text: "带媒体的文档" } });
+  const associated = await f.client.call("content.associate", { spaceId: f.space.id, location: target.location, role: "document", operationId: randomUUID() });
+  const document = associated.contents[0]!;
+  const composed = await f.client.call("content.setComposition", { ref: document.ref!, base: document.revision!, operationId: randomUUID(), members: [], resources: [ref] });
+  const hold = await f.client.call("resource.hold", { spaceId: f.space.id, id: randomUUID(), targets: [document.target] });
+  const stranger = await f.connect();
+  await assert.rejects(stranger.call("resource.release", { spaceId: f.space.id, id: hold.id }), error => error instanceof RpcError && (error.data as { code: string }).code === "permission_required");
+  const hostKey = f.client.hostKey;
+  await f.client.reconnect();
+  assert.equal(f.client.hostKey, hostKey);
+  assert.deepEqual((await f.client.call("resource.hold.get", { spaceId: f.space.id, id: hold.id })).resources, hold.resources);
+  await f.client.call("session.remove", f.key);
+  await f.client.call("resource.collect", { spaceId: f.space.id });
+  assert.equal(new Uint8Array(await (await f.client.resource(ref)).arrayBuffer())[0], 137);
+  await f.client.call("session.remove", { spaceId: f.space.id, sessionId: branch.sessionId });
+  await f.client.call("resource.collect", { spaceId: f.space.id });
+  assert.equal((await f.client.resource(ref)).status, 200);
+  const removed = await f.client.call("content.remove", { target: document.target, base: created.contents[0]!.bodyRevision!, operationId: randomUUID() });
+  await f.client.call("operation.prune", { spaceId: f.space.id, operationIds: [created.operationId, associated.operationId, composed.operationId, removed.operationId] });
+  await f.client.call("resource.collect", { spaceId: f.space.id });
+  assert.equal((await f.client.resource(ref)).status, 200);
+  await f.client.call("resource.release", { spaceId: f.space.id, id: hold.id });
+  await f.client.call("resource.collect", { spaceId: f.space.id });
+  await assert.rejects(f.client.resource(ref));
+  assert.equal((await f.client.resource(copiedMedia.resource)).status, 200);
 });

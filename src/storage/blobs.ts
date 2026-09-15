@@ -1,8 +1,9 @@
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { RepaFault } from "../errors.js";
-import { atomicWrite } from "./atomic.js";
+import { atomicWrite, atomicWriteSync } from "./atomic.js";
 
 export const digest = (bytes: Uint8Array | string): string =>
   createHash("sha256").update(bytes).digest("hex");
@@ -34,6 +35,25 @@ export class BlobStore {
     }
     if (digest(bytes) !== id)
       throw new RepaFault("invalid_storage", "保存的内容版本校验失败。", { id });
+    return bytes;
+  }
+  putSync(bytes: Uint8Array): string {
+    const snapshot = Buffer.from(bytes);
+    const id = digest(snapshot), file = this.#path(id);
+    try { if (digest(readFileSync(file)) === id) return id; }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+    atomicWriteSync(file, snapshot);
+    return id;
+  }
+  getSync(id: string): Buffer {
+    let bytes: Buffer;
+    try { bytes = readFileSync(this.#path(id)); }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT")
+        throw new RepaFault("revision_unavailable", "所需的内容版本不可用。", { id });
+      throw error;
+    }
+    if (digest(bytes) !== id) throw new RepaFault("invalid_storage", "保存的内容版本校验失败。", { id });
     return bytes;
   }
   #path(id: string): string {

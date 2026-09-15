@@ -1,26 +1,14 @@
-import { createHash } from "node:crypto";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import type { Block, Message } from "./protocol.js";
+import type { ResourceRetention } from "./content/resources.js";
+import type { ResourceRef } from "./content/schema.js";
 
 export class Resources {
-  readonly #values = new Map<string, { mimeType: string; data: Buffer }>();
-  add(mimeType: string, data: string): { id: string; mimeType: string } {
+  constructor(readonly retention: ResourceRetention, readonly owner: string) {}
+  add(mimeType: string, data: string): ResourceRef {
     if (!/^[\w.+-]+\/[\w.+-]+$/.test(mimeType))
       mimeType = "application/octet-stream";
-    const bytes = Buffer.from(data, "base64");
-    const id = createHash("sha256")
-      .update(mimeType)
-      .update("\0")
-      .update(bytes)
-      .digest("hex");
-    if (!this.#values.has(id)) this.#values.set(id, { mimeType, data: bytes });
-    return { id, mimeType };
-  }
-  get(id: string) {
-    return this.#values.get(id);
-  }
-  clear(): void {
-    this.#values.clear();
+    return this.retention.pinBytes(this.owner, mimeType, Buffer.from(data, "base64"));
   }
 }
 
