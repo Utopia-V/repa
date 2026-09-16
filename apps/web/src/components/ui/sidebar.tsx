@@ -18,10 +18,23 @@ import {
 } from "@/components/ui/sheet"
 
 
+// 侧栏宽度属于布局尺寸，不占用 spacing token；默认 280px，可拖动范围 200–480px。
 const SIDEBAR_WIDTH_DEFAULT = 280
+const SIDEBAR_WIDTH_MIN = 200
+const SIDEBAR_WIDTH_MAX = 480
 const SIDEBAR_WIDTH_MOBILE = "min(320px, calc(100vw - 48px))"
 const SIDEBAR_WIDTH_ICON = "calc(var(--button-md-height) + var(--space-16))"
 const SIDEBAR_KEYBOARD_SHORTCUT = "b"
+// 把手拖动阈值（px）与双击窗口（ms）。
+const SIDEBAR_RESIZE_THRESHOLD = 4
+const SIDEBAR_RAIL_DOUBLE_CLICK_MS = 250
+
+/** 视口允许的最大宽度：不超过 480px，也不超过 40vw。 */
+const sidebarWidthMaxNow = () => Math.min(SIDEBAR_WIDTH_MAX, window.innerWidth * 0.4)
+
+/** 收敛到允许范围内并取整，避免状态里出现小数宽度。 */
+const clampSidebarWidth = (value: number, max = SIDEBAR_WIDTH_MAX) =>
+  Math.round(Math.min(max, Math.max(SIDEBAR_WIDTH_MIN, value)))
 
 type SidebarContextProps = {
   state: "expanded" | "collapsed"
@@ -31,6 +44,8 @@ type SidebarContextProps = {
   setOpenMobile: (open: boolean) => void
   isMobile: boolean
   toggleSidebar: () => void
+  width: number
+  setWidth: (value: number | ((prev: number) => number)) => void
   triggerRef: React.RefObject<HTMLButtonElement | null>
 }
 
@@ -60,7 +75,16 @@ function SidebarProvider({
 }) {
   const isMobile = useIsMobile()
   const [openMobile, setOpenMobile] = React.useState(false)
+  const [_width, _setWidth] = React.useState(SIDEBAR_WIDTH_DEFAULT)
   const triggerRef = React.useRef<HTMLButtonElement>(null)
+
+  // 拖动改宽的提交入口；始终收敛到允许范围内。
+  const setWidth = React.useCallback(
+    (value: number | ((prev: number) => number)) => {
+      _setWidth((prev) => clampSidebarWidth(typeof value === "function" ? value(prev) : value, sidebarWidthMaxNow()))
+    },
+    []
+  )
 
   React.useEffect(() => {
     if (!isMobile) setOpenMobile(false)
@@ -120,9 +144,11 @@ function SidebarProvider({
       openMobile,
       setOpenMobile,
       toggleSidebar,
+      width: _width,
+      setWidth,
       triggerRef,
     }),
-    [state, open, setOpen, isMobile, openMobile, setOpenMobile, toggleSidebar]
+    [state, open, setOpen, isMobile, openMobile, setOpenMobile, toggleSidebar, _width, setWidth]
   )
 
   return (
@@ -132,7 +158,7 @@ function SidebarProvider({
           data-slot="sidebar-wrapper"
           style={
             {
-              "--sidebar-width": `${SIDEBAR_WIDTH_DEFAULT}px`,
+              "--sidebar-width": `min(${_width}px, 40vw)`,
               "--sidebar-width-icon": SIDEBAR_WIDTH_ICON,
               ...style,
             } as React.CSSProperties
@@ -288,8 +314,111 @@ function SidebarTrigger({
   )
 }
 
+type SidebarRailDrag = {
+  pointerId: number
+  startX: number
+  startWidth: number
+  direction: number
+  wrapper: HTMLElement
+  bodyCursor: string
+  bodyUserSelect: string
+  moved: boolean
+  ended: boolean
+}
+
 function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
-  const { toggleSidebar } = useSidebar()
+  const { toggleSidebar, open, setOpen, width, setWidth } = useSidebar()
+  const dragRef = React.useRef<SidebarRailDrag | null>(null)
+  const suppressClickRef = React.useRef(false)
+  const clickTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const finishDrag = React.useCallback(() => {
+    const drag = dragRef.current
+    if (!drag) return
+    suppressClickRef.current = drag.moved
+    delete drag.wrapper.dataset.resizing
+    document.body.style.cursor = drag.bodyCursor
+    document.body.style.userSelect = drag.bodyUserSelect
+    dragRef.current = null
+  }, [])
+
+  React.useEffect(() => () => {
+    if (clickTimerRef.current) clearTimeout(clickTimerRef.current)
+    finishDrag()
+  }, [finishDrag])
+
+  const onPointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (event.button !== 0 || dragRef.current) return
+    const wrapper = event.currentTarget.closest<HTMLElement>('[data-slot="sidebar-wrapper"]')
+    const root = event.currentTarget.closest<HTMLElement>('[data-slot="sidebar"]')
+    const container = event.currentTarget.closest<HTMLElement>('[data-slot="sidebar-container"]')
+    if (!wrapper || !container) return
+    if (clickTimerRef.current) {
+      clearTimeout(clickTimerRef.current)
+      clickTimerRef.current = null
+    }
+    suppressClickRef.current = false
+    dragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startWidth: container.getBoundingClientRect().width,
+      direction: root?.dataset.side === "right" ? -1 : 1,
+      wrapper,
+      bodyCursor: document.body.style.cursor,
+      bodyUserSelect: document.body.style.userSelect,
+      moved: false,
+      ended: false,
+    }
+    event.currentTarget.setPointerCapture?.(event.pointerId)
+  }
+
+  const onPointerMove = (event: React.PointerEvent<HTMLButtonElement>) => {
+    const drag = dragRef.current
+    if (!drag || drag.ended || event.pointerId !== drag.pointerId) return
+    const delta = (event.clientX - drag.startX) * drag.direction
+    if (!drag.moved) {
+      if (Math.abs(delta) < SIDEBAR_RESIZE_THRESHOLD) return
+      drag.moved = true
+      drag.wrapper.dataset.resizing = "true"
+      document.body.style.cursor = "ew-resize"
+      document.body.style.userSelect = "none"
+    }
+    const target = drag.startWidth + delta
+    if (open && drag.startWidth >= SIDEBAR_WIDTH_MIN && target < SIDEBAR_WIDTH_MIN) {
+      // 收起是状态切换，恢复完整过渡，不能沿用拖动时的短过渡。
+      delete drag.wrapper.dataset.resizing
+      setOpen(false)
+      drag.ended = true
+    } else if (open) {
+      setWidth(target)
+    } else if (target >= SIDEBAR_WIDTH_MIN) {
+      // 折叠栏的小幅拖动不展开；越过阈值后完整播放展开过渡。
+      delete drag.wrapper.dataset.resizing
+      setWidth(target)
+      setOpen(true)
+      drag.ended = true
+    }
+  }
+
+  const onClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    if (suppressClickRef.current) {
+      suppressClickRef.current = false
+      return
+    }
+    if (event.detail === 0) {
+      toggleSidebar()
+    } else if (event.detail === 2) {
+      if (clickTimerRef.current) clearTimeout(clickTimerRef.current)
+      clickTimerRef.current = null
+      setWidth(SIDEBAR_WIDTH_DEFAULT)
+    } else {
+      clickTimerRef.current = setTimeout(() => {
+        clickTimerRef.current = null
+        toggleSidebar()
+      }, SIDEBAR_RAIL_DOUBLE_CLICK_MS)
+    }
+  }
+
   return (
     <button
       {...props}
@@ -297,10 +426,25 @@ function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
       data-sidebar="rail"
       data-slot="sidebar-rail"
       aria-label="切换侧栏"
-      title="切换侧栏"
-      onClick={toggleSidebar}
+      title="拖动调整宽度，点击切换，双击重置；方向键调整宽度"
+      onClick={onClick}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={finishDrag}
+      onPointerCancel={finishDrag}
+      onLostPointerCapture={finishDrag}
+      onKeyDown={(event) => {
+        const direction = event.currentTarget.closest('[data-side]')?.getAttribute("data-side") === "right" ? -1 : 1
+        if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+          event.preventDefault()
+          setWidth(width + (event.key === "ArrowRight" ? 16 : -16) * direction)
+        } else if (event.key === "Home") {
+          event.preventDefault()
+          setWidth(SIDEBAR_WIDTH_DEFAULT)
+        }
+      }}
       className={cn(
-        "absolute inset-y-0 z-20 hidden w-4 -translate-x-1/2 outline-none focus-visible:ring-2 focus-visible:ring-ring group-data-[side=left]:-right-4 group-data-[side=right]:left-0 after:absolute after:inset-y-0 after:left-1/2 after:w-[2px] hover:after:bg-border md:flex cursor-ew-resize",
+        "absolute inset-y-0 z-20 hidden w-4 -translate-x-1/2 touch-none outline-none focus-visible:ring-2 focus-visible:ring-ring group-data-[side=left]:-right-4 group-data-[side=right]:left-0 after:absolute after:inset-y-0 after:left-1/2 after:w-[2px] hover:after:bg-border md:flex cursor-ew-resize",
         "group-data-[collapsible=offcanvas]:translate-x-0 group-data-[collapsible=offcanvas]:after:left-full hover:group-data-[collapsible=offcanvas]:bg-card",
         "[[data-side=left][data-collapsible=offcanvas]_&]:-right-2",
         "[[data-side=right][data-collapsible=offcanvas]_&]:-left-2",

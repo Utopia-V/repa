@@ -136,3 +136,40 @@ it("侧栏边缘把手可切换展开与收起", () => {
   fireEvent.click(rail);
   expect(document.querySelector('[data-slot="sidebar"]')?.getAttribute("data-state")).toBe("expanded");
 });
+
+
+it("拖动改宽、拖窄收起、向外展开，并清理拖动状态", () => {
+  vi.stubGlobal("PointerEvent", MouseEvent);
+  renderWorkspace("/sources");
+  const rail = screen.getByRole("button", { name: "切换侧栏" });
+  const wrapper = document.querySelector<HTMLElement>('[data-slot="sidebar-wrapper"]')!;
+  const container = document.querySelector<HTMLElement>('[data-slot="sidebar-container"]')!;
+  const sidebar = document.querySelector<HTMLElement>('[data-slot="sidebar"]')!;
+  vi.spyOn(container, "getBoundingClientRect").mockReturnValue({ width: 280 } as DOMRect);
+  fireEvent.pointerDown(rail, { clientX: 280, button: 0 });
+  fireEvent.pointerMove(rail, { clientX: 350 });
+  expect(wrapper.style.getPropertyValue("--sidebar-width")).toContain("350px");
+  expect(document.body.style.userSelect).toBe("none");
+  fireEvent.pointerUp(rail);
+  fireEvent.click(rail);
+  expect(sidebar.dataset.state).toBe("expanded");
+  expect(document.body.style.userSelect).toBe("");
+  expect(wrapper.dataset.resizing).toBeUndefined();
+  fireEvent.pointerDown(rail, { clientX: 280, button: 0 });
+  fireEvent.pointerMove(rail, { clientX: 190 });
+  expect(wrapper.dataset.resizing).toBeUndefined();
+  fireEvent.pointerUp(rail);
+  expect(sidebar.dataset.state).toBe("collapsed");
+  vi.mocked(container.getBoundingClientRect).mockReturnValue({ width: 56 } as DOMRect);
+  fireEvent.pointerDown(rail, { clientX: 56, button: 0 });
+  fireEvent.pointerMove(rail, { clientX: 80 });
+  fireEvent.pointerMove(rail, { clientX: 100 });
+  expect(sidebar.dataset.state).toBe("collapsed");
+  fireEvent.pointerMove(rail, { clientX: 210 });
+  expect(sidebar.dataset.state).toBe("expanded");
+  expect(wrapper.dataset.resizing).toBeUndefined();
+  fireEvent.pointerCancel(rail);
+  expect(document.body.style.userSelect).toBe("");
+  fireEvent.keyDown(rail, { key: "Home" });
+  expect(wrapper.style.getPropertyValue("--sidebar-width")).toContain("280px");
+});

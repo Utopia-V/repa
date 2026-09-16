@@ -112,3 +112,10 @@
     }
   }
 }
+
+/* 拖动用短过渡平滑指针采样间的宽度变化；收起和松手恢复完整过渡。 */
+[data-slot="sidebar-wrapper"][data-resizing="true"] [data-slot="sidebar-container"],
+[data-slot="sidebar-wrapper"][data-resizing="true"] [data-slot="sidebar-gap"] {
+  transition-duration: 80ms;
+  transition-timing-function: linear;
+}
