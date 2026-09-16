@@ -21,6 +21,14 @@ npm ci
 
 Web 和 Desktop 会自动构建并启动各自的开发后端，不需要手工填写连接地址或令牌。提交评审前在根目录运行 `npm run check`、`npm test` 和 `npm run build`；具体代码入口见下一节。
 
+## Web 界面
+
+主应用启动、连接提示与工作台侧栏已使用统一的 token 和组件；连接生命周期仍由 `apps/web/src/app.tsx` 持有。工作台默认进入 `/sources`，各导航路由的右侧内容暂时留空；侧栏接入与示例数据边界见设计系统实现说明。
+
+Web 开发约束见 [apps/web/AGENTS.md](../../apps/web/AGENTS.md)。
+
+稳定视觉规则见 [DESIGN.md](../../DESIGN.md)。通用视觉由 `components/ui` 持有，业务组合位于 `components/domain`，页面负责布局。当前文件责任、主题适配、迁移范围、启动与验证入口统一见[设计系统实现说明](../design-system-implementation.md)。
+
 ## 工程边界
 
 后端、CLI、公开客户端与协议位于 `packages/repa` workspace。完整 Web 前端和完整 Electron 前端分别位于 `apps/web` 与 `apps/desktop`，各自持有页面、路由、应用状态和宿主进程接入。仓库根目录持有唯一锁文件和统一命令，包内的相对路径用于实现与测试；renderer 只通过 `repa/client` 和 `repa/protocol` 使用后端能力，Node 宿主把现有 `repa serve` CLI 作为进程边界。
