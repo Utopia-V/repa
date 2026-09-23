@@ -1,14 +1,17 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { StrictMode } from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RepaClient } from "repa/client";
 
 import { App, type LoadConnection } from "../src/renderer/src/app";
+import { mockMatchMedia } from "./match-media";
 
 vi.mock("repa/client", () => ({ RepaClient: { connect: vi.fn() } }));
 
+beforeEach(() => { mockMatchMedia(); });
 afterEach(() => {
   cleanup();
+  vi.unstubAllGlobals();
   vi.clearAllMocks();
 });
 
@@ -28,7 +31,7 @@ describe("Desktop App bootstrap", () => {
       </StrictMode>,
     );
 
-    await screen.findByText("后端已连接，学习工作台将在这里展开。");
+    await screen.findByRole("navigation", { name: "主导航" });
     expect(loadConnection).toHaveBeenCalledTimes(2);
     expect(RepaClient.connect).toHaveBeenCalledOnce();
   });
@@ -44,7 +47,8 @@ describe("Desktop App bootstrap", () => {
     render(<App loadConnection={loadConnection} />);
 
     expect(screen.getByRole("heading", { name: "正在准备 Repa" })).toBeTruthy();
-    expect(await screen.findByText("后端已连接，学习工作台将在这里展开。")).toBeTruthy();
+    expect(await screen.findByRole("navigation", { name: "主导航" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Sources 知识图" }).getAttribute("aria-current")).toBe("page");
     expect(loadConnection).toHaveBeenCalledOnce();
     expect(RepaClient.connect).toHaveBeenCalledWith(connection);
   });
@@ -63,7 +67,7 @@ describe("Desktop App bootstrap", () => {
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toContain("Node 不可用");
     fireEvent.click(screen.getByRole("button", { name: "重试" }));
-    expect(await screen.findByText("后端已连接，学习工作台将在这里展开。")).toBeTruthy();
+    expect(await screen.findByRole("navigation", { name: "主导航" })).toBeTruthy();
   });
 
   it("保留工作台并显示自动重连状态", async () => {
@@ -78,9 +82,40 @@ describe("Desktop App bootstrap", () => {
     } as unknown as RepaClient);
 
     render(<App loadConnection={loadConnection} />);
-    await screen.findByText("后端已连接，学习工作台将在这里展开。");
+    await screen.findByRole("navigation", { name: "主导航" });
     act(() => listener?.(false));
     expect(screen.getByText("后端连接已中断，正在自动重连…")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Repa" })).toBeTruthy();
+  });
+
+  it("使用桌面 Memory Router 导航并保留折叠侧栏", async () => {
+    vi.mocked(RepaClient.connect).mockResolvedValue({
+      close: vi.fn(),
+      onConnectionChange: vi.fn(() => vi.fn()),
+    } as unknown as RepaClient);
+    render(<App loadConnection={() => Promise.resolve(connection)} />);
+
+    await screen.findByRole("navigation", { name: "主导航" });
+    fireEvent.click(screen.getByRole("button", { name: "收起导航" }));
+    fireEvent.click(screen.getByRole("link", { name: "Goals" }));
+    expect(screen.getByRole("link", { name: "Goals" }).getAttribute("aria-current")).toBe("page");
+    expect(document.querySelector('[data-slot="sidebar"]')?.getAttribute("data-state")).toBe("collapsed");
+  });
+
+  it("窄窗口使用导航抽屉，选中目标后关闭", async () => {
+    mockMatchMedia(true);
+    vi.mocked(RepaClient.connect).mockResolvedValue({
+      close: vi.fn(),
+      onConnectionChange: vi.fn(() => vi.fn()),
+    } as unknown as RepaClient);
+    render(<App loadConnection={() => Promise.resolve(connection)} />);
+
+    const trigger = await screen.findByRole("button", { name: "打开导航" });
+    fireEvent.click(trigger);
+    const dialog = screen.getByRole("dialog", { name: "工作台导航" });
+    fireEvent.click(within(dialog).getByRole("link", { name: "Goals" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    fireEvent.click(trigger);
+    expect(within(screen.getByRole("dialog", { name: "工作台导航" })).getByRole("link", { name: "Goals" }).getAttribute("aria-current")).toBe("page");
   });
 });

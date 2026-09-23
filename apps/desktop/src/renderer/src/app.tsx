@@ -4,6 +4,7 @@ import { RouterProvider } from "react-router/dom";
 import { RepaClient, type ClientConnection } from "repa/client";
 
 import { routes } from "./routes";
+import { StartupPanel, ReconnectionNotice } from "@/components/domain/connection-state";
 
 type BootstrapState =
   | { status: "starting" }
@@ -62,41 +63,25 @@ export function App({
 
   if (state.status !== "ready") {
     return (
-      <main className="startup-shell">
-        <section className="startup-card" aria-labelledby="startup-title">
-          <p className="eyebrow">Repa Desktop</p>
-          <h1 id="startup-title">
-            {state.status === "starting" ? "正在准备 Repa" : "Repa 启动失败"}
-          </h1>
-          <p
-            className="description"
-            role={state.status === "failed" ? "alert" : "status"}
-          >
-            {state.status === "starting"
-              ? "正在启动或连接本机学习后端…"
-              : state.message}
-          </p>
-          {state.status === "failed" && (
-            <button
-              type="button"
-              onClick={() => setAttempt((value) => value + 1)}
-            >
-              重试
-            </button>
-          )}
-        </section>
+      <main className="grid min-h-dvh place-items-center p-4 md:p-8">
+        <div className="w-full max-w-xl">
+          <StartupPanel
+            failure={state.status === "failed" ? { message: state.message } : undefined}
+            onRetry={() => setAttempt((value) => value + 1)}
+          />
+        </div>
       </main>
     );
   }
 
   return (
-    <>
+    <div className="flex min-h-dvh flex-col">
       {!state.connected && (
-        <div className="connection-banner" role="status">
-          后端连接已中断，正在自动重连…
+        <div className="mx-auto w-full max-w-3xl px-4 pt-4 md:px-8">
+          <ReconnectionNotice />
         </div>
       )}
       <RouterProvider router={router} />
-    </>
+    </div>
   );
 }

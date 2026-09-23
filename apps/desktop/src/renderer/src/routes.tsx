@@ -1,14 +1,19 @@
-import type { RouteObject } from "react-router";
+import { Navigate, type RouteObject } from "react-router";
+import { WorkspaceLayout } from "@/layouts/workspace-layout";
+import { workspaceSections } from "@/components/domain/sidebar-data";
 
 export const routes: RouteObject[] = [
   {
-    path: "*",
-    element: (
-      <main className="home-shell">
-        <p className="eyebrow">Repa Desktop</p>
-        <h1>Repa</h1>
-        <p className="description">后端已连接，学习工作台将在这里展开。</p>
-      </main>
-    ),
+    path: "/",
+    element: <WorkspaceLayout />,
+    children: [
+      { index: true, element: <Navigate to="/sources" replace /> },
+      { path: "chat", element: null },
+      { path: "chat/:conversationId", element: null },
+      ...workspaceSections.map(({ path }) => ({ path, element: null })),
+      { path: "sources/:sourceId/knowledge-tree", element: null },
+      { path: "settings", element: null },
+      { path: "*", element: <p className="p-8">未找到页面。</p> },
+    ],
   },
 ];

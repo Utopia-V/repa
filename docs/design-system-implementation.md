@@ -13,7 +13,7 @@
 - 字体、行高、圆角、间距同样由此文件持有，不通过 JavaScript 注入 token，不维护第二份 JSON 色板。
 - `components/ui` 使用引入并适配的 shadcn 组件；涉及焦点管理、复合控件与键盘操作的行为复用 Radix。
 - 业务组件持有数据与业务状态，只组合语义组件。当前 `components/domain/knowledge-card.tsx` 组合 `SelectableCard` 与 `Badge`，不另写卡片颜色。
-- 页面负责布局，不持有通用组件样式。Web 主应用的启动、失败重试、断线提示与工作台侧栏已接入；Desktop 尚未迁移。
+- 页面负责布局，不持有通用组件样式。Web 与 Desktop 主应用的启动、失败重试、断线提示和工作台侧栏已接入；其他 Desktop 组件尚未迁移。
 
 ## 当前主题与适配
 
@@ -55,7 +55,9 @@ DESIGN.md
 
 `SelectionButton` 统一持续选择的背景、可见标记与键盘焦点，用于目录、筛选和拓扑节点；`SearchInput` 组合 Input 和 Button，页面不再通过子元素选择器改写输入框圆角。`ConversationMessage` 将 sender 映射到 `MessageBubble` 的 variant；通用气泡视觉由 ui 持有。没有真实调用方的业务组件不预建。
 
-Desktop 仍使用自身实现，不受 Web 主题入口影响。
+Desktop renderer 在 `apps/desktop/src/renderer/src/` 持有自己的 `globals.css`、基础组件源码和业务组合，当前只引入主应用与侧栏实际使用的组件。主题语义和侧栏交互以 Web 当前实现为基准；连接继续通过 preload 的 `getConnection` 获取，路由继续使用 Memory Router，窗口保留原生标题栏。Desktop 的 Tailwind 插件与路径别名由 `electron.vite.config.ts` 提供，`src/renderer/src/main.tsx` 加载主题和宿主样式。两端没有共享组件包，后续改动共同规则时需核对对应实现。
+
+Desktop 验证入口为 `npm run check --workspace=@repa/desktop`、`npm run test --workspace=@repa/desktop` 和 `npm run build --workspace=@repa/desktop`；`apps/desktop/test/app.test.tsx` 覆盖启动与重连、Memory Router 导航、折叠栏和窄窗口抽屉。
 
 ## 参考方式
 
@@ -87,5 +89,3 @@ Desktop 仍使用自身实现，不受 Web 主题入口影响。
 - `components/domain/sidebar-data.ts` 持有导航配置与三条示例会话数据，界面直接呈现会话列表。当前没有读取真实会话或空间，底部显示“尚未选择学习空间”。
 - `/` 重定向到 `/sources`；`/chat`、`/chat/:conversationId`、`/goals`、`/wiki`、`/sources`、`/sources/:sourceId/knowledge-tree`、`/history`、`/settings` 共用布局，内容区为空。未知地址显示未找到页面，不自动改写为 Sources。
 - `test/sidebar.test.tsx` 验证默认路由、导航历史、Chat 整行开关、深链接归属、移动面板关闭与焦点恢复、图标栏折叠（可访问名称与 `title` 保留、折叠时点击 Chat 先展开、深链接标记当前项）；`test/app.test.tsx` 继续验证连接生命周期。
-
-已知限制：折叠栏的当前项只靠 `accent` 背景区分，加粗标签随文字一起隐藏，没有非颜色提示；是否补选中标记或 `border-selected` 边框待定。
