@@ -11,4 +11,6 @@
 
 ## 目录规范
 
+- 前端设计规范见 [docs/design-system.md](docs/design-system.md)，实现说明见 [docs/design-system-implementation.md](docs/design-system-implementation.md)。
+
 - Web 前端开发同时遵循 [apps/web/AGENTS.md](apps/web/AGENTS.md)。

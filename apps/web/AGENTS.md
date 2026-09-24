@@ -4,14 +4,14 @@
 
 ## 开发前阅读
 
-- [DESIGN.md](../../DESIGN.md)：稳定设计规则；尺寸、组件用途、状态和可访问性以此为准，不在本文件复制数值表。
+- [设计系统规范](../../docs/design-system.md)：稳定设计规则；尺寸、组件用途、状态和可访问性以此为准，不在本文件复制数值表。
 - [设计系统实现说明](../../docs/design-system-implementation.md)：当前接入范围、文件职责和主题加载方式。
 - [开发指南](../../docs/development/README.md)：Web 宿主、后端接入与工程边界。
 - 修改基础组件时核对[通用组件说明](src/components/ui/README.md)中的上游来源与本地适配。
 
 ## 样式与组件归属
 
-- 样式链路为 `DESIGN.md` → `src/globals.css` → `src/components/ui` → `src/components/domain` → 页面或 feature；页面或 feature 位于组件的调用层，不反向定义组件视觉。
+- 样式链路为 `docs/design-system.md` → `src/globals.css` → `src/components/ui` → `src/components/domain` → 页面或 feature；页面或 feature 位于组件的调用层，不反向定义组件视觉。
 - 优先复用 `src/components/ui` 中已有的 shadcn 组件；基础组件存在 variant 或 size 时使用 CVA 管理。
 - 颜色必须使用 semantic design tokens，不直接写品牌色或中性色 HEX/RGB，不引用主题私有变量。`src/globals.css` 是 token 的唯一真实来源，不另建 `tokens.ts` 或 JSON 色板。
 - 不新增任意圆角、字号或非 spacing scale 间距；布局尺寸、拓扑坐标和图标尺寸不冒充留白 token。
@@ -27,7 +27,7 @@
 - 同一 size 下各 Button variant 共享几何与排版；Disabled 是状态。默认 Button 不提交表单，提交入口显式使用 `type="submit"`。
 - 重要状态提供非颜色视觉提示，同时提供对应的原生或 ARIA 状态。Selected 与 Focus 独立，不以选中标记替代焦点提示。
 - 输入控件使用可见 label；错误说明关联输入。图标按钮提供可访问名称；交互组件支持键盘操作。
-- 业务组件、页面和 feature 的 `className` 仅用于布局、定位、响应式及基础组件明确允许的 composition spacing；不得覆盖 variant、颜色、边框或 ring、圆角、阴影、排版和交互状态。Card 内距由基础组件 size / variant 持有；响应式和页面 CSS 不豁免限制。具体范围以 `DESIGN.md` 为准。
+- 业务组件、页面和 feature 的 `className` 仅用于布局、定位、响应式及基础组件明确允许的 composition spacing；不得覆盖 variant、颜色、边框或 ring、圆角、阴影、排版和交互状态。Card 内距由基础组件 size / variant 持有；响应式和页面 CSS 不豁免限制。具体范围以 `docs/design-system.md` 为准。
 - 组件不得依赖调用页面的 CSS 才能正确显示，不维护第二套 token 展示值。
 - 新增或修改界面需处理窄屏、内容换行、文字放大和减少动态效果偏好；不得通过缩小正文或禁用缩放隐藏布局问题。
 
@@ -51,4 +51,4 @@ npm run build --workspace=@repa/web
 
 - 行为测试覆盖用户可观察的结果，例如选择、表单提交、错误反馈和焦点恢复；不以类名快照代替交互验证。
 - 视觉或交互改动在浏览器核对受影响场景，包括窄屏和键盘操作；报告未完成的验证，不将构建通过等同于视觉验收。
-- 稳定设计决策更新 `DESIGN.md`；文件责任、接入方式和迁移现状更新设计系统实现说明；依赖来源与组件适配更新通用组件说明。不将临时测试结果写成长期设计规则。
+- 稳定设计决策更新 `docs/design-system.md`；文件责任、接入方式和迁移现状更新设计系统实现说明；依赖来源与组件适配更新通用组件说明。不将临时测试结果写成长期设计规则。

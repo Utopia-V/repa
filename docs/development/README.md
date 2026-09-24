@@ -27,7 +27,7 @@ Web 与 Desktop 的主应用启动、连接提示和工作台侧栏已使用相�
 
 Web 开发约束见 [apps/web/AGENTS.md](../../apps/web/AGENTS.md)。
 
-稳定视觉规则见 [DESIGN.md](../../DESIGN.md)，相关取舍见 [ADR 0006](../adr/0006-govern-frontend-visuals-through-a-semantic-design-system.md)。通用视觉由 `components/ui` 持有，业务组合位于 `components/domain`，页面负责布局。当前文件责任、主题适配、迁移范围、启动与验证入口统一见[设计系统实现说明](../design-system-implementation.md)。
+稳定视觉规则见 [设计系统规范](../design-system.md)，相关取舍见 [ADR 0006](../adr/0006-govern-frontend-visuals-through-a-semantic-design-system.md)。通用视觉由 `components/ui` 持有，业务组合位于 `components/domain`，页面负责布局。当前文件责任、主题适配、迁移范围、启动与验证入口统一见[设计系统实现说明](../design-system-implementation.md)。
 
 ## 工程边界
 

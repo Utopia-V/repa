@@ -1,12 +1,12 @@
 # 设计系统实现说明
 
-稳定规则由 [DESIGN.md](../DESIGN.md) 持有；本文记录当前实现与接入方式，不作为新增视觉规则的入口。
+稳定规则由 [设计系统规范](design-system.md) 持有；本文记录当前实现与接入方式，不作为新增视觉规则的入口。
 
 前端开发执行约束见 [apps/web/AGENTS.md](../apps/web/AGENTS.md)。
 
 ## 责任与文件位置
 
-`DESIGN.md` 定义语义 → `globals.css` 映射主题 → `components/ui` 实现通用组件 → 业务组件组合使用 → 页面布局。
+`docs/design-system.md` 定义语义 → `globals.css` 映射主题 → `components/ui` 实现通用组件 → 业务组件组合使用 → 页面布局。
 
 - `globals.css` 内 `--theme-*` 是主题私有色值，仅用于定义语义变量；业务代码禁止引用。
 - 公共 CSS variables 按规范中的色彩语义分层。Tailwind 的 `@theme inline` 将其映射为 `bg-primary`、`text-foreground` 等工具类，普通 CSS 可直接使用同名变量。
@@ -38,7 +38,7 @@ Web 仅保留主应用入口 `apps/web/index.html`，主题由 `apps/web/src/glo
 ## 样式修改入口
 
 ```text
-DESIGN.md
+docs/design-system.md
   → apps/web/src/globals.css
   → apps/web/src/components/ui
   → apps/web/src/components/domain
@@ -47,7 +47,7 @@ DESIGN.md
 
 | 修改内容 | 所属位置 |
 | --- | --- |
-| 语义和可判定约束 | 根目录 DESIGN.md |
+| 语义和可判定约束 | docs/design-system.md |
 | 色值、字体尺度、圆角、留白和尺寸 token | globals.css；不新增 tokens.ts |
 | 通用 variant / size / hover / active / focus | ui 组件及其 CVA；跨控件的 CSS 由 ui/styles.css 持有，通过 globals.css 加载 |
 | 业务状态与基础组件组合 | domain/knowledge-card.tsx、conversation-message.tsx、topology-node.tsx |

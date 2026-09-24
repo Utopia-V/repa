@@ -269,6 +269,8 @@ repa/
 
 ## 参与开发
 
+前端视觉与交互遵循[设计系统规范](docs/design-system.md)，组件职责与接入方式见[设计系统实现说明](docs/design-system-implementation.md)。
+
 从[开发指南](docs/development/README.md#参与开发)开始：其中说明根目录安装、Web／Desktop／后端开发命令、代码入口与交付前验证。可领取任务及其依赖关系由[产品主议题 #5](https://github.com/Utopia-V/repa/issues/5)统一维护。
 
 ## 运行现有 TUI
