@@ -1,8 +1,6 @@
-import { useState } from "react";
 import { Outlet } from "react-router";
 import { SidebarProvider, SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/domain/app-sidebar";
-import { exampleConversations } from "@/components/domain/sidebar-data";
 
 function WorkspaceContent() {
   const { isMobile } = useSidebar();
@@ -14,9 +12,8 @@ function WorkspaceContent() {
 }
 
 export function WorkspaceLayout() {
-  const [chatExpanded, setChatExpanded] = useState(true);
   return <SidebarProvider>
-    <AppSidebar conversations={exampleConversations} chatExpanded={chatExpanded} onChatExpandedChange={setChatExpanded} />
+    <AppSidebar />
     <WorkspaceContent />
   </SidebarProvider>;
 }

@@ -82,10 +82,11 @@ Desktop 验证入口为 `npm run check --workspace=@repa/desktop`、`npm run tes
 - `components/ui/sidebar.tsx` 从 shadcn 官方 `new-york-v4/sidebar.json` 引入本次使用的 Provider、Sidebar、Trigger、Rail、Header、Content、Footer、Group、Menu 与 Submenu 组合；未引入没有调用方的 Input、Skeleton、Tooltip 和菜单附件。
 - `SidebarRail` 是侧栏边缘的 16px 手势条，点击切换展开/收起，悬停显示 2px 中性 `border` 竖线；支持拖动调整宽度、双击重置，键盘方向键调整、Home 重置、Enter/空格切换；上游的 offcanvas 类保留但当前未被使用。
 - `layouts/workspace-layout.tsx` 通过 SidebarProvider 组合应用侧栏、打开入口和空白路由出口。桌面展开宽度 280px，收起为 56px 常驻图标栏（`collapsible="icon"`）；移动端由官方 `useIsMobile` 与 Sheet 切换为侧边面板。桌面折叠栏自带展开入口，工作区只在移动端渲染浮动打开按钮。桌面可拖动至 200–480px，最大不超过视口的 40%；拖至最小宽度以下收起，折叠时向外拖至 200px 展开阈值才展开，小幅拖动保持折叠；展开使用完整过渡并结束本次拖动。宽度只存于内存，拖动期间用 80ms 短过渡平滑调整宽度，跨过收起阈值时恢复完整折叠动画，取消、失去指针捕获或卸载时清理拖动状态。
-- 折叠栏沿用展开态样式：同一个 `SidebarMenuButton` cva、相同 token 与 hover/active/focus/current 规则，仅把按钮收敛为 40px 图标盒、`Header`/`Footer`/`Group` 内距收敛为 `--space-8`、会话子菜单用 `grid-template-rows` 高度过渡收起并加 `inert`。菜单按钮 `overflow-hidden`、标签 `truncate`，内距与容器宽度都按 `duration-300 ease-linear` 同步过渡，避免展开时标签在窄宽度下换行把列表项挤乱（标签不再换行；超长会话标题在展开态截断，并用 `title` 给出全文）。宽度由 `--button-md-height + --space-16` 派生，不写裸值。折叠时菜单文字使用 `sr-only` 保留可访问名称，并用原生 `title` 为鼠标用户补回标签（暂不引入 Tooltip 组件）；会话深链接通过 `isActive` 让 Chat 保持当前项标记。折叠后加粗标签不可见，因此 icon 栏按钮统一预留 1px `border`（默认 `border-transparent`），当前项（`data-active` 或 `aria-current=page`）仅切换为 `border-selected`，为非颜色提示保留形状线索。Header 不使用独立品牌图标与副标题：展开态左侧显示 `Repa` 文字，折叠态只保留居中的展开按钮，`Repa` 转为 `sr-only`。Footer 贴底锚定：折叠后空间块与 Settings 距底 `--space-8`（展开为 `--space-16`），底栏高度随内容收缩而下移；空间块的宽度、内距与描述行同样按 300ms 过渡，折叠后为 40px 图标盒。
-- `components/domain/app-sidebar.tsx` 持有品牌、导航与空间说明的组合。Chat 整行由 Radix Collapsible.Trigger 和 SidebarMenuButton 组合，点击仅展开或收起；SidebarMenuSubButton 中的会话链接负责导航。路由 `aria-current` 决定当前菜单项，不另存选中状态。
-- 菜单样式使用 Sidebar 内的 Tailwind + CVA，映射到既有 semantic tokens，不新增 sidebar 色板。文字换行、14px 标签、触控最小尺寸和独立焦点遵循 DESIGN.md；子菜单没有文字下划线。
-- 自定义 NavigationLink、NavigationGroupTrigger 和布局层重复的抽屉状态已移除。Sheet 复用 Radix Dialog 的模态行为；选择会话或功能后关闭并恢复打开入口焦点，回到桌面宽度时清除移动展开状态。折叠栏不套用 offcanvas 的 `inert`，图标按钮仍可键盘到达，被隐藏的子菜单不进入 Tab 顺序。
-- `components/domain/sidebar-data.ts` 持有导航配置与三条示例会话数据，界面直接呈现会话列表。当前没有读取真实会话或空间，底部显示“尚未选择学习空间”。
-- `/` 重定向到 `/sources`；`/chat`、`/chat/:conversationId`、`/goals`、`/wiki`、`/sources`、`/sources/:sourceId/knowledge-tree`、`/history`、`/settings` 共用布局，内容区为空。未知地址显示未找到页面，不自动改写为 Sources。
-- `test/sidebar.test.tsx` 验证默认路由、导航历史、Chat 整行开关、深链接归属、移动面板关闭与焦点恢复、图标栏折叠（可访问名称与 `title` 保留、折叠时点击 Chat 先展开、深链接标记当前项）；`test/app.test.tsx` 继续验证连接生命周期。
+- 折叠栏沿用 SidebarMenuButton 的 token 与交互状态，通过 `sr-only` 保留标签的可访问名称，并用 `title` 提供图标提示。侧栏支持拖动调宽、收起与展开；移动端复用 Sheet 的关闭、Escape 和焦点恢复行为。
+- `components/domain/app-sidebar.tsx` 仅组合 Learning Space 和 Settings 两个栏目。Learning Space 位于上方，Settings 位于底部；不再显示 Chat、示例会话、Goals、Wiki、Sources、History 或本地空间提示卡。布局不再保存会话展开状态，已移除示例导航数据文件。
+- `/` 重定向到 `/learning-space`，显示材料选择组件；`/settings` 内容暂时为空。两者共用工作台布局，未知地址显示未找到页面。
+- `test/sidebar.test.tsx` 验证两个栏目、默认页、导航历史、移动抽屉与焦点恢复、图标栏和拖动调宽；`test/app.test.tsx` 验证连接生命周期及 Desktop 导航。
+
+## Learning Space 材料选择
+
+Web 和 Desktop 均由 `pages/learning-space.tsx` 负责居中布局，`components/domain/learning-upload.tsx` 负责材料拖拽、多文件选择、去重和移除，相邻 CSS 仅使用语义 token。默认路由为 `/learning-space`，侧栏通过 Learning Space 进入材料选择页。书本使用现有 lucide-react 的 BookOpen 图标，主要行动复用 Button。材料暂存在页面内存，离开页面后清空；上方拖拽框独立承担文件选择，仅在文件输入具有 `:focus-visible` 时显示容器焦点环，鼠标点击不额外描边。“开始学习”是进入学习页面的入口，不触发文件选择或上传；学习页面暂不实现，按钮保持禁用。

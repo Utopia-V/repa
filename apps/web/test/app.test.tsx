@@ -32,7 +32,7 @@ describe("Web App bootstrap", () => {
       </StrictMode>,
     );
 
-    await screen.findByRole("link", { name: "Sources 知识图" });
+    await screen.findByRole("link", { name: "Learning Space" });
     expect(loadConnection).toHaveBeenCalledTimes(2);
     expect(RepaClient.connect).toHaveBeenCalledOnce();
   });
@@ -48,7 +48,7 @@ describe("Web App bootstrap", () => {
     render(<App loadConnection={loadConnection} />);
 
     expect(screen.getByRole("heading", { name: "正在准备 Repa" })).toBeTruthy();
-    expect(await screen.findByRole("link", { name: "Sources 知识图" })).toBeTruthy();
+    expect(await screen.findByRole("link", { name: "Learning Space" })).toBeTruthy();
     expect(loadConnection).toHaveBeenCalledOnce();
     expect(RepaClient.connect).toHaveBeenCalledWith(connection);
   });
@@ -66,7 +66,7 @@ describe("Web App bootstrap", () => {
     render(<App loadConnection={loadConnection} />);
     expect((await screen.findByRole("alert")).textContent).toContain("后端不可用");
     fireEvent.click(screen.getByRole("button", { name: "重试" }));
-    expect(await screen.findByRole("link", { name: "Sources 知识图" })).toBeTruthy();
+    expect(await screen.findByRole("link", { name: "Learning Space" })).toBeTruthy();
     expect(loadConnection).toHaveBeenCalledTimes(2);
   });
 
@@ -82,7 +82,7 @@ describe("Web App bootstrap", () => {
     } as unknown as RepaClient);
 
     render(<App loadConnection={loadConnection} />);
-    await screen.findByRole("link", { name: "Sources 知识图" });
+    await screen.findByRole("link", { name: "Learning Space" });
     act(() => listener?.(false));
     expect(screen.getByText("后端连接已中断，正在自动重连…")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Repa" })).toBeTruthy();

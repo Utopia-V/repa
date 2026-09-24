@@ -23,7 +23,7 @@ Web 和 Desktop 会自动构建并启动各自的开发后端，不需要手工�
 
 ## Web 界面
 
-Web 与 Desktop 的主应用启动、连接提示和工作台侧栏已使用相同的语义 token 与组件行为；连接生命周期分别由各自的 `app.tsx` 持有。工作台默认进入 `/sources`，各导航路由的右侧内容暂时留空；侧栏接入与示例数据边界见设计系统实现说明。
+Web 与 Desktop 的主应用启动、连接提示和工作台侧栏已使用相同的语义 token 与组件行为；连接生命周期分别由各自的 `app.tsx` 持有。工作台默认进入 `/learning-space`，右侧居中显示学习材料选择组件；侧栏仅保留 Learning Space 和 Settings，Settings 内容暂时留空；侧栏接入见设计系统实现说明。
 
 Web 开发约束见 [apps/web/AGENTS.md](../../apps/web/AGENTS.md)。
 

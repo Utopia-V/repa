@@ -48,7 +48,8 @@ describe("Desktop App bootstrap", () => {
 
     expect(screen.getByRole("heading", { name: "正在准备 Repa" })).toBeTruthy();
     expect(await screen.findByRole("navigation", { name: "主导航" })).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Sources 知识图" }).getAttribute("aria-current")).toBe("page");
+    await waitFor(() => expect(screen.getByRole("link", { name: "Learning Space" }).getAttribute("aria-current")).toBe("page"));
+    expect(screen.getAllByRole("link").map((link) => link.textContent)).toEqual(["Learning Space", "Settings"]);
     expect(loadConnection).toHaveBeenCalledOnce();
     expect(RepaClient.connect).toHaveBeenCalledWith(connection);
   });
@@ -97,8 +98,8 @@ describe("Desktop App bootstrap", () => {
 
     await screen.findByRole("navigation", { name: "主导航" });
     fireEvent.click(screen.getByRole("button", { name: "收起导航" }));
-    fireEvent.click(screen.getByRole("link", { name: "Goals" }));
-    expect(screen.getByRole("link", { name: "Goals" }).getAttribute("aria-current")).toBe("page");
+    fireEvent.click(screen.getByRole("link", { name: "Settings" }));
+    expect(screen.getByRole("link", { name: "Settings" }).getAttribute("aria-current")).toBe("page");
     expect(document.querySelector('[data-slot="sidebar"]')?.getAttribute("data-state")).toBe("collapsed");
   });
 
@@ -113,9 +114,9 @@ describe("Desktop App bootstrap", () => {
     const trigger = await screen.findByRole("button", { name: "打开导航" });
     fireEvent.click(trigger);
     const dialog = screen.getByRole("dialog", { name: "工作台导航" });
-    fireEvent.click(within(dialog).getByRole("link", { name: "Goals" }));
+    fireEvent.click(within(dialog).getByRole("link", { name: "Settings" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     fireEvent.click(trigger);
-    expect(within(screen.getByRole("dialog", { name: "工作台导航" })).getByRole("link", { name: "Goals" }).getAttribute("aria-current")).toBe("page");
+    expect(within(screen.getByRole("dialog", { name: "工作台导航" })).getByRole("link", { name: "Settings" }).getAttribute("aria-current")).toBe("page");
   });
 });
