@@ -86,7 +86,7 @@ npm test
 npm run build
 ```
 
-测试使用 Node 自带测试器，所有 `packages/repa/test/*.test.ts` 都进入 `npm test`。Pi 集成使用锁定 SDK 的真实会话、工具和压缩流程，模型由本地 faux provider 提供确定性响应，无需模型凭据。
+后端测试使用 Node 自带测试器，所有 `packages/repa/test/*.test.ts` 都进入 `npm test`。Pi 集成使用锁定 SDK 的真实会话、工具和压缩流程，模型由本地 faux provider 提供确定性响应，无需模型凭据。
 
 | 需要保护的行为 | 主要验证入口 |
 | --- | --- |
@@ -97,5 +97,9 @@ npm run build
 | 实际模型输入、来源关闭、空提示、重复注入和压缩 | [agent-context.test.ts](../../packages/repa/test/agent-context.test.ts)、[pi-context-integration.test.ts](../../packages/repa/test/pi-context-integration.test.ts) |
 | 配置与外部文件授权的持久化、并发写入 | [configuration.test.ts](../../packages/repa/test/configuration.test.ts)、[content-access.test.ts](../../packages/repa/test/content-access.test.ts) |
 | 后端、客户端、TUI、恢复与真实子进程生命周期 | [application.test.ts](../../packages/repa/test/application.test.ts)、[run-journal.test.ts](../../packages/repa/test/run-journal.test.ts) |
+| Web HTTP 连接交付、真实后端启动及退出清理 | [Web 宿主集成测试](../../apps/web/test/backend.integration.test.ts) |
+| Desktop 后端进程复用、退出与再次启动 | [Desktop 宿主集成测试](../../apps/desktop/test/backend.integration.test.ts) |
 
 完整后端端到端基线已有 Linux 运行证据；Web 与 Desktop 的开发启动已在 macOS 验证。文件系统通知用于让界面重新查询，不能证明观察到了外部程序的每一次中间写入。安装包、其他平台的进程与文件锁行为、性能和真实学习效果仍需在对应环境验证。
+
+两项前端宿主集成测试沿用 Vitest，在 Node 环境中启动真实 `repa serve` 子进程并通过 `RepaClient` 打开、查询临时学习空间；Web 额外经过真实 Vite HTTP 连接端点。配置和内容使用独立临时目录，测试结束清理后端与文件，无需模型凭据或新增测试依赖。运行根目录 `npm test` 会先构建后端并包含这些测试；仅运行前端 workspace 测试前需先执行 `npm run build --workspace=repa`。这些检查覆盖宿主与后端边界，不等同于浏览器端到端或 Electron 窗口、preload 的验证。
