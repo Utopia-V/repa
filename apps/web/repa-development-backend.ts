@@ -54,6 +54,7 @@ function isAlive(pid: number): boolean {
   }
 }
 
+// SCRUM-70：通过连接文件复用或启动后端；交付连接后由后端按客户端生命周期退出。
 export async function startRepaDevelopmentBackend(): Promise<ClientConnection> {
   const file = connectionFile();
   await mkdir(path.dirname(file), { recursive: true, mode: 0o700 });

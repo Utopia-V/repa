@@ -120,6 +120,7 @@ async function start(options: RepaProcessOptions): Promise<ClientConnection> {
   return { url: endpoint.url, token: endpoint.token };
 }
 
+// SCRUM-70：合并并发启动请求，避免多个窗口重复拉起同一后端。
 export function ensureDesktopRepaProcess(
   options: RepaProcessOptions,
 ): Promise<ClientConnection> {
