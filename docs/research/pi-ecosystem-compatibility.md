@@ -1,6 +1,6 @@
 # Pi 生态对 Repa 的可复用性调查
 
-调查基准是 `earendil-works/pi` 的固定提交 [`8fa7eebd235355522c8104166b4f1f959b4e2f10`](https://github.com/earendil-works/pi/tree/8fa7eebd235355522c8104166b4f1f959b4e2f10)，下文的 GitHub 链接均固定到该提交。本记录为 Pi 嵌入决策和后续 integration prototype 提供事实依据；升级 Pi 固定版本时，应重新核对其中受影响的结论。
+第 1–8 节的调查基准是 `earendil-works/pi` 的固定提交 [`8fa7eebd235355522c8104166b4f1f959b4e2f10`](https://github.com/earendil-works/pi/tree/8fa7eebd235355522c8104166b4f1f959b4e2f10)，相应 GitHub 链接均固定到该提交。第 9–11 节补充本仓库锁定依赖 `@earendil-works/pi-coding-agent@0.84.3` 的局部核验，第 10 节另以固定版本的 Codex 编辑实现作比较。本记录为 Pi 嵌入决策和后续 integration prototype 提供事实依据；升级相关依赖时，应重新核对其中受影响的结论。
 
 ## 结论摘要
 
@@ -54,11 +54,11 @@ Pi 明确警告 package/extension 以完整系统权限运行，skill 也能指�
 
 | 生态类别 | Node SDK 宿主 | Rust + RPC | Repa 不使用 Pi |
 |---|---|---|---|
-| skill（标准 `SKILL.md`） | **直接复用**，可由 loader 发现或显式注入 | **直接复用**，由 Pi 子进程加载；Repa 只消费行为 | **Adapter**：复用文件/解析和约定，重做注入/按需读取 |
+| skill（标准 `SKILL.md`） | **直接复用**，可由 loader 发现或显式注入 | **直接复用**，由 Pi 子进程加载；Repa 只消费行为 | **Adapter**：复用文件和约定，按替代运行时的能力接入发现、注入与按需读取 |
 | tool-only extension（不依赖 TUI） | **直接复用** | **直接复用**，工具调用和结果走 RPC events | **Adapter**：重写 ExtensionAPI/tool schema 到 Repa tool API |
-| provider extension | **直接复用**，Node 侧认证/streaming/provider registry 均可接 | **直接复用**，由 Pi Node 进程持有 provider；Rust 只驱动模型 | **基本不可直接复用**，需重做 provider/auth/stream protocol |
-| commands/dialogs | **直接复用**；SDK 中 command 仍可调用，但 UI 要宿主提供 | **部分复用/Adapter**：四类 dialog 有 subprotocol，需客户端应答 | **Adapter**：命令解析、交互、状态全重做 |
-| custom TUI | **直接复用**，需嵌入/使用 Pi TUI 运行时 | **基本不可直接复用**；`custom()` 等降级 | **基本不可直接复用**，重做 UI |
+| provider extension | **直接复用**，Node 侧认证/streaming/provider registry 均可接 | **直接复用**，由 Pi Node 进程持有 provider；Rust 只驱动模型 | **基本不可直接复用**，需适配所选 provider/auth/stream 接口 |
+| commands/dialogs | **直接复用**；SDK 中 command 仍可调用，但 UI 要宿主提供 | **部分复用/Adapter**：四类 dialog 有 subprotocol，需客户端应答 | **Adapter**：命令解析、交互与状态需接入所选宿主 |
+| custom TUI | **直接复用**，需嵌入/使用 Pi TUI 运行时 | **基本不可直接复用**；`custom()` 等降级 | **基本不可直接复用**，需按所选前端适配或替代 |
 | coding-tool override | **Adapter**：若 Repa 工具契约同构才可直连 | **Adapter**：Pi 内覆写后通过 RPC 暴露，不是 Rust 本地覆写 | **Adapter/重写** |
 | session-internals（append entries/tree labels/runtime replacement） | **直接复用**，但宿主需遵守 Runtime 重绑语义 | **部分复用**：RPC 有 fork/tree/entries 等命令，不能任意使用 Node 对象 | **基本不可直接复用**，需映射到 Repa session model |
 | theme | **直接复用**仅对 Pi TUI；非 TUI 仅可读取数据 | **基本不可用**：RPC `getAllThemes/getTheme/setTheme` 降级 | **基本不可直接复用** |
@@ -76,10 +76,59 @@ Pi 明确警告 package/extension 以完整系统权限运行，skill 也能指�
 
 1. **Node SDK 架构（复用最高）**：Repa 直接调用 `createAgentSession`/Runtime，注入自己的 cwd、settings、session manager、tools 或 loader；可保留 Node extension、provider、skills、prompts、Pi session/compaction/retry/streaming。代价是 Repa 接受 Node/TypeScript runtime 与 Pi 的生命周期和资源布局，或明确写 adapter。
 2. **Rust + RPC 架构（复用中高）**：Repa 保持 Rust 主进程和自己的 UI/产品边界，Pi Node 子进程承载 agent/model/auth/tools/extensions/session。tool-only/provider/skill 复用度高；TUI custom、theme、editor/footer 只能降级；要实现可靠交互，Rust 必须实现 JSONL command/event 与 extension UI request/response。
-3. **未来不使用 Pi（复用最低）**：只能把 `SKILL.md`、Markdown prompts、JSON themes、tool/provider 设计思想作为数据或规范迁移；所有 extension runtime、package manager、认证、agent loop、session tree、retry/compaction/streaming、TUI/RPC 都需重做。不存在官方承诺的跨宿主 ABI，因此“直接运行 Pi extension”不成立。
+3. **不使用 Pi（需选择替代运行时）**：可迁移 `SKILL.md`、Markdown prompts、JSON themes 及相关工具约定，但需要为模型连接、认证、Agent loop、会话、重试、压缩、流式执行和扩展选择并整合替代能力。这些能力可以来自其他 SDK 或成熟组件，也可以按需要自研。Pi 没有承诺跨宿主 ABI，原有 Pi Extension 的直接兼容性需要另行适配；失去 Pi 的统一实现与扩展兼容性，不等于所有通用能力都必须从零重写。
 
 ## 8. 关键限定
 
 * 上述“可直接复用”指在 Pi Node runtime 中按官方 API 运行，不表示能把 TypeScript extension 编译成 Rust 原生插件。
 * RPC 能加载并运行 extension/package 资源，是因为 Pi Node 进程仍执行 `DefaultResourceLoader`/package resolution；Rust 端仅是协议消费者。
 * package/extension/skill 均是信任边界内的任意代码或任意模型指令；Repa 若把它们暴露给不受信项目，必须自行增加沙箱、审批或资源白名单。Pi 官方文档只提供 trust gating，不宣称 sandbox。
+
+## 9. Pi 0.84.3 的包入口边界补充
+
+本节依据仓库锁定依赖的 `package-manager`、`resource-loader` 和 `extensions` 类型与实现，以及使用 `SettingsManager.inMemory()` 的本地包解析探针。核验范围是包发现、位置解析与资源过滤，没有安装网络包、创建 AgentSession 或调用模型。
+
+`PackageManager.listConfiguredPackages()` 与 `getInstalledPath()` 可以在没有 Agent 运行实例时取得已配置包及其位置，因此 Repa 可以复用包来源与定位，再读取各宿主所需的入口信息。Pi 的工具执行仍要求 `ExtensionContext`，其中包含会话管理、模型和会话 UI 等能力；Extension loader 创建的运行时动作在 runner 绑定前是抛错占位。这两种接口分别服务包管理和会话中的扩展执行，不能将任意 Pi 工具直接视为独立后台函数。
+
+本地目录解析还有一项兼容细节：`resolveLocalExtensionSource()` 在目录没有 Pi manifest 或约定资源目录时，会把整个目录回退登记为 Extension。仅添加自定义 Repa 入口元数据不会改变这条规则。
+
+| 本地解析条件 | Extension 数 | Skill 数 | prompt 数 |
+| --- | --- | --- | --- |
+| 只有自定义 Repa 入口声明，作为普通本地包直接交给 Pi | 1 | 0 | 0 |
+| 同一目录由宿主将四类 Pi 资源过滤为空 | 0 | 0 | 0 |
+| 仓库已有的 Pi 测试包，沿用原声明 | 1 | 1 | 1 |
+
+空过滤使用现有 package filter 的 `extensions`、`skills`、`prompts`、`themes` 空数组完成，Repa 入口文件保持为普通包文件。上述结果支持在宿主适配层分别装配包的 Agent、后台和前端部分，而不是将全部已安装包原样交给 Pi 的扩展发现规则。各类 Repa 入口的公开字段和运行契约仍属于待定义的宿主接口。
+
+## 10. Pi 0.84.3 的工具与服务复用边界
+
+本节核对[仓库锁定依赖](../../package-lock.json)中该包的 `package.json`、`dist/index.d.ts` 及下列模块的类型和实现。编辑行为通过公开工具工厂与内存 I/O 复现，没有调用模型或写入实际内容文件。
+
+| 能力 | 已有入口与实现 | 接入时保留的 Repa 责任 |
+| --- | --- | --- |
+| 读取、编辑与写入 | `createReadToolDefinition`、`createEditToolDefinition`、`createWriteToolDefinition` 及各自的 `operations`；模块为 `dist/core/tools/{read,edit,write}` | 授权、内容身份与修订、共同提交和资源关系；编辑行为须符合正文契约 |
+| 命令执行 | `createBashToolDefinition` 的 `BashOperations.exec`；工具外层已有流式输出、截断及完整输出保留 | 实际执行环境、权限与取消收尾；替换执行器不自动提供沙箱 |
+| 会话工作视图 | `SessionManager.buildContextEntries()`、`buildSessionContext()` 与分支查询，位于 `dist/core/session-manager` | Repa 语境快照的来源、比较与回填，以及公共数据投影 |
+| 凭据与认证 | `ModelRuntime.create({ authPath, credentials })`，位于 `dist/core/model-runtime` | 凭据位置、具名连接和实际认证关联；该版本的内部 `AuthStorage` 类未从包入口导出 |
+| Pi 运行设置 | `SettingsManager.fromStorage()`、`applyOverrides()` 等公开方法，位于 `dist/core/settings-manager` | Repa 的作用域、有效值来源、完整值覆盖与插件设置语义 |
+
+包安装与定位继续使用第 9 节所述入口。工具 I/O 的可替换性提供了接入位置，不能单独证明修改协调已经成立：`withFileMutationQueue` 只串行化同一文件的修改，不覆盖多文件操作，也不自动协调其他前端入口。
+
+`edit` 的 `applyEditsToNormalizedContent` 在精确匹配失败后使用规范化文本定位，再将受影响的行覆盖到原文本；范围外的其他行保留，但受影响行中未选中的字符仍可能改变。原文 `公式 x²；标记：ＡＢＣ`，以 `oldText: "ABC"`、`newText: "DEF"` 调用公开编辑工具，实际写回为 `公式 x2;标记:DEF`。同一验证中的下一行 `其他行 x²` 保持原样。实现还会先统一换行，再按检测到的样式恢复；混合 CRLF/LF 文件中未编辑行的换行也可能改变。相应实现位于 `dist/core/tools/edit.js` 与 `edit-diff.js`。
+
+Codex 对比基准为固定提交 [`3d2ee51ca2d5db578f328aa75e20aa22c0197c9a`](https://github.com/openai/codex/tree/3d2ee51ca2d5db578f328aa75e20aa22c0197c9a)，以下为源码与相邻测试核对，未运行其 Rust 测试：
+
+- [`seek_sequence.rs`](https://github.com/openai/codex/blob/3d2ee51ca2d5db578f328aa75e20aa22c0197c9a/codex-rs/apply-patch/src/seek_sequence.rs) 依次尝试精确、空白宽松和特定 Unicode 标点比较，返回匹配位置；比较过程不修改原行。其规则与 Pi 的整段 NFKC 规范化不同，不能假定两者接受相同输入。
+- [`file_update.rs`](https://github.com/openai/codex/blob/3d2ee51ca2d5db578f328aa75e20aa22c0197c9a/codex-rs/apply-patch/src/file_update.rs) 的 `PreserveLineEndings` 路径按补丁的上下文行分隔实际替换，保留上下文原文；[`text_file.rs`](https://github.com/openai/codex/blob/3d2ee51ca2d5db578f328aa75e20aa22c0197c9a/codex-rs/apply-patch/src/text_file.rs) 保存各行原有的换行方式并据此重建文件。
+- 该版本 [`ApplyPatchOptions` 的默认模式](https://github.com/openai/codex/blob/3d2ee51ca2d5db578f328aa75e20aa22c0197c9a/codex-rs/apply-patch/src/lib.rs#L62-L95) 是 `NormalizeToLf`；保留换行的路径仍沿用补齐末尾换行的约定。补丁按行替换，与 Repa 的局部文本替换粒度也有区别。
+
+可借鉴的机制是将定位时的宽松比较与实际修改分开，并从原内容保留未修改部分。采用范围仍以 Repa 的正文、冲突及恢复契约为准；有针对性地补足或替换不匹配的行为，其他适用工具和运行能力继续复用。
+
+## 11. Pi 0.84.3 的提示装配入口与边界
+
+本节核对锁定依赖的 `dist/core/resource-loader.d.ts`、`system-prompt.js`、`agent-session.js`、`extensions/types.d.ts`、`extensions/runner.js` 与 `compaction/compaction.js`，属于类型与源码核验，未调用模型。
+
+- `DefaultResourceLoader` 提供 `systemPrompt`、`appendSystemPrompt`、`noContextFiles`、`noSkills` 及相应资源覆盖入口。项目文件可以通过 `agentsFilesOverride` 选择，Skill、prompt 等资源沿用原有加载与过滤。
+- `buildSystemPrompt` 使用 `if (customPrompt)` 区分自定义与默认分支，所以空字符串不表示完全禁用。非空自定义提示后仍可能追加项目说明、Skill 清单和当前工作目录；只替换基础文本不能证明最终输入已经完全受控。
+- `before_agent_start` 接收已组装的系统提示和构造选项，并可返回替换后的 `systemPrompt`。runner 和 session 使用 `!== undefined` 判断该返回值，因此这个入口能表达显式空内容；多个扩展会链式处理，接入时仍需核对贡献顺序和最终结果。工具文字指导由 `promptSnippet`、`promptGuidelines` 等工具定义字段提供。
+- 默认压缩生成器将 `customInstructions` 追加到既有模板，内部另有摘要系统提示；它不等于完整模板替换。`session_before_compact` 可接管摘要结果，`session_before_tree` 提供摘要及指令替换入口。Repa 需要完全控制辅助调用的提示时，应在这些生命周期边界选择适配方式，继续复用准备数据、计量、记录与恢复机制。
