@@ -60,7 +60,6 @@ export function App({
   const [attempt, setAttempt] = useState(0);
   const [state, setState] = useState<BootstrapState>({ status: "starting" });
 
-  // SCRUM-70：连接就绪后进入工作台；卸载或重试时清理连接，丢弃过期的异步启动结果。
   useEffect(() => {
     let active = true;
     let client: RepaClient | undefined;

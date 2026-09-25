@@ -3,15 +3,12 @@ import { BookOpen, ArrowRight, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import "./learning-upload.css";
 
-// SCRUM-70：材料仅暂存于当前页面；学习流程未接入，开始学习入口暂时禁用。
 export function LearningUpload() {
   const inputId = useId();
-  // SCRUM-70：记录嵌套拖拽层数，避免经过书本和文字时错误清除拖入状态。
   const dragDepth = useRef(0);
   const [dragging, setDragging] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
 
-  // SCRUM-70：选择和拖拽共用去重入口，以名称、大小和修改时间识别重复材料。
   function addFiles(incoming: File[]) {
     setFiles((current) => {
       const next = [...current];

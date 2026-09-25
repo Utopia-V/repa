@@ -7,7 +7,6 @@ import {
 
 const collapseLabel = "group-data-[collapsible=icon]:sr-only";
 
-// SCRUM-70：Learning Space 是唯一业务入口；Settings 保留为独立设置入口。
 export function AppSidebar() {
   const { state, setOpenMobile } = useSidebar();
   const closeMobileSidebar = () => setOpenMobile(false);

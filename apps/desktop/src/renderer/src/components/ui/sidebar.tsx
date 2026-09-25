@@ -326,7 +326,6 @@ type SidebarRailDrag = {
   ended: boolean
 }
 
-// SCRUM-70：边缘把手统一处理调宽、折叠和重置；结束拖动时恢复全局指针与文本选择状态。
 function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
   const { toggleSidebar, open, setOpen, width, setWidth } = useSidebar()
   const dragRef = React.useRef<SidebarRailDrag | null>(null)
